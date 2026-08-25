@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.env
+*.db
+*.db-shm
+*.db-wal
+.mycode/
+.test-tmp/
+*.log
+.codex/

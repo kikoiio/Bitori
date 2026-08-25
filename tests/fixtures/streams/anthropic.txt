@@ -1,0 +1,6 @@
+event: content_block_delta
+data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"你好"}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

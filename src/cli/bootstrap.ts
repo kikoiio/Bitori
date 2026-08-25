@@ -1,0 +1,85 @@
+import {ChatController} from '../chat/controller.js';
+import {loadConfig, resolveProfile} from '../config/loader.js';
+import {toProfileSummary} from '../config/types.js';
+import type {ProviderProfile} from '../config/types.js';
+import {createLLMClient} from '../providers/factory.js';
+import {SessionRepository} from '../storage/repository.js';
+import {createShutdownOnce} from '../terminal/shutdown.js';
+import {TerminalSession} from '../terminal/session.js';
+import {renderApp} from '../tui/render.js';
+import {usage} from './args.js';
+import type {CliOptions} from './args.js';
+import {createToolSystem} from '../tools/create-tool-system.js';
+
+/** [s01] 在读取配置和创建资源前先拒绝不受支持的运行环境。 */
+function assertRuntime(): void {
+  const major = Number.parseInt(process.versions.node.split('.')[0] ?? '', 10);
+  if (major !== 24) throw new Error(`MyCode 需要 Node.js 24 LTS，当前为 ${process.versions.node}`);
+  if (process.platform !== 'win32') throw new Error('MyCode 首个版本仅支持 Windows 10/11');
+}
+
+export async function bootstrap(options: CliOptions): Promise<void> {
+  if (options.help) {
+    process.stdout.write(`${usage}\n`);
+    return;
+  }
+  assertRuntime();
+  // [s01] 配置读取、profile 选择、Provider/存储创建都集中在“组合根”中，UI 无需知道构造细节。
+  const config = loadConfig();
+  const selected = resolveProfile(config, options.profile);
+  // [s02] 启动时固定捕获工作区；限制不来自配置或模型参数。
+  const toolSystem = createToolSystem(process.cwd());
+  let activeController: ChatController | null = null;
+  let terminal: TerminalSession | null = null;
+
+  const createController = async (profile: ProviderProfile): Promise<ChatController> => {
+    // [s01] 每个 controller 拥有一条独立的存储 Worker 客户端和一个具体模型客户端。
+    const repository = new SessionRepository();
+    /* [s01 旧实现，s02 替换] const controller = new ChatController(createLLMClient(profile), repository); */
+    const controller = new ChatController(createLLMClient(profile), repository, toolSystem);
+    try {
+      await controller.initialize(profile);
+      return controller;
+    } catch (error) {
+      // [s01] 初始化中途失败也必须关闭 Worker；catch 后重新抛出，保留原始失败原因。
+      await repository.close().catch(() => undefined);
+      throw error;
+    }
+  };
+
+  if (selected !== null) activeController = await createController(selected);
+  // [s01] shutdown 内部会记忆第一次关闭 Promise，因此多个退出来源不会重复释放资源。
+  const shutdown = createShutdownOnce(() => activeController, () => terminal);
+  const instance = renderApp({
+    profiles: config.profiles.map(toProfileSummary),
+    initialController: activeController,
+    createController: async name => {
+      const profile = config.profiles.find(item => item.name === name);
+      if (profile === undefined) throw new Error(`找不到 profile：${name}`);
+      const controller = await createController(profile);
+      activeController = controller;
+      return controller;
+    },
+    onController: controller => { activeController = controller; },
+    onExit: () => { void shutdown('user'); },
+  });
+  terminal = new TerminalSession(instance);
+
+  const fatalHandler = (error: unknown) => {
+    // [s01] void 表示有意不在同步事件处理器里 await；finally 仍保证错误输出发生在清理之后。
+    void shutdown('fatal_error').finally(() => {
+      process.stderr.write(`MyCode 发生未处理错误：${error instanceof Error ? error.message : String(error)}\n`);
+      process.exitCode = 1;
+    });
+  };
+  process.once('uncaughtException', fatalHandler);
+  process.once('unhandledRejection', fatalHandler);
+  try {
+    // [s01] Ink 卸载前保持主流程存活。
+    await terminal.waitUntilExit();
+  } finally {
+    process.off('uncaughtException', fatalHandler);
+    process.off('unhandledRejection', fatalHandler);
+    await shutdown('user');
+  }
+}

@@ -1,0 +1,6 @@
+profiles:
+  - name: test
+    protocol: openai-chat
+    model: model
+    base_url: http://127.0.0.1:12345/v1
+    api_key: ${TEST_API_KEY}

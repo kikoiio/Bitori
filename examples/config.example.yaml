@@ -1,0 +1,29 @@
+profiles:
+  - name: claude-main
+    protocol: anthropic
+    model: claude-model-id
+    base_url: https://api.anthropic.com
+    api_key: ${ANTHROPIC_API_KEY}
+    thinking: true
+
+  - name: claude-manual
+    protocol: anthropic
+    model: claude-model-id
+    base_url: https://api.anthropic.com
+    api_key: ${ANTHROPIC_API_KEY}
+    thinking:
+      type: manual
+      budget_tokens: 4096
+      max_tokens: 8192
+
+  - name: openai-responses
+    protocol: openai-responses
+    model: model-id
+    base_url: https://api.openai.com/v1
+    api_key: ${OPENAI_API_KEY}
+
+  - name: compatible-chat
+    protocol: openai-chat
+    model: model-id
+    base_url: https://example.com/v1
+    api_key: ${COMPATIBLE_API_KEY}

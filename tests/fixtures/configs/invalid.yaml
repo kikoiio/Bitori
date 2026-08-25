@@ -1,0 +1,6 @@
+profiles:
+  - name: broken
+    protocol: unknown
+    model: ""
+    base_url: file:///invalid
+    api_key: literal-key
