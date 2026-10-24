@@ -13,7 +13,8 @@ export class WorkspacePaths {
   private constructor(readonly root: string) {}
   static async create(root: string): Promise<WorkspacePaths> { return new WorkspacePaths(await realpath(root)); }
   #syntactic(relativePath: string): string {
-    if (!relativePath || isAbsolute(relativePath) || /^[a-zA-Z]:/.test(relativePath)) throw new WorkspacePathError('path_outside_workspace', '路径必须是工作区内的非空相对路径');
+    const normalized = relativePath.replaceAll('\\', '/');
+    if (!normalized || isAbsolute(normalized) || /^[a-zA-Z]:/.test(normalized) || normalized.split('/').includes('..')) throw new WorkspacePathError('path_outside_workspace', '路径必须是工作区内的非空相对路径');
     const candidate = resolve(this.root, relativePath);
     if (!isInside(this.root, candidate)) throw new WorkspacePathError('path_outside_workspace', '路径位于工作区之外');
     return candidate;

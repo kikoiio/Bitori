@@ -1,4 +1,4 @@
-import {cpSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync} from 'node:fs';
+import {cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {dirname, join, resolve} from 'node:path';
 
@@ -66,7 +66,9 @@ function copySettings(repoRoot: string, worktreePath: string): void {
 function linkDependencies(repoRoot: string, worktreePath: string): void {
   const source = join(repoRoot, 'node_modules');
   const target = join(worktreePath, 'node_modules');
-  if (existsSync(source) && !existsSync(target)) symlinkSync(source, target, 'junction');
+  if (!existsSync(source) || existsSync(target)) return;
+  // [s13] Windows 对目录符号链接有权限要求；junction 指向目录且不需要开发者模式。
+  symlinkSync(source, target, process.platform === 'win32' ? 'junction' : 'dir');
 }
 
 function copyIncludedFiles(repoRoot: string, worktreePath: string): void {
@@ -113,7 +115,9 @@ export function hasWorktreeChanges(worktreePath: string, headCommit: string | nu
 
 export function removeAgentWorktree(worktreePath: string, branch: string, gitRoot: string): void {
   if (!resolve(worktreePath).startsWith(resolve(gitRoot))) throw new Error('Worktree 路径越界');
-  git(gitRoot, ['worktree', 'remove', '--force', worktreePath]);
+  try { git(gitRoot, ['worktree', 'remove', '--force', worktreePath]); }
+  catch { git(gitRoot, ['worktree', 'remove', '--force', worktreePath]); }
+  if (existsSync(worktreePath)) rmSync(worktreePath, {recursive: true, force: true, maxRetries: 5, retryDelay: 50});
   try { git(gitRoot, ['branch', '-D', branch]); } catch { /* 分支可能已被合并或删除。 */ }
 }
 

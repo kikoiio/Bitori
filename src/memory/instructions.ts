@@ -1,5 +1,5 @@
 import {existsSync, readFileSync} from 'node:fs';
-import {dirname, isAbsolute, join, resolve} from 'node:path';
+import {dirname, isAbsolute, join, resolve, sep} from 'node:path';
 
 const MAX_INCLUDE_DEPTH = 5;
 export const INSTRUCTION_FILENAMES = ['BITORI.md', 'Bitori.md', 'bitori.md'] as const;
@@ -10,7 +10,7 @@ function safeIncludePath(workDir: string, base: string, include: string): string
   const raw = include.trim().replace(/^["']|["']$/g, '');
   const path = isAbsolute(raw) ? raw : resolve(dirname(base), raw);
   const root = resolve(workDir);
-  if (path !== root && !path.startsWith(root + '/')) throw new Error(`@include 路径越界：${include}`);
+  if (path !== root && !path.startsWith(root + sep)) throw new Error(`@include 路径越界：${include}`);
   return path;
 }
 

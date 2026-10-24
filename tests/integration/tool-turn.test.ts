@@ -27,7 +27,7 @@ class MixedBatchClient implements LLMClient {
     const calls = [
       {id: 'create', provider: 'pc', position: 0, name: 'write_file', args: {path: 'created.txt', content: 'created'}},
       {id: 'edit', provider: 'pe', position: 1, name: 'edit_file', args: {path: 'existing.txt', oldText: 'old', newText: 'new'}},
-      {id: 'command', provider: 'pr', position: 2, name: 'run_command', args: {command: `Write-Output 'verified'`}},
+      {id: 'command', provider: 'pr', position: 2, name: 'run_command', args: {command: process.platform === 'win32' ? `Write-Output 'verified'` : `printf 'verified'`}},
     ];
     for (const call of calls) { yield {type: 'tool_call_start', internalId: call.id, providerCallId: call.provider, position: call.position, name: call.name}; yield {type: 'tool_call_arguments_delta', internalId: call.id, delta: JSON.stringify(call.args)}; yield {type: 'tool_call_end', internalId: call.id}; }
     yield {type: 'completed', finishReason: 'tool_calls'};
