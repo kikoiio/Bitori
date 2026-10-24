@@ -59,6 +59,9 @@ function violatedConstraints(task: TaskDefinition, summary: ExecSummary): string
   for (const expected of task.expectReplyContains ?? []) {
     if (!summary.reply.includes(expected)) violations.push(`回复应包含 ${expected}`);
   }
+  if ((task.expectReplyAnyContains ?? []).length > 0 && !task.expectReplyAnyContains!.some(expected => summary.reply.includes(expected))) {
+    violations.push(`回复应包含以下之一：${task.expectReplyAnyContains!.join(' / ')}`);
+  }
   return violations;
 }
 

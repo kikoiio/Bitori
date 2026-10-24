@@ -1,0 +1,6 @@
+id: implement-from-spec
+title: 从测试反推实现
+difficulty: medium
+skills: [read-tests, greenfield, implement]
+maxIterations: 12
+task: stack.test.js 已给出 Stack 类的完整行为契约。请实现 stack.js 让所有测试通过，不要修改测试文件。

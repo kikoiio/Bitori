@@ -7,6 +7,7 @@ export interface TaskDefinition {
   maxIterations?: number;
   forbiddenTools?: string[];
   expectReplyContains?: string[];
+  expectReplyAnyContains?: string[];
 }
 
 export interface TaskResult {

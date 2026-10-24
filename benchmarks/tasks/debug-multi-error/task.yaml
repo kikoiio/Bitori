@@ -1,0 +1,6 @@
+id: debug-multi-error
+title: 多类错误混合修复
+difficulty: hard
+skills: [run-tests, read-before-edit, multi-fix]
+maxIterations: 14
+task: src/calc.js 同时存在一个测试失败和一个 ReferenceError。请先运行 npm test 定位，然后一次性修复所有问题；不要删除测试。
