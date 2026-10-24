@@ -7,8 +7,8 @@ export interface CliOptions {
   exec?: {task: string; workspace?: string; maxIterations?: number; json: boolean};
 }
 
-export const usage = `用法：Bitori [--profile <name>] [--help]
-       Bitori exec [--profile <name>] --task <text> [--workspace <path>] [--max-iterations <n>] [--json]
+export const usage = `用法：bitori [--profile <name>] [--help]
+       bitori exec [--profile <name>] --task <text> [--workspace <path>] [--max-iterations <n>] [--json]
 
 选项：
   --profile <name>  直接使用指定模型配置

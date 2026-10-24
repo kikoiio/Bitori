@@ -2,7 +2,7 @@
 /** [s01]
  * 命令行程序的最外层入口。
  *
- * package.json 会把构建后的这个文件注册成 `Bitori` 命令。这里故意只做三件事：
+ * package.json 会把构建后的这个文件注册成 `bitori` 命令。这里故意只做三件事：
  * 解析参数、启动应用、把没有在内部处理的错误转换成进程退出码。
  */
 import {bootstrap} from '../cli/bootstrap.js';

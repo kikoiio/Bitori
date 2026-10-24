@@ -8,7 +8,7 @@
     "node": ">=24 <25"
   },
   "bin": {
-    "Bitori": "dist/bin/bitori.js"
+    "bitori": "dist/bin/bitori.js"
   },
   "scripts": {
     "dev": "tsx src/bin/bitori.ts",
