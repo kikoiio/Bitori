@@ -37,6 +37,7 @@ jobs:
         id: select
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             # PR 验证：只重跑 PR body 列出的上游 Issue 对应任务。
@@ -60,9 +61,6 @@ jobs:
             echo "tasks=$(node -e "console.log(JSON.parse(process.argv[1]).tasks.join(','))" "$plan")" >> "$GITHUB_OUTPUT"
             echo "issues=$(node -e "console.log(JSON.parse(process.argv[1]).issueNumbers.join(','))" "$plan")" >> "$GITHUB_OUTPUT"
           fi
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-
       - name: Write model config
         if: steps.select.outputs.tasks != ''
         run: |
