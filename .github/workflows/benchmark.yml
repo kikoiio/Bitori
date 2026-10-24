@@ -40,13 +40,13 @@ jobs:
       - name: Write model config
         run: |
           mkdir -p "$HOME/.bitori"
-          cat > "$HOME/.bitori/config.yaml" <<'YAML'
+          cat > "$HOME/.bitori/config.yaml" <<YAML
           profiles:
             - name: bench
               protocol: openai-chat
               model: "${LLM_MODEL}"
               base_url: "${LLM_BASE_URL}"
-              api_key: "${LLM_API_KEY}"
+              api_key: "\${LLM_API_KEY}"
               context_window: 131072
           YAML
           printf 'LLM_API_KEY=%s\n' "$LLM_API_KEY" > "$HOME/.bitori/.env"

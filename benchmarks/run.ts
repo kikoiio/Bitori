@@ -62,7 +62,7 @@ function violatedConstraints(task: TaskDefinition, summary: ExecSummary): string
 
 async function verify(task: {definition: TaskDefinition; directory: string}, workspace: string): Promise<string | null> {
   try {
-    await exec('npx', ['tsx', join(task.directory, 'verify.ts')], {cwd: workspace, maxBuffer: 8 * 1024 * 1024});
+    await exec(process.execPath, [join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs'), join(task.directory, 'verify.ts')], {cwd: workspace, maxBuffer: 8 * 1024 * 1024});
     return null;
   } catch (error) {
     return (error instanceof Error ? error.message : String(error)).slice(0, 4_000);
