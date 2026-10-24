@@ -13,6 +13,10 @@ on:
         description: Model id
         required: false
         default: ''
+      tasks:
+        description: Comma-separated task ids (empty = all)
+        required: false
+        default: ''
       report_issues:
         description: Create issues for failures
         required: false
@@ -63,6 +67,7 @@ jobs:
           BITORI_BENCH_PROVIDER: ${{ inputs.provider || 'groq' }}
           BITORI_BENCH_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
           BITORI_BENCH_PROFILE: bench
+          BITORI_BENCH_TASKS: ${{ inputs.tasks }}
         run: |
           set +e
           npm run bench | tee benchmark-output.jsonl

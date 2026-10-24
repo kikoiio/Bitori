@@ -14,6 +14,7 @@ const provider = process.env.BITORI_BENCH_PROVIDER ?? 'groq';
 const model = process.env.BITORI_BENCH_MODEL ?? process.env.LLM_MODEL ?? '';
 const profile = process.env.BITORI_BENCH_PROFILE ?? '';
 const taskDelayMs = Number.parseInt(process.env.BITORI_BENCH_TASK_DELAY_MS ?? '15000', 10);
+const onlyTasks = (process.env.BITORI_BENCH_TASKS ?? '').split(',').map(name => name.trim()).filter(name => name.length > 0);
 
 function discoverTasks(): Array<{definition: TaskDefinition; directory: string}> {
   if (!existsSync(tasksRoot)) return [];
@@ -25,6 +26,7 @@ function discoverTasks(): Array<{definition: TaskDefinition; directory: string}>
       if (definition.id !== entry.name) throw new Error(`任务目录与 id 不一致：${entry.name} / ${definition.id}`);
       return {definition, directory};
     })
+    .filter(task => onlyTasks.length === 0 || onlyTasks.includes(task.definition.id))
     .sort((a, b) => a.definition.id.localeCompare(b.definition.id));
 }
 
@@ -59,8 +61,9 @@ function violatedConstraints(task: TaskDefinition, summary: ExecSummary): string
   for (const expected of task.expectReplyContains ?? []) {
     if (!summary.reply.includes(expected)) violations.push(`回复应包含 ${expected}`);
   }
-  if ((task.expectReplyAnyContains ?? []).length > 0 && !task.expectReplyAnyContains!.some(expected => summary.reply.includes(expected))) {
-    violations.push(`回复应包含以下之一：${task.expectReplyAnyContains!.join(' / ')}`);
+  const anyExpected = task.expectReplyAnyContains ?? [];
+  if (anyExpected.length > 0 && !anyExpected.some(expected => summary.reply.includes(expected))) {
+    violations.push(`回复应包含以下之一：${anyExpected.join(' / ')}`);
   }
   return violations;
 }
@@ -117,6 +120,10 @@ function sleep(ms: number): Promise<void> { return new Promise(resolve => setTim
 
 async function runTaskWithRateLimitRetry(task: {definition: TaskDefinition; directory: string}): Promise<TaskResult> {
   let result = await runTask(task);
+  // 每日配额耗尽时继续跑只会烧时间；只有分钟级限流才值得重试。
+  if (result.error !== null && /tokens per day/i.test(result.error)) {
+    throw new Error('Groq 每日 token 配额已耗尽，终止本轮 benchmark');
+  }
   if (result.status !== 'pass' && result.error !== null && /429|rate_limit/i.test(result.error)) {
     process.stderr.write('  429 限流，45 秒后重试一次\n');
     await sleep(45_000);
