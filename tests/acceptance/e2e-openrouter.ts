@@ -9,9 +9,10 @@ import {ChatController} from '../../src/chat/controller.js';
 import {SessionRepository} from '../../src/storage/repository.js';
 import {createToolSystem} from '../../src/tools/create-tool-system.js';
 
-/** [s12] OpenRouter 真实端点 E2E：走完整 AgentRunner 链路，验证流式、工具调用与结果回传。 */
+/** [s12] OpenAI 兼容真实端点 E2E：走完整 AgentRunner 链路，验证流式、工具调用与结果回传。 */
 
 const retryDelayMs = 20_000;
+const baseUrl = process.env.LLM_BASE_URL ?? 'https://openrouter.ai/api/v1';
 
 function sleep(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)); }
 
@@ -92,6 +93,13 @@ async function run(profile: ProviderProfile, root: string): Promise<void> {
 
 const model = process.env.OPENROUTER_MODEL;
 if (!model) throw new Error('缺少 OPENROUTER_MODEL 环境变量');
+if (model === '__list__') {
+  const response = await fetch(`${baseUrl}/models`, {headers: {Authorization: `Bearer ${process.env.LLM_API_KEY ?? ''}`}});
+  const body = await response.json() as {data?: Array<{id?: string; context_window?: number}>};
+  if (!response.ok) throw new Error(`模型列表请求失败：${response.status} ${JSON.stringify(body)}`);
+  for (const item of body.data ?? []) console.log(`${item.id ?? ''}\t${item.context_window ?? ''}`);
+  process.exit(0);
+}
 const root = workspace();
 const configDirectory = join(root, 'home');
 mkdirSync(join(configDirectory, '.bitori'), {recursive: true});
@@ -100,7 +108,7 @@ writeFileSync(join(configDirectory, '.bitori', 'config.yaml'), [
   '  - name: openrouter-e2e',
   '    protocol: openai-chat',
   `    model: "${model}"`,
-  '    base_url: "https://openrouter.ai/api/v1"',
+  `    base_url: "${baseUrl}"`,
   '    api_key: "${LLM_API_KEY}"',
   '    context_window: 262144',
   '',

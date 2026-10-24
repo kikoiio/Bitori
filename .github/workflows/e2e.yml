@@ -1,10 +1,16 @@
-name: E2E OpenRouter
+name: E2E LLM
 
 on:
   workflow_dispatch:
     inputs:
+      provider:
+        description: LLM provider
+        required: false
+        default: openrouter
+        type: choice
+        options: [openrouter, groq]
       model:
-        description: OpenRouter model id
+        description: Model id, or __list__ to only list provider models
         required: false
         default: ''
 
@@ -29,6 +35,7 @@ jobs:
       # OpenRouter 免费档每天约 50 次请求；异常时先看日志，不要连续重跑消耗额度。
       - name: Run real endpoint e2e
         env:
-          LLM_API_KEY: ${{ secrets.OPENROUTER_LLM_API_KEY }}
-          OPENROUTER_MODEL: ${{ inputs.model || vars.OPENROUTER_MODEL }}
+          LLM_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
+          LLM_API_KEY: ${{ (inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
+          OPENROUTER_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
         run: npx tsx tests/acceptance/e2e-openrouter.ts
