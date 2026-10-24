@@ -1,0 +1,132 @@
+#!/usr/bin/env npx tsx
+import {cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join, resolve} from 'node:path';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {parse as parseYaml} from 'yaml';
+import type {RunLedger, TaskDefinition, TaskResult} from './types.js';
+
+const exec = promisify(execFile);
+const root = resolve(import.meta.dirname, '..');
+const tasksRoot = join(root, 'benchmarks', 'tasks');
+const provider = process.env.BITORI_BENCH_PROVIDER ?? 'groq';
+const model = process.env.BITORI_BENCH_MODEL ?? process.env.LLM_MODEL ?? '';
+const profile = process.env.BITORI_BENCH_PROFILE ?? '';
+
+function discoverTasks(): Array<{definition: TaskDefinition; directory: string}> {
+  if (!existsSync(tasksRoot)) return [];
+  return readdirSync(tasksRoot, {withFileTypes: true})
+    .filter(entry => entry.isDirectory())
+    .map(entry => {
+      const directory = join(tasksRoot, entry.name);
+      const definition = parseYaml(readFileSync(join(directory, 'task.yaml'), 'utf8')) as TaskDefinition;
+      if (definition.id !== entry.name) throw new Error(`任务目录与 id 不一致：${entry.name} / ${definition.id}`);
+      return {definition, directory};
+    })
+    .sort((a, b) => a.definition.id.localeCompare(b.definition.id));
+}
+
+interface ExecSummary {
+  iterations: number;
+  inputTokens: number;
+  outputTokens: number;
+  toolCalls: Array<{name: string; status: string}>;
+  reply: string;
+  stopReason: string | null;
+  error: string | null;
+}
+
+function parseExecSummary(stdout: string, stderr: string): ExecSummary {
+  const fallback: ExecSummary = {iterations: 0, inputTokens: 0, outputTokens: 0, toolCalls: [], reply: '', stopReason: null, error: stderr || 'exec 未返回 JSON'};
+  const line = stdout.trimEnd().split('\n').at(-1);
+  if (!line?.startsWith('{')) return fallback;
+  try {
+    const parsed = JSON.parse(line) as Partial<ExecSummary>;
+    return {...fallback, ...parsed};
+  } catch {
+    return {...fallback, error: `exec JSON 解析失败：${line.slice(0, 200)}`};
+  }
+}
+
+function violatedConstraints(task: TaskDefinition, summary: ExecSummary): string[] {
+  const violations: string[] = [];
+  for (const tool of task.forbiddenTools ?? []) {
+    if (summary.toolCalls.some(call => call.name === tool)) violations.push(`禁止使用工具 ${tool}`);
+  }
+  for (const expected of task.expectReplyContains ?? []) {
+    if (!summary.reply.includes(expected)) violations.push(`回复应包含 ${expected}`);
+  }
+  return violations;
+}
+
+async function verify(task: {definition: TaskDefinition; directory: string}, workspace: string): Promise<string | null> {
+  try {
+    await exec('npx', ['tsx', join(task.directory, 'verify.ts')], {cwd: workspace, maxBuffer: 8 * 1024 * 1024});
+    return null;
+  } catch (error) {
+    return (error instanceof Error ? error.message : String(error)).slice(0, 4_000);
+  }
+}
+
+async function runTask(task: {definition: TaskDefinition; directory: string}): Promise<TaskResult> {
+  const workspace = mkdtempSync(join(tmpdir(), `bitori-bench-${task.definition.id}-`));
+  const source = join(task.directory, 'workspace');
+  if (existsSync(source)) cpSync(source, workspace, {recursive: true});
+  const started = Date.now();
+  try {
+    const args = [join(root, 'dist', 'bin', 'bitori.js'), 'exec', '--task', task.definition.task, '--workspace', workspace, '--json'];
+    if (profile) args.push('--profile', profile);
+    if (task.definition.maxIterations !== undefined) args.push('--max-iterations', String(task.definition.maxIterations));
+    const invocation = await exec('node', args, {cwd: workspace, maxBuffer: 16 * 1024 * 1024})
+      .then(output => ({stdout: output.stdout, stderr: output.stderr, exitCode: 0}))
+      .catch((error: {code?: number; stdout?: string; stderr?: string}) => ({stdout: error.stdout ?? '', stderr: error.stderr ?? '', exitCode: error.code ?? 1}));
+    const summary = parseExecSummary(invocation.stdout, invocation.stderr);
+    const constraints = violatedConstraints(task.definition, summary);
+    const verifyError = await verify(task, workspace);
+    const errors = [invocation.exitCode !== 0 ? summary.error ?? invocation.stderr : null, ...constraints, verifyError].filter(item => item !== null);
+    const status: TaskResult['status'] = errors.length > 0 ? 'fail' : 'pass';
+    return {
+      taskId: task.definition.id,
+      model,
+      provider,
+      status,
+      exitCode: invocation.exitCode,
+      exitReason: invocation.exitCode !== 0 ? 'agent' : verifyError !== null ? 'verify' : constraints.length > 0 ? 'constraint' : 'none',
+      iterations: summary.iterations,
+      inputTokens: summary.inputTokens,
+      outputTokens: summary.outputTokens,
+      toolSequence: summary.toolCalls.map(call => call.name),
+      reply: summary.reply,
+      error: errors.length > 0 ? errors.join('\n') : null,
+      durationMs: Date.now() - started,
+    };
+  } finally {
+    rmSync(workspace, {recursive: true, force: true});
+  }
+}
+
+if (!model) throw new Error('缺少 BITORI_BENCH_MODEL 或 LLM_MODEL');
+const tasks = discoverTasks();
+if (tasks.length === 0) throw new Error('未发现 benchmark 任务');
+const runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${provider}`;
+const results: TaskResult[] = [];
+for (const task of tasks) {
+  process.stderr.write(`[${results.length + 1}/${tasks.length}] ${task.definition.id} ... `);
+  const started = Date.now();
+  try {
+    results.push(await runTask(task));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    results.push({taskId: task.definition.id, model, provider, status: 'error', exitCode: 1, exitReason: 'harness', iterations: 0, inputTokens: 0, outputTokens: 0, toolSequence: [], reply: '', error: message, durationMs: Date.now() - started});
+  }
+  const result = results.at(-1)!;
+  process.stderr.write(`${result.status} (${result.durationMs}ms)\n`);
+}
+const passed = results.filter(result => result.status === 'pass').length;
+const ledger: RunLedger = {runId, startedAt: new Date().toISOString(), provider, model, results, summary: {passed, failed: results.filter(result => result.status === 'fail').length, errored: results.filter(result => result.status === 'error').length, total: results.length, passRate: passed / results.length}};
+const outputDirectory = join(root, 'benchmarks', 'results');
+mkdirSync(outputDirectory, {recursive: true});
+writeFileSync(join(outputDirectory, `${runId}.json`), JSON.stringify(ledger, null, 2) + '\n', 'utf8');
+process.stdout.write(`${JSON.stringify({...ledger.summary, runId})}\n`);
+process.exitCode = passed === results.length ? 0 : 1;

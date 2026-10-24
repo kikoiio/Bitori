@@ -1,0 +1,11 @@
+mode: bypass
+rules:
+  - tool: write_file
+    pattern: "*"
+    decision: deny
+  - tool: edit_file
+    pattern: "*"
+    decision: deny
+  - tool: run_command
+    pattern: "*"
+    decision: deny

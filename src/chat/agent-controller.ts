@@ -70,8 +70,9 @@ export class ChatController {
   readonly #commands: CommandRegistry;
   readonly #services: AgentServices | null;
   readonly #memoryClient: LLMClient | null;
+  readonly #maxIterations: number;
 
-  constructor(client: LLMClient, repository: SessionRepositoryContract, tools: ControllerToolSystem | null = null, runner?: AgentRunner) {
+  constructor(client: LLMClient, repository: SessionRepositoryContract, tools: ControllerToolSystem | null = null, runner?: AgentRunner, options: {maxIterations?: number} = {}) {
     this.#repository = repository; this.#client = client;
     const registry = tools?.registry ?? new ToolRegistry(); const approvals = tools?.approvals ?? new ApprovalCoordinator();
     const executor = tools?.executor ?? new ToolExecutor(registry, {workspaceRoot: process.cwd(), limits: fixedToolLimits});
@@ -81,6 +82,7 @@ export class ChatController {
     this.#memoryClient = withServices?.memoryClient ?? null;
     this.#commands = loadUserCommands(process.cwd(), undefined, createDefaultRegistry());
     this.#runner = runner ?? new AgentRunner(client, registry, new StreamCollector(), new SafetyBatchScheduler(executor, approvals, undefined, this.#services?.hooks ?? null), this.#services?.hooks ?? null);
+    this.#maxIterations = options.maxIterations ?? 20;
   }
   getState(): AppState { return this.#state; }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
@@ -141,7 +143,7 @@ export class ChatController {
   async #consume(runId: string, instruction: string, trigger: 'message' | 'do', context: AgentContext, signal: AbortSignal, reminders: string[]): Promise<void> {
     const session = this.#state.session!; const projector = new AgentEventProjector(this.#repository, this.#state, state => this.#publish(state), this.#state.agentMode);
     try {
-      const generator = this.#runner.run({runId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders, ...(this.#profile ? {contextManagement: {windowTokens: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), workspaceRoot: process.cwd()}} : {})}, signal);
+      const generator = this.#runner.run({runId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders, limits: {maxIterations: this.#maxIterations, maxUnknownToolIterations: 3}, ...(this.#profile ? {contextManagement: {windowTokens: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), workspaceRoot: process.cwd()}} : {})}, signal);
       while (true) { const step = await generator.next(); if (step.done) break; await projector.project(step.value); }
       await projector.flush(); const restored = await this.#repository.getSession(session.id); if (restored) this.#publish({...this.#state, session: restored, agentMode: restored.agentMode});
       // [s08] 回合自然停止后异步提取记忆；提取失败不影响本轮结果。

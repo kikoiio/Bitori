@@ -1,0 +1,5 @@
+{
+  "name": "bitori-benchmark-rename",
+  "private": true,
+  "scripts": {"test": "node --test"}
+}

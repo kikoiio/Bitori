@@ -1,11 +1,14 @@
 node_modules/
 dist/
+benchmarks/results/
 coverage/
 .env
 *.db
 *.db-shm
 *.db-wal
 .bitori/
+!benchmarks/tasks/**/workspace/.bitori/
+!benchmarks/tasks/**/workspace/.bitori/**
 .test-tmp/
 *.log
 .codex/

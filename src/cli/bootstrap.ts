@@ -4,12 +4,14 @@ import {toProfileSummary} from '../config/types.js';
 import type {ProviderProfile} from '../config/types.js';
 import {createLLMClient} from '../providers/factory.js';
 import {SessionRepository} from '../storage/repository.js';
+import {resolve} from 'node:path';
 import {createShutdownOnce} from '../terminal/shutdown.js';
 import {TerminalSession} from '../terminal/session.js';
 import {renderApp} from '../tui/render.js';
 import {usage} from './args.js';
 import type {CliOptions} from './args.js';
 import {createToolSystem} from '../tools/create-tool-system.js';
+import {runExec} from './exec.js';
 
 /** [s01] 在读取配置和创建资源前先拒绝不受支持的运行环境。 */
 function assertRuntime(): void {
@@ -23,6 +25,14 @@ export async function bootstrap(options: CliOptions): Promise<void> {
     return;
   }
   assertRuntime();
+  if (options.exec) {
+    const workspace = resolve(options.exec.workspace ?? process.cwd());
+    const config = loadConfig(undefined, workspace);
+    const profile = resolveProfile(config, options.profile);
+    if (profile === null) throw new Error('多 profile 时 exec 需要 --profile 指定');
+    process.exitCode = await runExec(config, profile, options.exec);
+    return;
+  }
   // [s01] 配置读取、profile 选择、Provider/存储创建都集中在“组合根”中，UI 无需知道构造细节。
   const config = loadConfig(undefined, process.cwd());
   const selected = resolveProfile(config, options.profile);

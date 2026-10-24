@@ -14,6 +14,7 @@
     "dev": "tsx src/bin/bitori.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/bin/bitori.js",
+    "bench": "npm run build && tsx benchmarks/run.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "pretest": "npm run build",

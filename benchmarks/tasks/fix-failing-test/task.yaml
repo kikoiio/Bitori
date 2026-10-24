@@ -1,0 +1,6 @@
+id: fix-failing-test
+title: 修复失败测试
+difficulty: medium
+skills: [run-tests, read-before-edit]
+maxIterations: 12
+task: 运行 npm test 找出失败原因并修复，直到测试全部通过。
