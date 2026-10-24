@@ -53,6 +53,7 @@ jobs:
         env:
           LLM_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
           LLM_API_KEY: ${{ (inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
+          LLM_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
 
       - name: Run benchmarks
         id: bench
