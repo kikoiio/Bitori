@@ -1,0 +1,30 @@
+name: E2E OpenRouter
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: OpenRouter model id
+        required: false
+        default: ${{ vars.OPENROUTER_MODEL }}
+
+jobs:
+  openrouter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run real endpoint e2e
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          OPENROUTER_MODEL: ${{ inputs.model || vars.OPENROUTER_MODEL }}
+        run: npx tsx tests/acceptance/e2e-openrouter.ts
