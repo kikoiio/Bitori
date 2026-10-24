@@ -11,20 +11,36 @@ import {createToolSystem} from '../../src/tools/create-tool-system.js';
 
 /** [s12] OpenRouter 真实端点 E2E：走完整 AgentRunner 链路，验证流式、工具调用与结果回传。 */
 
+const retryDelayMs = 20_000;
+
+function sleep(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)); }
+
 class RecordingClient implements LLMClient {
   readonly requests: ChatRequest[] = [];
   readonly toolCalls: string[] = [];
+  #streamErrors = 0;
   readonly #inner: LLMClient;
 
   constructor(inner: LLMClient) { this.#inner = inner; }
 
   async *streamChat(request: ChatRequest, signal: AbortSignal): AsyncIterable<StreamEvent> {
     this.requests.push(request);
+    let attempt = 0;
+    while (true) {
+      let failed = false;
     for await (const event of this.#inner.streamChat(request, signal)) {
       if (event.type === 'tool_call_start') this.toolCalls.push(event.name);
+      else if (event.type === 'error' && event.error.retryable) { failed = true; break; }
       yield event;
     }
+      if (!failed || signal.aborted || ++attempt >= 3) return;
+      this.#streamErrors++;
+      console.log(`OpenRouter 流失败，${retryDelayMs / 1000} 秒后重试（第 ${attempt + 1} 次）`);
+      await sleep(retryDelayMs);
+    }
   }
+
+  get streamErrors(): number { return this.#streamErrors; }
 }
 
 function assert(condition: boolean, message: string): void {
@@ -56,6 +72,7 @@ async function run(profile: ProviderProfile, root: string): Promise<void> {
 
     console.log(`模型请求次数：${client.requests.length}`);
     console.log(`工具调用序列：${client.toolCalls.join(' → ') || '（无）'}`);
+    console.log(`流级重试次数：${client.streamErrors}`);
     console.log(`停止原因：${state.stopReason ?? '（无）'}；失败信息：${failed?.errorMessage ?? '（无）'}`);
     console.log(`最终回复：${reply.slice(0, 300)}`);
     console.log(`文件结果：${content.replaceAll('\n', ' / ')}`);
