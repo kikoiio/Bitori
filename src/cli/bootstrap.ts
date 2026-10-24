@@ -15,7 +15,6 @@ import {createToolSystem} from '../tools/create-tool-system.js';
 function assertRuntime(): void {
   const major = Number.parseInt(process.versions.node.split('.')[0] ?? '', 10);
   if (major !== 24) throw new Error(`Bitori 需要 Node.js 24 LTS，当前为 ${process.versions.node}`);
-  if (process.platform !== 'win32') throw new Error('Bitori 首个版本仅支持 Windows 10/11');
 }
 
 export async function bootstrap(options: CliOptions): Promise<void> {
@@ -30,7 +29,10 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   const selected = resolveProfile(config, options.profile);
   // [s02] 启动时固定捕获工作区；限制不来自配置或模型参数。
   /* [s02 旧实现，s06 替换] const toolSystem = createToolSystem(process.cwd()); */
-  const toolSystem = createToolSystem(process.cwd(), config.mcpServers);
+  // [s12] SubAgent 的模型映射先复用当前 profile；自定义模型路由在配置系统扩展后接入。
+  const toolOptions: {clientFor: (model: string | null) => ReturnType<typeof createLLMClient>; memoryClient?: ReturnType<typeof createLLMClient>} = {clientFor: () => createLLMClient(selected ?? config.profiles[0]!)};
+  if (selected) toolOptions.memoryClient = createLLMClient(selected);
+  const toolSystem = createToolSystem(process.cwd(), config.mcpServers, toolOptions);
   // [s06] Server 逐个隔离初始化；可用工具先注册，失败项只告警而不阻断应用。
   const mcpResult = await toolSystem.mcp.initialize();
   for (const failure of mcpResult.failed) process.stderr.write(`MCP Server ${failure.name} 启动失败：${failure.error.message}\n`);
@@ -54,10 +56,10 @@ export async function bootstrap(options: CliOptions): Promise<void> {
 
   if (selected !== null) {
     try { activeController = await createController(selected); }
-    catch (error) { await toolSystem.close(); throw error; }
+    catch (error) { toolSystem.close(); throw error; }
   }
   // [s01] shutdown 内部会记忆第一次关闭 Promise，因此多个退出来源不会重复释放资源。
-  const shutdown = createShutdownOnce(() => activeController, () => terminal, toolSystem.close);
+  const shutdown = createShutdownOnce(() => activeController, () => terminal, async () => { toolSystem.close(); await Promise.resolve(); });
   const instance = renderApp({
     profiles: config.profiles.map(toProfileSummary),
     initialController: activeController,

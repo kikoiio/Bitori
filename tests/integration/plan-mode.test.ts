@@ -22,10 +22,10 @@ describe('Plan Mode', () => {
     ]);
     const controller = new ChatController(client, new SessionRepository(join(root, 'db.sqlite')), createToolSystem(root)); await controller.initialize(profile);
     await controller.sendMessage('/plan'); expect(client.requests).toHaveLength(0); expect(controller.getState().agentMode).toBe('plan');
-    await controller.sendMessage('制定计划'); expect(client.requests[0]?.tools?.map(tool => tool.name)).toEqual(['read_file', 'find_files', 'search_text']);
+    await controller.sendMessage('制定计划'); expect(client.requests[0]?.tools?.map(tool => tool.name)).toEqual(['read_file', 'find_files', 'search_text', 'load_skill']);
     expect(controller.getState().toolCalls[0]?.result).toMatchObject({status: 'error', error: {code: 'tool_unavailable_in_mode'}});
     expect(controller.getState().session?.latestPlanMessageId).not.toBeNull();
-    await controller.sendMessage('/do'); expect(client.requests[2]?.tools).toHaveLength(6); expect(client.requests[2]?.items?.at(-1)).toMatchObject({type: 'message', content: '根据当前会话中的最近计划立即执行。'});
+    await controller.sendMessage('/do'); expect(client.requests[2]?.tools).toHaveLength(10); expect(client.requests[2]?.items?.at(-1)).toMatchObject({type: 'message', content: '根据当前会话中的最近计划立即执行。'});
     expect(controller.getState().agentMode).toBe('execute'); await controller.shutdown();
   }, 20_000);
   it('没有计划时 /do 不请求模型', async () => {

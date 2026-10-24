@@ -49,7 +49,7 @@ describe('Agent 工具回合', () => {
     const client = new TwoPhaseClient(); const repository = new SessionRepository(join(root, 'db.sqlite'));
     const controller = new ChatController(client, repository, createToolSystem(root));
     await controller.initialize(profile); await controller.sendMessage('读取 note.txt');
-    expect(client.requests).toHaveLength(2); expect(client.requests[0]?.tools).toHaveLength(6); expect(client.requests[1]?.tools).toHaveLength(6); expect(client.requests[1]?.items?.find(item => item.type === 'tool_results')).toMatchObject({results: [{providerCallId: 'provider-1', name: 'read_file', result: {status: 'success'}}]});
+    expect(client.requests).toHaveLength(2); expect(client.requests[0]?.tools).toHaveLength(10); expect(client.requests[1]?.tools).toHaveLength(10); expect(client.requests[1]?.items?.find(item => item.type === 'tool_results')).toMatchObject({results: [{providerCallId: 'provider-1', name: 'read_file', result: {status: 'success'}}]});
     expect(controller.getState().toolCalls[0]).toMatchObject({toolName: 'read_file', executionStatus: 'succeeded', result: {status: 'success'}});
     expect(controller.getState().messages.at(-1)).toMatchObject({content: '已读取并总结', status: 'completed'});
     expect(controller.getState().messages.map(message => [message.role, message.status])).toEqual([['user', 'completed'], ['assistant', 'completed'], ['assistant', 'completed']]);

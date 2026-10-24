@@ -11,6 +11,7 @@ import {ToolResultReplacementState} from '../toolresult/state.js';
 import {applyToolResultBudget} from '../toolresult/budget.js';
 import type {ModelContextItem} from '../providers/types.js';
 import {computeKeepStartIndex, manageContext, usageAnchorFrom, type UsageAnchor} from '../compact/compact.js';
+import type {HookEngine} from '../hooks/engine.js';
 function computeKeep(items: readonly ModelContextItem[]): number { return computeKeepStartIndex(items); }
 import {RecoveryState} from '../compact/recovery.js';
 
@@ -31,7 +32,7 @@ function addUsage(a: Usage, b: Usage): Usage {
 
 /** [s03] 唯一的自主 Agent 循环入口，不依赖存储或界面。 */
 export class AgentRunner {
-  constructor(readonly client: LLMClient, readonly registry: ToolRegistry, readonly collector: StreamCollector, readonly scheduler: SafetyBatchScheduler) {}
+  constructor(readonly client: LLMClient, readonly registry: ToolRegistry, readonly collector: StreamCollector, readonly scheduler: SafetyBatchScheduler, readonly hooks: HookEngine | null = null) {}
 
   async *run(input: AgentRunInput, signal: AbortSignal): AsyncGenerator<AgentEvent, AgentRunResult, void> {
     const maxIterations = input.limits?.maxIterations ?? 20;
@@ -46,8 +47,10 @@ export class AgentRunner {
     let total: Usage = {inputTokens: 0, outputTokens: 0}; let unknownIterations = 0; let finalIterationId: string | null = null;
     const replacementState = new ToolResultReplacementState(); const recovery = new RecoveryState(); const tracking = {consecutiveFailures: 0}; let usageAnchor: UsageAnchor | null = null;
     const base = () => ({runId: input.runId, sessionId: input.sessionId, at: now()});
-    yield {...base(), type: 'run_started', mode: input.mode, maxIterations};
-    for (let iteration = 1; iteration <= maxIterations; iteration++) {
+    await this.hooks?.fire('turn_start', {event: 'turn_start', message: input.instruction});
+    try {
+      yield {...base(), type: 'run_started', mode: input.mode, maxIterations};
+      for (let iteration = 1; iteration <= maxIterations; iteration++) {
       if (signal.aborted) {
         const result: AgentRunResult = {runId: input.runId, status: 'cancelled', stopReason: 'user_cancelled', iterationCount: iteration - 1, usage: total, finalIterationId};
         yield {...base(), type: 'run_finished', result}; return result;
@@ -117,6 +120,9 @@ export class AgentRunner {
         const result: AgentRunResult = {runId: input.runId, status: 'stopped', stopReason: 'unknown_tool_limit', iterationCount: iteration, usage: total, finalIterationId};
         yield {...base(), type: 'run_finished', result}; return result;
       }
+    }
+    } finally {
+      await this.hooks?.fire('turn_end', {event: 'turn_end'});
     }
     throw new Error('AgentRunner 到达不可达分支');
   }

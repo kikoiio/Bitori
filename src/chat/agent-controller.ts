@@ -24,9 +24,15 @@ import {AgentEventProjector} from './agent-event-projector.js';
 import {initialAppState} from './state.js';
 import type {AppState} from './state.js';
 import type {PermissionEngine, PermissionTier} from '../tools/permission-engine.js';
+import type {AgentServices} from '../agent/services.js';
+import {createDefaultRegistry, type CommandRegistry} from '../commands/registry.js';
+import {loadUserCommands} from '../commands/loader.js';
+import {loadInstructions} from '../memory/instructions.js';
+import {SECTION_PRIORITY} from '../prompt/builder.js';
 
 type StateListener = (state: AppState) => void;
 interface ControllerToolSystem {registry: ToolRegistry; executor: ToolExecutor; approvals: ApprovalCoordinator; permissions?: PermissionEngine}
+interface ControllerToolSystemWithServices extends ControllerToolSystem {services?: AgentServices; memoryClient?: LLMClient}
 interface ActiveRequest {abortController: AbortController; promise: Promise<void>}
 
 /** [s03] 恢复会话时，状态栏继续显示最近一次 Agent 回合的累计用量和停止原因。 */
@@ -61,13 +67,20 @@ export class ChatController {
   #active: ActiveRequest | null = null;
   #shutdownPromise: Promise<void> | null = null;
   #closed = false;
+  readonly #commands: CommandRegistry;
+  readonly #services: AgentServices | null;
+  readonly #memoryClient: LLMClient | null;
 
   constructor(client: LLMClient, repository: SessionRepositoryContract, tools: ControllerToolSystem | null = null, runner?: AgentRunner) {
     this.#repository = repository; this.#client = client;
     const registry = tools?.registry ?? new ToolRegistry(); const approvals = tools?.approvals ?? new ApprovalCoordinator();
     const executor = tools?.executor ?? new ToolExecutor(registry, {workspaceRoot: process.cwd(), limits: fixedToolLimits});
     this.#tools = {registry, approvals, executor, ...(tools?.permissions === undefined && executor.options.permissions === undefined ? {} : {permissions: tools?.permissions ?? executor.options.permissions})};
-    this.#runner = runner ?? new AgentRunner(client, registry, new StreamCollector(), new SafetyBatchScheduler(executor, approvals));
+    const withServices: ControllerToolSystemWithServices | null = tools;
+    this.#services = withServices?.services ?? null;
+    this.#memoryClient = withServices?.memoryClient ?? null;
+    this.#commands = loadUserCommands(process.cwd(), undefined, createDefaultRegistry());
+    this.#runner = runner ?? new AgentRunner(client, registry, new StreamCollector(), new SafetyBatchScheduler(executor, approvals), this.#services?.hooks ?? null);
   }
   getState(): AppState { return this.#state; }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
@@ -84,12 +97,23 @@ export class ChatController {
     if (this.#closed) throw new Error('控制器已经关闭');
     if (this.#active) { this.#error('已有请求正在进行'); return; }
     if (!text.trim() || !this.#state.session) return;
-    const command = parseChatCommand(text);
-    if (command !== null && typeof command === 'object' && command.type === 'unknown') { this.#error(`未知命令：${text.trim()}。可用命令：/plan、/do、/compact、/permission <tier>`); return; }
-    if (command === 'plan') { await this.#setMode('plan'); return; }
-    if (command === 'do') { await this.#setMode('execute'); if (!this.#state.session?.latestPlanMessageId) { this.#error('当前会话没有可执行计划'); return; } await this.#startRun('/do', '根据当前会话中的最近计划立即执行。', 'do'); return; }
-    if (command !== null && typeof command === 'object' && command.type === 'permission') { this.#setPermissionTier(command.tier); return; }
-    if (command === 'compact') { await this.#compactConversation(); return; }
+    /* [s09 旧实现，s09 集成替换] parseChatCommand 只识别四条硬编码命令。 */
+    const legacy = parseChatCommand(text);
+    if (legacy !== null && typeof legacy === 'object' && legacy.type === 'unknown') {
+      const known = this.#commands.find(text.trim().slice(1).split(/\s+/)[0] ?? '');
+      if (!known) { this.#error(`未知命令：${text.trim()}。输入 /help 查看可用命令`); return; }
+      if (known.type === 'prompt') { await this.#startRun(text, known.handler({workDir: process.cwd(), args: text.trim().slice(1).split(' ').slice(1).join(' ')}), 'message'); return; }
+      const local = known.handler({workDir: process.cwd(), args: ''});
+      if (local === '/plan') { await this.#setMode('plan'); return; }
+      if (local === '/do') { await this.#setMode('execute'); if (!this.#state.session?.latestPlanMessageId) { this.#error('当前会话没有可执行计划'); return; } await this.#startRun('/do', '根据当前会话中的最近计划立即执行。', 'do'); return; }
+      if (local === '/compact') { await this.#compactConversation(); return; }
+      this.#error(local || `${known.name}：${known.description}`);
+      return;
+    }
+    if (legacy === 'plan') { await this.#setMode('plan'); return; }
+    if (legacy === 'do') { await this.#setMode('execute'); if (!this.#state.session?.latestPlanMessageId) { this.#error('当前会话没有可执行计划'); return; } await this.#startRun('/do', '根据当前会话中的最近计划立即执行。', 'do'); return; }
+    if (legacy !== null && typeof legacy === 'object' && legacy.type === 'permission') { this.#setPermissionTier(legacy.tier); return; }
+    if (legacy === 'compact') { await this.#compactConversation(); return; }
     await this.#startRun(text, text, 'message');
   }
   /** [s07] 空闲时手动压缩；不发起普通对话请求，只额外调用一次摘要模型。 */
@@ -120,6 +144,11 @@ export class ChatController {
       const generator = this.#runner.run({runId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders, ...(this.#profile ? {contextManagement: {windowTokens: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), workspaceRoot: process.cwd()}} : {})}, signal);
       while (true) { const step = await generator.next(); if (step.done) break; await projector.project(step.value); }
       await projector.flush(); const restored = await this.#repository.getSession(session.id); if (restored) this.#publish({...this.#state, session: restored, agentMode: restored.agentMode});
+      // [s08] 回合自然停止后异步提取记忆；提取失败不影响本轮结果。
+      if (this.#services && this.#profile && this.#memoryClient) {
+        const dialogue = [...this.#state.messages].slice(-20).map(message => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`).join('\n');
+        void this.#services.memoryExtractor(this.#memoryClient).extract(dialogue).catch(() => undefined);
+      }
     } catch (error) { if (!signal.aborted) this.#publish({...this.#state, requestStatus: 'failed', activeRunId: null, visibleError: error instanceof Error ? error.message : String(error)}); }
     finally { this.#active = null; }
   }
@@ -136,7 +165,17 @@ export class ChatController {
   async #setMode(mode: 'plan' | 'execute'): Promise<void> { const session = this.#state.session; if (!session) return; const updated = await this.#repository.setSessionMode(session.id, mode); this.#publish({...this.#state, session: updated, agentMode: mode, visibleError: null}); }
   #setPermissionTier(tier: PermissionTier): void { if (!this.#tools.permissions) { this.#error('当前工具系统未启用权限引擎'); return; } this.#tools.permissions.setTier(tier); this.#publish({...this.#state, permissionTier: tier, visibleError: null}); }
   /** [s04] 会话激活时采集环境并冻结系统提示；同一会话内逐字节稳定，保证 Anthropic 可缓存前缀不被破坏。 */
-  #rebuildSystemPrompt(): void { this.#systemBlocks = this.#profile ? buildSystemPrompt(collectEnvironment(this.#profile, process.cwd())).blocks : null; }
+  #rebuildSystemPrompt(): void {
+    if (!this.#profile) { this.#systemBlocks = null; return; }
+    const optional = [];
+    const instructions = this.#services ? loadInstructions(process.cwd()) : '';
+    if (instructions) optional.push({id: 'customInstructions', priority: SECTION_PRIORITY.customInstructions, text: instructions});
+    const memory = this.#services?.memory.buildSystemReminder() ?? '';
+    if (memory) optional.push({id: 'longTermMemory', priority: SECTION_PRIORITY.longTermMemory, text: memory});
+    const skills = this.#services?.skills.catalog() ?? [];
+    if (skills.length > 0) optional.push({id: 'skills', priority: SECTION_PRIORITY.skills, text: ['Available skills:', ...skills.map(skill => `- ${skill.name}: ${skill.description}`), '', 'Use load_skill to activate one before following its SOP.'].join('\n')});
+    this.#systemBlocks = buildSystemPrompt(collectEnvironment(this.#profile, process.cwd()), optional).blocks;
+  }
   #canChangeSession(): boolean { if (this.#active) { this.#error('生成期间不能新建或切换会话'); return false; } return true; }
   /* [s03 旧实现，s03 验收修复替换] 切换会话时无条件清零 latestUsage/runUsage，且沿用了前一会话的 stopReason。 */
   #publishSession(session: Session, messages: StoredMessage[], toolCalls: ToolCallRecord[] = [], agentRuns: AgentRunRecord[] = []): void { this.#publish({...this.#state, screen: 'chat', session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls, requestStatus: 'idle', ...restoredRunState(messages, agentRuns), activeRunId: null, iteration: 0, agentPhase: null, expandedThinkingIds: new Set(), selectedMessageId: null, visibleError: null, approvalPrompt: null}); }

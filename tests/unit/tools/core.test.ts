@@ -10,9 +10,9 @@ const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, {recursive: true, force: true}))); });
 
 describe('s02 工具核心', () => {
-  it('只登记一次即可稳定导出六个工具', () => {
+  it('只登记一次即可稳定导出内置工具', () => {
     const {registry} = createToolSystem(process.cwd());
-    expect(registry.definitions().map(item => item.name)).toEqual(['read_file', 'write_file', 'edit_file', 'run_command', 'find_files', 'search_text']);
+    expect(registry.definitions().map(item => item.name)).toEqual(['read_file', 'write_file', 'edit_file', 'run_command', 'find_files', 'search_text', 'load_skill', 'team', 'enter_worktree', 'exit_worktree']);
     expect(() => registry.register(registry.entries()[0]!)).toThrow(/重复/);
   });
 
