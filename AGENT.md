@@ -1,6 +1,6 @@
-# MyCode 项目约束
+# Bitori 项目约束
 
-MyCode 是一个使用 TypeScript 实现、仅支持 Windows 10/11 的终端 AI 对话助手。
+Bitori 是一个使用 TypeScript 实现、仅支持 Windows 10/11 的终端 AI 对话助手。
 
 ## 语言
 
@@ -9,8 +9,8 @@ MyCode 是一个使用 TypeScript 实现、仅支持 Windows 10/11 的终端 AI 
 
 ## 状态留痕
 
-- 项目使用 `sNN` 标记每次可追溯状态；当前状态为 `s04`。
-- 每个状态的完整中文导读保存在 `Project_Guide/sNN.md`，已有状态文件不得覆盖或删除。
+- 项目使用 `sNN` 标记每次可追溯状态；当前状态为 `s14`。
+- 课程入口为 `docs/learning/README.md`。每个状态的完整中文导读保存在 `Project_Guide/sNN.md`，已有状态文件不得覆盖或删除。
 - 源码中的解释性注释必须以对应状态标签开头，例如 `// [s01] ...`、`/** [s01] ... */`。
 - 后续状态不得删除或改写旧状态标签。修改已有实现时，把被替换的手写代码就近保留在块注释中，并写明来源与替换关系，例如 `/* [s01 旧实现，s02 替换] ... */`；新实现及其新注释使用新状态标签。
 - 不支持注释的文件格式（例如 JSON）、自动生成目录（例如 `dist/`、`coverage/`、`node_modules/`）和依赖锁文件不强行保留注释版旧代码；相关变化记录在对应的 `Project_Guide/sNN.md` 中。
@@ -18,17 +18,21 @@ MyCode 是一个使用 TypeScript 实现、仅支持 Windows 10/11 的终端 AI 
 
 ## 当前阶段
 
-- s03 以独立 `AgentRunner` 持续执行“模型 → 工具 → 结果回写”，直到自然完成或明确停止。
-- 每次模型迭代形成独立助手消息；单任务固定最多 20 次迭代，连续三轮全未知工具时停止。
-- `/plan` 切换会话级 PLAN 模式并只公开读取工具；`/do` 恢复 DO 模式并立即执行最近自然完成的计划。
-- 连续只读工具可并发；创建、修改和命令仍形成安全屏障并逐项 `Y/N` 批准。
-- 模式、计划、迭代消息、工具结果和逐轮/累计 Token 用量通过 SQLite 持久化；中断后只恢复现场，不自动续跑。
-- s04 系统提示由七个固定模块按优先级拼装并接环境信息；会话激活时冻结，自定义指令/Skill/长期记忆留扩展位。
-- s04 稳定模块与工具定义走 Anthropic 显式缓存断点；缓存命中字段经事件流累计并在状态栏展示，不持久化。
-- s04 关键规则在系统提示与工具描述中双重强化；Plan 提醒以 `<system-reminder>` 请求级消息按轮次注入（首轮完整、每隔 3 轮重复、其余精简），不持久化、不显示。
+- s03 以独立 `AgentRunner` 持续执行“模型 → 工具 → 结果回写”；`/plan`/`/do` 切换 PLAN/DO 模式，中断后只恢复现场，不自动续跑。
+- s04 系统提示由七个固定模块按优先级拼装并接环境信息；稳定模块与工具定义走 Anthropic 显式缓存断点。
+- s05 以黑名单、真实路径沙箱、三层规则、权限档位和人在回路组成统一权限管线。
+- s06 启动时从用户级与项目级配置发现 MCP Server，经 stdio 或 Streamable HTTP 握手并把远端工具适配进统一注册中心。
+- s07 引入工具结果落盘预算、自动全量摘要、手动 `/compact`/`/c` 和压缩熔断恢复，通过 `context_window` 配置控制上下文预算。
+- s08 支持指令文件 `@include` 展开、四类长期记忆提取和 `MEMORY.md` 轻量索引。
+- s09 提供统一 Slash Command 注册表、别名补全、Markdown prompt 命令与使用统计。
+- s10 提供 frontmatter 技能包、用户级/项目级两级加载热更新与 ActiveSkills 环境注入。
+- s11 提供 15 个生命周期 Hook 事件、条件表达式、command/prompt/http 动作与 `pre_tool_use` 拦截。
+- s12 提供内置 SubAgent 角色（plan/explore/general-purpose）、三级加载、多层工具过滤与后台任务通知。
+- s13 提供 Worktree 安全 slug、纯文件系统 HEAD 读取、快速恢复、创建后设置、变更保护与清理。
+- s14 提供团队花名册、成员文件邮箱、`wx` 文件锁、JSONL 游标恢复与进度状态。
 
 ## 验证
 
-开发完成后先运行 `npm run check`。人工端到端验收在 Windows Terminal 的 PowerShell 中执行：启动 MyCode、发送真实对话、观察流式输出和取消/恢复行为，并按 `checklist.md` 逐项记录真实结果。
+开发完成后先运行 `npm run check`。人工端到端验收在 Windows Terminal 的 PowerShell 中执行：启动 Bitori、发送真实对话、观察流式输出和取消/恢复行为，并按 `checklist.md` 逐项记录真实结果。
 
-2026-08-23 已完成真实 DeepSeek Anthropic 兼容端点验收；s03 当前结论为“基本完成”。s01/s02 兼容入口按状态留痕规则保留，不属于兼容清理待办；官方三个原生供应商端点的分别实测仍是可选的完整供应商矩阵验收。
+2026-08-23 已完成真实 DeepSeek Anthropic 兼容端点验收（s03）。当前 Linux 开发机可完成 typecheck、lint、build 与绝大多数非平台绑定测试；`run_command`、Windows 反斜杠路径和真实终端人工验收需按 checklist 在 Windows 环境执行。官方三个原生供应商端点的分别实测仍是可选的完整供应商矩阵验收。

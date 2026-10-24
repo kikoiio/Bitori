@@ -7,6 +7,12 @@ import type {AgentEvent, AgentRunInput, AgentRunResult} from './types.js';
 import type {StreamCollector} from './stream-collector.js';
 import type {SafetyBatchScheduler} from './safety-batch-scheduler.js';
 import {ToolPolicy} from './tool-policy.js';
+import {ToolResultReplacementState} from '../toolresult/state.js';
+import {applyToolResultBudget} from '../toolresult/budget.js';
+import type {ModelContextItem} from '../providers/types.js';
+import {computeKeepStartIndex, manageContext, usageAnchorFrom, type UsageAnchor} from '../compact/compact.js';
+function computeKeep(items: readonly ModelContextItem[]): number { return computeKeepStartIndex(items); }
+import {RecoveryState} from '../compact/recovery.js';
 
 function callId(call: PreparedToolCall): string { return call.availability === 'available' ? call.call.internalId : call.draft.internalId; }
 function providerCallId(call: PreparedToolCall): string | null { return call.availability === 'available' ? call.call.providerCallId : call.draft.providerCallId; }
@@ -38,6 +44,7 @@ export class AgentRunner {
     for (const text of input.reminders ?? []) context.appendReminder({type: 'reminder', text});
     const policy = new ToolPolicy(this.registry, input.mode);
     let total: Usage = {inputTokens: 0, outputTokens: 0}; let unknownIterations = 0; let finalIterationId: string | null = null;
+    const replacementState = new ToolResultReplacementState(); const recovery = new RecoveryState(); const tracking = {consecutiveFailures: 0}; let usageAnchor: UsageAnchor | null = null;
     const base = () => ({runId: input.runId, sessionId: input.sessionId, at: now()});
     yield {...base(), type: 'run_started', mode: input.mode, maxIterations};
     for (let iteration = 1; iteration <= maxIterations; iteration++) {
@@ -49,7 +56,20 @@ export class AgentRunner {
       yield {...base(), type: 'iteration_started', iterationId, iteration};
       yield {...base(), type: 'progress', iteration, maxIterations, phase: 'streaming', completedTools: 0, totalTools: 0};
       /* [s03 旧实现，s04 替换] streamChat 请求不携带系统提示。 */
-      const generator = this.collector.collect({runId: input.runId, sessionId: input.sessionId, iterationId, iteration, stream: this.client.streamChat({items: [...context.items()], messages: [], tools: policy.definitions(), ...(input.system ? {system: input.system} : {})}, signal), toolPolicy: policy, signal});
+      /* [s07] 每次请求前先做全量摘要兜底，再做工具结果轻量预算；替换决策冻结以保护缓存前缀。 */
+      let requestItems = [...context.items()];
+      if (input.contextManagement?.windowTokens) {
+        const compact = await manageContext({items: requestItems, client: this.client, contextWindow: input.contextManagement.windowTokens, tracking, recovery, tools: policy.definitions(), anchor: usageAnchor, signal});
+        if (compact.compacted) {
+          context.replaceItems([
+            {type: 'message', messageId: 'compact-summary', role: 'user', content: `${compact.summary ?? ''}\n\n${recovery.buildRecoveryAttachment(policy.definitions())}`},
+            ...requestItems.slice(computeKeep(requestItems))],
+          );
+          requestItems = [...context.items()];
+        }
+      }
+      requestItems = input.contextManagement ? applyToolResultBudget(requestItems, input.contextManagement.workspaceRoot, replacementState) : requestItems;
+      const generator = this.collector.collect({runId: input.runId, sessionId: input.sessionId, iterationId, iteration, stream: this.client.streamChat({items: requestItems, messages: [], tools: policy.definitions(), ...(input.system ? {system: input.system} : {})}, signal), toolPolicy: policy, signal});
       let response;
       while (true) {
         const step = await generator.next();
@@ -59,7 +79,7 @@ export class AgentRunner {
         if (event.type === 'usage_updated') yield {...event, totalUsage: addUsage(total, event.iterationUsage)};
         else yield event;
       }
-      total = addUsage(total, response.usage);
+      total = addUsage(total, response.usage); usageAnchor = usageAnchorFrom(response.usage, requestItems);
       yield {...base(), type: 'iteration_finished', iterationId, iteration, response};
       if (response.cancelled || signal.aborted) {
         const result: AgentRunResult = {runId: input.runId, status: 'cancelled', stopReason: 'user_cancelled', iterationCount: iteration, usage: total, finalIterationId};

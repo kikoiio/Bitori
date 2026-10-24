@@ -9,9 +9,9 @@ afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: t
 
 describe('Storage Worker', () => {
   it('持久化 turn、thinking、usage 和状态', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mycode-storage-'));
+    const root = mkdtempSync(join(tmpdir(), 'bitori-storage-'));
     roots.push(root);
-    const path = join(root, 'mycode.db');
+    const path = join(root, 'bitori.db');
     const repository = new SessionRepository(path);
     await repository.initialize();
     const session = await repository.createSession('profile-a');

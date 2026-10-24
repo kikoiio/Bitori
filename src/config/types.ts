@@ -28,6 +28,8 @@ export interface ProviderProfileSource {
   base_url: string;
   api_key: string;
   thinking?: ThinkingConfigSource;
+  /** [s07] token 上限；未配置时按协议默认值处理。 */
+  context_window?: number;
 }
 
 /** [s01] 完成校验、密钥替换和字段标准化后，应用实际使用的 profile。 */
@@ -38,17 +40,37 @@ export interface ProviderProfile {
   baseUrl: string;
   apiKey: string;
   thinking: ThinkingConfig;
+  /** [s07] 未配置时由 effectiveContextWindow 给出协议默认值。 */
+  contextWindow?: number;
 }
+
+/** [s06] MCP Server 配置以名称为键；项目级同名项会完整覆盖用户级项。 */
+export type McpServerConfig =
+  | {transport: 'stdio'; command: string; args: string[]; env: Record<string, string>}
+  | {transport: 'http'; url: string; headers: Record<string, string>};
+
+/** [s06] YAML 校验后的配置仍保留待展开字符串，loader 统一处理环境变量。 */
+export type McpServerConfigSource =
+  | {transport: 'stdio'; command: string; args?: string[]; env?: Record<string, string>}
+  | {transport: 'http'; url: string; headers?: Record<string, string>};
 
 // [s01] Pick 从完整类型中只取 UI 真正需要且可以安全展示的字段，避免 API Key 泄漏到界面层。
 export type ProfileSummary = Pick<ProviderProfile, 'name' | 'protocol' | 'model'>;
 
 export interface AppConfig {
   profiles: ProviderProfile[];
+  mcpServers: Record<string, McpServerConfig>;
 }
 
 export interface ParsedConfig {
   profiles: ProviderProfileSource[];
+  mcp_servers?: Record<string, McpServerConfigSource>;
+}
+
+/** [s07] 跨协议默认上下文窗口；配置值只做覆盖。 */
+export function effectiveContextWindow(protocol: Protocol, configured?: number): number {
+  if (configured && configured > 0) return configured;
+  return protocol === 'anthropic' ? 200_000 : 128_000;
 }
 
 export function toProfileSummary(profile: ProviderProfile): ProfileSummary {

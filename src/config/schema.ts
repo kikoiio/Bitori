@@ -27,10 +27,33 @@ const profileSchema = z.object({
   base_url: z.url().refine(value => /^https?:\/\//i.test(value), 'base_url 必须使用 HTTP(S)'),
   api_key: z.string().regex(environmentReference, 'api_key 必须完整使用 ${ENV_NAME} 引用'),
   thinking: thinkingSchema.optional(),
+  context_window: z.number().int().positive().optional(),
 });
 
+const stringMapSchema = z.record(z.string(), z.string());
+const stdioMcpServerSchema = z.strictObject({
+  transport: z.literal('stdio'),
+  command: z.string().trim().min(1, 'command 不能为空'),
+  args: z.array(z.string()).optional(),
+  env: stringMapSchema.optional(),
+});
+const httpMcpServerSchema = z.strictObject({
+  transport: z.literal('http'),
+  // [s06] URL 在 loader 展开 ${VAR} 后再做 HTTP(S) 校验。
+  url: z.string().trim().min(1, 'MCP url 不能为空'),
+  headers: stringMapSchema.optional(),
+});
+const mcpServersSchema = z.record(
+  z.string().trim().min(1, 'MCP Server 名称不能为空'),
+  z.discriminatedUnion('transport', [stdioMcpServerSchema, httpMcpServerSchema]),
+);
+
+/* [s01 旧实现，s06 替换] export const configSchema = z.object({profiles: z.array(profileSchema).min(1, '至少需要一个 profile')}) */
 export const configSchema = z
-  .object({profiles: z.array(profileSchema).min(1, '至少需要一个 profile')})
+  .object({
+    profiles: z.array(profileSchema).min(1, '至少需要一个 profile'),
+    mcp_servers: mcpServersSchema.optional(),
+  })
   .superRefine((value, context) => {
     // [s01] superRefine 适合做跨字段/跨数组项校验：单个字段的 schema 无法判断名称是否重复。
     const names = new Set<string>();
@@ -53,9 +76,16 @@ export const configSchema = z
     }
   });
 
+/** [s06] 项目级配置只承载 MCP Server，避免项目覆盖用户的供应商密钥配置。 */
+export const projectConfigSchema = z.strictObject({mcp_servers: mcpServersSchema.optional()});
+
 export function parseConfig(value: unknown): ParsedConfig {
   // [s01] 外部输入先视为 unknown；只有 Zod 校验成功后才进入有类型保证的应用代码。
   return configSchema.parse(value) as ParsedConfig;
+}
+
+export function parseProjectConfig(value: unknown): Pick<ParsedConfig, 'mcp_servers'> {
+  return projectConfigSchema.parse(value ?? {}) as Pick<ParsedConfig, 'mcp_servers'>;
 }
 
 /** [s01] 把面向 YAML 的多种简写归一化成 Provider 只需处理的判别联合。 */

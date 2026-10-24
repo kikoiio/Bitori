@@ -61,7 +61,7 @@ async function makeController(profile: ProviderProfile, workspace: string): Prom
 }
 
 function workspace(): string {
-  const root = mkdtempSync(join(tmpdir(), 'mycode-s04-accept-'));
+  const root = mkdtempSync(join(tmpdir(), 'bitori-s04-accept-'));
   console.log(`工作区：${root}`);
   return root;
 }

@@ -5,7 +5,7 @@ import type {PreparedToolCall, ToolApprovalPrompt, ToolExecutionResult, ToolExec
 
 export type AgentMode = 'plan' | 'execute';
 export type AgentRunStatus = 'running' | 'completed' | 'stopped' | 'cancelled' | 'failed' | 'interrupted';
-export type AgentStopReason = 'natural_completion' | 'iteration_limit' | 'unknown_tool_limit' | 'user_cancelled' | 'stream_error' | 'storage_error' | 'process_interrupted';
+export type AgentStopReason = 'natural_completion' | 'iteration_limit' | 'unknown_tool_limit' | 'user_cancelled' | 'stream_error' | 'storage_error' | 'process_interrupted' | 'context_compact_failed';
 export type AgentPhase = 'preparing' | 'streaming' | 'scheduling_tools' | 'awaiting_approval' | 'executing_tools' | 'finishing';
 
 export interface AgentRunInput {
@@ -20,6 +20,8 @@ export interface AgentRunInput {
   /** [s04] 本回合注入的提醒文本（已含标签），由控制器按模式与轮次生成。 */
   reminders?: string[];
   limits?: {maxIterations: number; maxUnknownToolIterations: number};
+  /** [s07] 上下文窗口与工作目录；缺省时工具结果预算仍生效，全量摘要禁用。 */
+  contextManagement?: {windowTokens: number; workspaceRoot: string};
 }
 
 export interface AgentRunResult {

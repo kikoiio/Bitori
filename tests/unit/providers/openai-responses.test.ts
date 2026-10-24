@@ -47,4 +47,15 @@ describe('OpenAIResponsesClient', () => {
     for await (const event of new OpenAIResponsesClient(profile, sdk).streamChat({messages: [{role: 'user', content: 'hi'}]}, new AbortController().signal)) { void event; }
     expect(create.mock.calls[0]?.[0] as Record<string, unknown>).not.toHaveProperty('instructions');
   });
+
+  // [s06] MCP Server 提供的 JSON Schema 不保证满足 OpenAI strict 子集。
+  it('按工具定义保留 strict 开关', async () => {
+    const create = vi.fn().mockResolvedValue(stream());
+    const sdk = {responses: {create}} as unknown as OpenAI;
+    for await (const event of new OpenAIResponsesClient(profile, sdk).streamChat({messages: [], tools: [
+      {name: 'builtin', description: 'built in', inputSchema: {type: 'object'}},
+      {name: 'mcp__demo__tool', description: 'remote', inputSchema: {type: 'object'}, strict: false},
+    ]}, new AbortController().signal)) { void event; }
+    expect((create.mock.calls[0]?.[0] as {tools: Array<{strict: boolean}>}).tools.map(tool => tool.strict)).toEqual([true, false]);
+  });
 });

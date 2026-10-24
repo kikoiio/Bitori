@@ -10,6 +10,7 @@ export type ShutdownReason = 'user' | 'fatal_error';
 export function createShutdownOnce(
   getController: () => ChatController | null,
   getTerminal: () => TerminalSession | null,
+  closeResources?: () => Promise<void>,
 ): (reason: ShutdownReason) => Promise<void> {
   let shutdownPromise: Promise<void> | null = null;
   return (reason: ShutdownReason) => {
@@ -17,6 +18,8 @@ export function createShutdownOnce(
     void reason;
     shutdownPromise ??= (async () => {
       await getController()?.shutdown();
+      // [s06] MCP 子进程/HTTP 会话属于应用级资源，即使尚未选择 profile 也必须释放。
+      await closeResources?.();
       getTerminal()?.unmount();
     })();
     return shutdownPromise;

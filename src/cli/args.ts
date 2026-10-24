@@ -6,7 +6,7 @@ export interface CliOptions {
   help: boolean;
 }
 
-export const usage = `用法：MyCode [--profile <name>] [--help]
+export const usage = `用法：Bitori [--profile <name>] [--help]
 
 选项：
   --profile <name>  直接使用指定模型配置

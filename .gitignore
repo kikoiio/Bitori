@@ -5,7 +5,9 @@ coverage/
 *.db
 *.db-shm
 *.db-wal
-.mycode/
+.bitori/
 .test-tmp/
 *.log
 .codex/
+.tmp/
+.audit/

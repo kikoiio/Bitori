@@ -6,7 +6,7 @@ export interface MessageProps {message: StoredMessage; selected: boolean; thinki
 
 /** [s01] 渲染单条消息的角色、状态、thinking、正文和错误。 */
 export function Message({message, selected, thinkingExpanded}: MessageProps) {
-  const label = message.role === 'user' ? '你' : 'MyCode';
+  const label = message.role === 'user' ? '你' : 'Bitori';
   const marker = selected ? '›' : ' ';
   // [s01] 嵌套三元表达式把四种状态压缩成可见后缀；completed 对应空字符串。
   const suffix = message.status === 'cancelled' ? ' [已取消]'

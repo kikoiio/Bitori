@@ -1,0 +1,108 @@
+import {McpProtocolError} from './types.js';
+import type {JsonObject} from '../tools/types.js';
+import type {JsonRpcFailure, JsonRpcId, JsonRpcMessage, McpTransport} from './types.js';
+
+interface PendingRequest {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  cleanup: () => void;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function messageId(value: unknown): JsonRpcId | null {
+  return typeof value === 'string' || typeof value === 'number' ? value : null;
+}
+
+/** [s06] JSON-RPC Peer 只按 id 配对响应；乱序响应不会串到其他请求。 */
+export class JsonRpcPeer {
+  readonly #pending = new Map<JsonRpcId, PendingRequest>();
+  #nextId = 1;
+  #closed = false;
+
+  constructor(readonly transport: McpTransport, readonly timeoutMs = 30_000) {}
+
+  async start(): Promise<void> {
+    await this.transport.start(
+      message => { void this.#receive(message).catch(error => this.#failAll(error instanceof Error ? error : new McpProtocolError(String(error)))); },
+      error => this.#failAll(error ?? new McpProtocolError('MCP 连接已关闭')),
+    );
+  }
+
+  async request(method: string, params: JsonObject = {}, signal?: AbortSignal): Promise<unknown> {
+    if (this.#closed) throw new McpProtocolError('MCP 连接已经关闭');
+    const id = this.#nextId++;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let abort: (() => void) | undefined;
+    const response = new Promise<unknown>((resolve, reject) => {
+      const cleanup = () => {
+        if (timeout !== undefined) clearTimeout(timeout);
+        if (abort !== undefined) signal?.removeEventListener('abort', abort);
+        this.#pending.delete(id);
+      };
+      abort = () => { cleanup(); reject(new DOMException('MCP 请求已取消', 'AbortError')); };
+      this.#pending.set(id, {resolve: value => { cleanup(); resolve(value); }, reject: error => { cleanup(); reject(error); }, cleanup});
+      timeout = setTimeout(() => {
+        cleanup();
+        reject(new McpProtocolError(`MCP 请求超时：${method}`));
+      }, this.timeoutMs);
+      signal?.addEventListener('abort', abort, {once: true});
+    });
+    if (signal?.aborted) {
+      this.#pending.get(id)?.reject(new DOMException('MCP 请求已取消', 'AbortError'));
+      return response;
+    }
+    try {
+      await this.transport.send({jsonrpc: '2.0', id, method, params}, signal);
+    } catch (error) {
+      this.#pending.get(id)?.reject(error instanceof Error ? error : new McpProtocolError(String(error)));
+    }
+    return response;
+  }
+
+  async notify(method: string, params: JsonObject = {}, signal?: AbortSignal): Promise<void> {
+    if (this.#closed) throw new McpProtocolError('MCP 连接已经关闭');
+    await this.transport.send({jsonrpc: '2.0', method, params}, signal);
+  }
+
+  async close(): Promise<void> {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.#failAll(new McpProtocolError('MCP 连接已经关闭'));
+    await this.transport.close();
+  }
+
+  async #receive(value: unknown): Promise<void> {
+    if (!isRecord(value) || value.jsonrpc !== '2.0') return;
+    const id = messageId(value.id);
+    if (id !== null && ('result' in value || 'error' in value)) {
+      const pending = this.#pending.get(id);
+      if (!pending) return;
+      if ('error' in value && isRecord(value.error)) {
+        const failure = value as unknown as JsonRpcFailure;
+        pending.reject(new McpProtocolError(failure.error.message, failure.error.code, failure.error.data));
+      } else pending.resolve(value.result);
+      return;
+    }
+    // [s06] 本阶段不实现 sampling/resources 等反向能力；明确回复 method not found，避免 Server 悬挂。
+    if (id !== null && typeof value.method === 'string') {
+      await this.transport.send({jsonrpc: '2.0', id, error: {code: -32601, message: `Bitori 不支持 Server 请求：${value.method}`}});
+    }
+  }
+
+  #failAll(error: Error): void {
+    for (const pending of [...this.#pending.values()]) pending.reject(error);
+  }
+}
+
+export function parseJsonRpcLine(line: string): JsonRpcMessage {
+  const value: unknown = JSON.parse(line);
+  if (!isRecord(value) || value.jsonrpc !== '2.0') throw new McpProtocolError('收到非法 JSON-RPC 2.0 消息');
+  return value as unknown as JsonRpcMessage;
+}
+
+export function encodeJsonRpcLine(message: JsonRpcMessage): string {
+  return `${JSON.stringify(message)}\n`;
+}

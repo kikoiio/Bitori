@@ -1,4 +1,4 @@
-# MyCode s04 人工定性评估场景集
+# Bitori s04 人工定性评估场景集
 
 > 对应 spec.md F15：在 s04 逐一走查以下场景，记录实际行为，并与 s03（无系统提示）的对应行为作对照，形成定性结论。
 > 走查方法：Windows Terminal 的 PowerShell 中运行 `npm run dev`，使用真实端点按步骤操作，把观察结果记录在「实际结果（s04）」一栏。
@@ -8,7 +8,7 @@
 - **目的：** 验证「编辑任何文件前必须先读取」规则在系统提示与工具描述双重强化下被模型遵守。
 - **前置条件：** 工作区存在一个已有内容的文本文件（如 `notes/todo.md`）；DO 模式。
 - **操作步骤：**
-  1. 启动 MyCode，发送：「把 notes/todo.md 里的‘买牛奶’改成‘买燕麦奶’」。
+  1. 启动 Bitori，发送：「把 notes/todo.md 里的‘买牛奶’改成‘买燕麦奶’」。
   2. 观察模型发起的工具调用序列。
 - **观察点：**
   - 模型是否在 edit_file 之前先调用 read_file 读取该文件；
@@ -74,3 +74,25 @@
 4. 缓存副作用为正面：各场景请求普遍命中 1408 token 的稳定前缀，随对话增长的工具结果部分也持续命中。
 
 说明：s03 基线行为是根据 s03 架构（无系统提示、Plan 仅靠工具过滤）作出的推断，本次未重新运行 s03 对照组；s04 的全部结果均为真实端点实测记录。
+
+# Bitori s06 MCP 人工验收场景
+
+> 在 Windows Terminal、Node.js 24 下执行；分别准备一个 stdio MCP Server 和一个 Streamable HTTP MCP Server。
+
+## 场景一：发现与调用
+
+1. 在用户级配置声明 stdio Server，在项目级配置声明 HTTP Server，并用项目级同名项覆盖一个用户项。
+2. 启动 Bitori，要求模型完成两个 Server 分别提供的任务。
+3. 确认工具名为 `mcp__<server>__<tool>`、default 档先审批、批准后结果正常回灌。
+
+## 场景二：故障隔离
+
+1. 再增加一个不存在的 stdio command 或不可达 URL。
+2. 启动时应只看到该 Server 的 stderr 告警，应用正常进入聊天。
+3. 调用其余 Server 的工具，确认不受影响。
+
+## 场景三：生命周期
+
+1. 调用一个 MCP 工具后正常退出；确认 stdio 子进程退出。
+2. 在 HTTP Server 日志确认初始化后请求携带 session/version header，退出时收到 DELETE（Server 支持时）。
+3. 重新启动后建立新连接；不期待健康检查或自动重连。

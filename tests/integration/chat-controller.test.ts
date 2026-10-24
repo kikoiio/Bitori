@@ -16,7 +16,7 @@ const profile: ProviderProfile = {
 
 describe('ChatController', () => {
   it('流式更新、持久化并发送多轮上下文', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mycode-controller-'));
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-'));
     roots.push(root);
     const client = new MockLLMClient([
       {type: 'text_delta', text: '你'}, {type: 'text_delta', text: '好'},
@@ -39,7 +39,7 @@ describe('ChatController', () => {
   }, 20_000);
 
   it('重启后恢复最近 Agent 回合的累计用量和停止原因', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mycode-controller-'));
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-'));
     roots.push(root);
     const database = join(root, 'db.sqlite');
     const first = new ChatController(new MockLLMClient([

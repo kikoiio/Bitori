@@ -17,6 +17,9 @@ import {buildSystemPrompt} from '../prompt/builder.js';
 import {collectEnvironment} from '../prompt/environment.js';
 import {buildReminders} from '../prompt/reminders.js';
 import {parseChatCommand} from './commands.js';
+import {effectiveContextWindow} from '../config/types.js';
+import {manageContext} from '../compact/compact.js';
+import {RecoveryState} from '../compact/recovery.js';
 import {AgentEventProjector} from './agent-event-projector.js';
 import {initialAppState} from './state.js';
 import type {AppState} from './state.js';
@@ -49,6 +52,7 @@ export class ChatController {
   readonly #repository: SessionRepositoryContract;
   readonly #listeners = new Set<StateListener>();
   readonly #tools: ControllerToolSystem;
+  readonly #client: LLMClient;
   readonly #runner: AgentRunner;
   #profile: ProviderProfile | null = null;
   /** [s04] 会话激活时构建并冻结的系统提示；无 profile 时为 null。 */
@@ -59,7 +63,7 @@ export class ChatController {
   #closed = false;
 
   constructor(client: LLMClient, repository: SessionRepositoryContract, tools: ControllerToolSystem | null = null, runner?: AgentRunner) {
-    this.#repository = repository;
+    this.#repository = repository; this.#client = client;
     const registry = tools?.registry ?? new ToolRegistry(); const approvals = tools?.approvals ?? new ApprovalCoordinator();
     const executor = tools?.executor ?? new ToolExecutor(registry, {workspaceRoot: process.cwd(), limits: fixedToolLimits});
     this.#tools = {registry, approvals, executor, ...(tools?.permissions === undefined && executor.options.permissions === undefined ? {} : {permissions: tools?.permissions ?? executor.options.permissions})};
@@ -81,11 +85,25 @@ export class ChatController {
     if (this.#active) { this.#error('已有请求正在进行'); return; }
     if (!text.trim() || !this.#state.session) return;
     const command = parseChatCommand(text);
+    if (command !== null && typeof command === 'object' && command.type === 'unknown') { this.#error(`未知命令：${text.trim()}。可用命令：/plan、/do、/compact、/permission <tier>`); return; }
     if (command === 'plan') { await this.#setMode('plan'); return; }
     if (command === 'do') { await this.#setMode('execute'); if (!this.#state.session?.latestPlanMessageId) { this.#error('当前会话没有可执行计划'); return; } await this.#startRun('/do', '根据当前会话中的最近计划立即执行。', 'do'); return; }
     if (command !== null && typeof command === 'object' && command.type === 'permission') { this.#setPermissionTier(command.tier); return; }
+    if (command === 'compact') { await this.#compactConversation(); return; }
     await this.#startRun(text, text, 'message');
   }
+  /** [s07] 空闲时手动压缩；不发起普通对话请求，只额外调用一次摘要模型。 */
+  async #compactConversation(): Promise<void> {
+    const session = this.#state.session; if (!session || !this.#profile) return;
+    if (this.#active) { this.#error('生成期间不能手动压缩上下文'); return; }
+    const conversation = await this.#repository.getConversation(session.id); if (!conversation) { this.#error('无法读取当前会话上下文'); return; }
+    const items = AgentContext.fromConversation(conversation).items();
+    const tools = this.#tools.registry.definitions();
+    const result = await manageContext({items, client: this.#client, contextWindow: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), tracking: {consecutiveFailures: 0}, recovery: new RecoveryState(), tools, anchor: null, signal: new AbortController().signal}, {force: true, safetyMargin: 3_000});
+    if (result.compacted) this.#error(`上下文已压缩：估算 ${result.beforeTokens} → ${result.afterTokens} tokens`);
+    else this.#error(`上下文未压缩：${result.reason}`);
+  }
+
   async #startRun(displayText: string, instruction: string, trigger: 'message' | 'do'): Promise<void> {
     const session = this.#state.session; if (!session) return; const runId = createId();
     const begun = await this.#repository.beginAgentRun({runId, sessionId: session.id, displayText, mode: this.#state.agentMode});
@@ -99,7 +117,7 @@ export class ChatController {
   async #consume(runId: string, instruction: string, trigger: 'message' | 'do', context: AgentContext, signal: AbortSignal, reminders: string[]): Promise<void> {
     const session = this.#state.session!; const projector = new AgentEventProjector(this.#repository, this.#state, state => this.#publish(state), this.#state.agentMode);
     try {
-      const generator = this.#runner.run({runId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders}, signal);
+      const generator = this.#runner.run({runId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders, ...(this.#profile ? {contextManagement: {windowTokens: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), workspaceRoot: process.cwd()}} : {})}, signal);
       while (true) { const step = await generator.next(); if (step.done) break; await projector.project(step.value); }
       await projector.flush(); const restored = await this.#repository.getSession(session.id); if (restored) this.#publish({...this.#state, session: restored, agentMode: restored.agentMode});
     } catch (error) { if (!signal.aborted) this.#publish({...this.#state, requestStatus: 'failed', activeRunId: null, visibleError: error instanceof Error ? error.message : String(error)}); }

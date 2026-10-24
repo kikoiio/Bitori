@@ -8,11 +8,13 @@ import type {ToolCall, ToolExecutionResult} from './types.js';
 export type PermissionTier = 'strict' | 'default' | 'bypass';
 export type PermissionDecision = 'allow' | 'ask' | 'deny';
 export type PermissionSource = 'blacklist' | 'sandbox' | 'rule' | 'tier';
-export interface PermissionRule {tool: string; pattern: string; decision: PermissionDecision}
+export interface PermissionRule {tool: string; pattern: string; decision: PermissionDecision; exact?: boolean}
 export interface PermissionCheck {decision: PermissionDecision; source: PermissionSource; reason: string; rule?: PermissionRule}
 export interface PermissionEngineOptions {workspaceRoot: string; userRulesPath?: string; projectRulesPath?: string; localRulesPath?: string}
 
 const toolNames = new Set(['read_file', 'write_file', 'edit_file', 'find_files', 'search_text', 'run_command']);
+// [s06] MCP 工具名由适配层生成；允许它们进入同一规则与人在回路系统。
+function isToolName(value: string): boolean { return toolNames.has(value) || /^mcp__[A-Za-z0-9_-]+__[A-Za-z0-9_-]+$/.test(value); }
 const decisions = new Set(['allow', 'ask', 'deny']);
 const tiers = new Set<PermissionTier>(['strict', 'default', 'bypass']);
 interface LoadedFile {rules: PermissionRule[]; tier?: PermissionTier}
@@ -32,12 +34,12 @@ function field(value: Record<string, unknown>, names: string[]): unknown { for (
 function parseRule(value: unknown, filePath: string, index: number): PermissionRule {
   if (!isRecord(value)) throw new Error(`${filePath}：第 ${index + 1} 条规则必须是对象`);
   let tool = field(value, ['tool', 'toolName', 'name']); let pattern = field(value, ['pattern', 'value']); const match = field(value, ['match', 'rule']); const decision = field(value, ['decision', 'action', 'result']);
-  if (tool === undefined && typeof match === 'string') { const parsed = match.match(/^([a-z_]+)\((.*)\)$/); if (parsed) { tool = parsed[1]; pattern = parsed[2]; } }
+  if (tool === undefined && typeof match === 'string') { const parsed = match.match(/^([A-Za-z0-9_-]+)\((.*)\)$/); if (parsed) { tool = parsed[1]; pattern = parsed[2]; } }
   else if (pattern === undefined && typeof match === 'string') pattern = match;
-  if (typeof tool !== 'string' || !toolNames.has(tool)) throw new Error(`${filePath}：第 ${index + 1} 条规则的工具名无效`);
+  if (typeof tool !== 'string' || !isToolName(tool)) throw new Error(`${filePath}：第 ${index + 1} 条规则的工具名无效`);
   if (typeof pattern !== 'string' || pattern.length === 0) throw new Error(`${filePath}：第 ${index + 1} 条规则的模式不能为空`);
   if (typeof decision !== 'string' || !decisions.has(decision)) throw new Error(`${filePath}：第 ${index + 1} 条规则的结果必须是 allow、ask 或 deny`);
-  return {tool, pattern, decision: decision as PermissionDecision};
+  return {tool, pattern, decision: decision as PermissionDecision, ...(value.exact === true ? {exact: true} : {})};
 }
 function readRulesFile(filePath: string): LoadedFile {
   if (!existsSync(filePath)) return {rules: []};
@@ -64,6 +66,7 @@ function callValue(call: ToolCall): string | null {
   if (call.name === 'read_file' || call.name === 'write_file' || call.name === 'edit_file') return typeof call.arguments.path === 'string' ? call.arguments.path.replaceAll('\\', '/') : null;
   if (call.name === 'find_files') return typeof call.arguments.pattern === 'string' ? call.arguments.pattern.replaceAll('\\', '/') : null;
   if (call.name === 'search_text') return typeof call.arguments.filePattern === 'string' ? call.arguments.filePattern.replaceAll('\\', '/') : '';
+  if (call.name.startsWith('mcp__')) return JSON.stringify(call.arguments);
   return null;
 }
 
@@ -72,8 +75,8 @@ export class PermissionEngine {
   readonly workspaceRoot: string; readonly userRulesPath: string; readonly projectRulesPath: string; readonly localRulesPath: string;
   #tier: PermissionTier; #rules: PermissionRule[]; #localRules: PermissionRule[]; readonly #sessionRules: PermissionRule[] = []; #paths: WorkspacePaths | null = null;
   constructor(options: PermissionEngineOptions) {
-    this.workspaceRoot = options.workspaceRoot; const userDirectory = join(homedir(), '.mycode');
-    this.userRulesPath = options.userRulesPath ?? join(userDirectory, 'permissions.yaml'); this.projectRulesPath = options.projectRulesPath ?? join(options.workspaceRoot, '.mycode', 'permissions.yaml'); this.localRulesPath = options.localRulesPath ?? join(options.workspaceRoot, '.mycode', 'permissions.local.yaml');
+    this.workspaceRoot = options.workspaceRoot; const userDirectory = join(homedir(), '.bitori');
+    this.userRulesPath = options.userRulesPath ?? join(userDirectory, 'permissions.yaml'); this.projectRulesPath = options.projectRulesPath ?? join(options.workspaceRoot, '.bitori', 'permissions.yaml'); this.localRulesPath = options.localRulesPath ?? join(options.workspaceRoot, '.bitori', 'permissions.local.yaml');
     const user = readRulesFile(this.userRulesPath); const project = readRulesFile(this.projectRulesPath); const local = readRulesFile(this.localRulesPath);
     this.#rules = [...user.rules, ...project.rules, ...local.rules]; this.#localRules = [...local.rules]; this.#tier = local.tier ?? 'default';
   }
@@ -83,7 +86,7 @@ export class PermissionEngine {
     if (call.effect === 'command') { const command = typeof call.arguments.command === 'string' ? call.arguments.command : ''; const blocked = blacklist.find(item => item.pattern.test(command)); if (blocked) return {decision: 'deny', source: 'blacklist', reason: `命令命中危险黑名单：${blocked.name}`}; }
     try { await this.#assertSandbox(call); }
     catch (error) { return {decision: 'deny', source: 'sandbox', reason: error instanceof Error ? error.message : '路径未通过工作区沙箱'}; }
-    const value = callValue(call) ?? ''; const matching = this.#rules.filter(rule => rule.tool === call.name && matches(rule.pattern.replaceAll('\\', '/'), value));
+    const value = callValue(call) ?? ''; const matching = this.#rules.filter(rule => rule.tool === call.name && (rule.exact ? rule.pattern === value : matches(rule.pattern.replaceAll('\\', '/'), value)));
     const strongest = matching.find(rule => rule.decision === 'deny') ?? matching.find(rule => rule.decision === 'ask') ?? matching.find(rule => rule.decision === 'allow');
     if (strongest) {
       if (strongest.decision === 'deny') return {decision: 'deny', source: 'rule', reason: `命中 deny 规则：${strongest.tool}(${strongest.pattern})`, rule: strongest};
@@ -99,9 +102,9 @@ export class PermissionEngine {
   addSessionAllow(call: ToolCall): void { const rule = this.#exactRule(call); this.#sessionRules.push(rule); this.#rules.push(rule); }
   addPermanentAllow(call: ToolCall): void { const rule = this.#exactRule(call); this.#localRules.push(rule); this.#rules.push(rule); this.#writeLocal(); }
   setTier(tier: PermissionTier): void { this.#tier = tier; this.#writeLocal(); }
-  #exactRule(call: ToolCall): PermissionRule { return {tool: call.name, pattern: callValue(call) ?? '', decision: 'allow'}; }
+  #exactRule(call: ToolCall): PermissionRule { return {tool: call.name, pattern: callValue(call) ?? '', decision: 'allow', exact: true}; }
   async #assertSandbox(call: ToolCall): Promise<void> {
-    if (call.effect === 'command') return; const paths = this.#paths ??= await WorkspacePaths.create(this.workspaceRoot);
+    if (call.effect === 'command' || call.name.startsWith('mcp__')) return; const paths = this.#paths ??= await WorkspacePaths.create(this.workspaceRoot);
     try { if (call.name === 'read_file' || call.name === 'edit_file') await paths.existingFile(callValue(call) ?? ''); else if (call.name === 'write_file') await paths.newFile(callValue(call) ?? ''); else { const pattern = callValue(call) ?? ''; paths.validateRelative(pattern || '.'); } }
     catch (error) { if (error instanceof WorkspacePathError && error.code === 'path_outside_workspace') throw error; if (!(error instanceof WorkspacePathError)) throw new WorkspacePathError('path_outside_workspace', '路径无法通过工作区沙箱校验'); }
   }

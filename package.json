@@ -1,5 +1,5 @@
 {
-  "name": "mycode",
+  "name": "bitori",
   "version": "0.1.0",
   "private": true,
   "description": "Windows-first full-screen AI chat client",
@@ -8,12 +8,12 @@
     "node": ">=24 <25"
   },
   "bin": {
-    "MyCode": "dist/bin/mycode.js"
+    "Bitori": "dist/bin/bitori.js"
   },
   "scripts": {
-    "dev": "tsx src/bin/mycode.ts",
+    "dev": "tsx src/bin/bitori.ts",
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/bin/mycode.js",
+    "start": "node dist/bin/bitori.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "pretest": "npm run build",

@@ -12,7 +12,7 @@ export function StatusBar({state}: {state: AppState}) {
   const progress = state.activeRunId === null ? '' : ` · ${state.iteration}/${state.maxIterations}${state.agentPhase ? ` · ${state.agentPhase}` : ''}`;
   const permission = state.permissionTier === 'strict' ? '严格' : state.permissionTier === 'bypass' ? '放行' : '默认';
   return <Box justifyContent="space-between">
-    <Text inverse> MyCode </Text>
+    <Text inverse> Bitori </Text>
     <Text>{state.profile?.name ?? '-'} · {state.profile?.model ?? '-'} · {state.agentMode === 'plan' ? 'PLAN' : 'DO'} · {state.requestStatus} · 权限:{permission}{progress}{usage}</Text>
     <Text color="gray">Ctrl+N 新建 · Ctrl+O 历史</Text>
   </Box>;

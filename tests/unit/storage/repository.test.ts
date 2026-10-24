@@ -6,7 +6,7 @@ import {SessionRepository} from '../../../src/storage/repository.js';
 
 describe('SessionRepository', () => {
   it('按 profile 隔离并按更新时间排序', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mycode-repository-'));
+    const root = mkdtempSync(join(tmpdir(), 'bitori-repository-'));
     try {
       const repository = new SessionRepository(join(root, 'db.sqlite'));
       await repository.initialize();

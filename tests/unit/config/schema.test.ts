@@ -30,4 +30,13 @@ describe('config schema', () => {
     expect(() => parseConfig({profiles: [{...base, base_url: 'file:///x'}]})).toThrow();
     expect(() => parseConfig({profiles: [{...base, api_key: 'secret'}]})).toThrow();
   });
+
+  it('校验两类 MCP Server 配置', () => {
+    const parsed = parseConfig({profiles: [base], mcp_servers: {
+      local: {transport: 'stdio', command: 'node', args: ['server.js'], env: {TOKEN: '${TOKEN}'}},
+      remote: {transport: 'http', url: 'https://example.com/mcp', headers: {Authorization: 'Bearer ${TOKEN}'}},
+    }});
+    expect(Object.keys(parsed.mcp_servers ?? {})).toEqual(['local', 'remote']);
+    expect(() => parseConfig({profiles: [base], mcp_servers: {bad: {transport: 'http', url: ''}}})).toThrow(/url/);
+  });
 });

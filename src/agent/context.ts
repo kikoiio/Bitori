@@ -33,6 +33,8 @@ export class AgentContext {
   }
 
   items(): readonly ModelContextItem[] { return this.#items; }
+  /** [s07] 全量摘要成功后原子替换内存请求上下文；持久化历史保持不变。 */
+  replaceItems(items: readonly ModelContextItem[]): void { this.#items.splice(0, this.#items.length, ...items); }
   appendUserMessage(item: ModelMessageItem): void { this.#items.push(item); }
   appendIteration(item: ModelAssistantIterationItem): void { this.#items.push(item); }
   appendToolResults(item: ModelToolResultsItem): void { this.#items.push(item); }

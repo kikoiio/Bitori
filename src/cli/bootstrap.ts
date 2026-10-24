@@ -14,8 +14,8 @@ import {createToolSystem} from '../tools/create-tool-system.js';
 /** [s01] 在读取配置和创建资源前先拒绝不受支持的运行环境。 */
 function assertRuntime(): void {
   const major = Number.parseInt(process.versions.node.split('.')[0] ?? '', 10);
-  if (major !== 24) throw new Error(`MyCode 需要 Node.js 24 LTS，当前为 ${process.versions.node}`);
-  if (process.platform !== 'win32') throw new Error('MyCode 首个版本仅支持 Windows 10/11');
+  if (major !== 24) throw new Error(`Bitori 需要 Node.js 24 LTS，当前为 ${process.versions.node}`);
+  if (process.platform !== 'win32') throw new Error('Bitori 首个版本仅支持 Windows 10/11');
 }
 
 export async function bootstrap(options: CliOptions): Promise<void> {
@@ -25,10 +25,15 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   }
   assertRuntime();
   // [s01] 配置读取、profile 选择、Provider/存储创建都集中在“组合根”中，UI 无需知道构造细节。
-  const config = loadConfig();
+  /* [s01 旧实现，s06 替换] const config = loadConfig(); */
+  const config = loadConfig(undefined, process.cwd());
   const selected = resolveProfile(config, options.profile);
   // [s02] 启动时固定捕获工作区；限制不来自配置或模型参数。
-  const toolSystem = createToolSystem(process.cwd());
+  /* [s02 旧实现，s06 替换] const toolSystem = createToolSystem(process.cwd()); */
+  const toolSystem = createToolSystem(process.cwd(), config.mcpServers);
+  // [s06] Server 逐个隔离初始化；可用工具先注册，失败项只告警而不阻断应用。
+  const mcpResult = await toolSystem.mcp.initialize();
+  for (const failure of mcpResult.failed) process.stderr.write(`MCP Server ${failure.name} 启动失败：${failure.error.message}\n`);
   let activeController: ChatController | null = null;
   let terminal: TerminalSession | null = null;
 
@@ -47,9 +52,12 @@ export async function bootstrap(options: CliOptions): Promise<void> {
     }
   };
 
-  if (selected !== null) activeController = await createController(selected);
+  if (selected !== null) {
+    try { activeController = await createController(selected); }
+    catch (error) { await toolSystem.close(); throw error; }
+  }
   // [s01] shutdown 内部会记忆第一次关闭 Promise，因此多个退出来源不会重复释放资源。
-  const shutdown = createShutdownOnce(() => activeController, () => terminal);
+  const shutdown = createShutdownOnce(() => activeController, () => terminal, toolSystem.close);
   const instance = renderApp({
     profiles: config.profiles.map(toProfileSummary),
     initialController: activeController,
@@ -68,7 +76,7 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   const fatalHandler = (error: unknown) => {
     // [s01] void 表示有意不在同步事件处理器里 await；finally 仍保证错误输出发生在清理之后。
     void shutdown('fatal_error').finally(() => {
-      process.stderr.write(`MyCode 发生未处理错误：${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(`Bitori 发生未处理错误：${error instanceof Error ? error.message : String(error)}\n`);
       process.exitCode = 1;
     });
   };

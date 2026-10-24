@@ -23,7 +23,7 @@ describe('s02 工具核心', () => {
   });
 
   it('创建、读取、唯一修改、查找和搜索均受工作区约束', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'mycode-tools-')); roots.push(root);
+    const root = await mkdtemp(join(tmpdir(), 'bitori-tools-')); roots.push(root);
     const {registry} = createToolSystem(root); const signal = new AbortController().signal;
     const context = {workspaceRoot: root, signal, limits: {timeoutMs: 10_000, maxResultBytes: 65_536, maxMatches: 500}};
     const write = registry.get('write_file')!; expect((await write.execute(write.parseArguments({path: '中文.ts', content: 'const x = 1;'}), context)).status).toBe('success');

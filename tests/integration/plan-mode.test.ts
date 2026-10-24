@@ -14,7 +14,7 @@ const profile: ProviderProfile = {name: 'plan', protocol: 'openai-chat', model: 
 
 describe('Plan Mode', () => {
   it('进入 Plan、拦截越权、保存计划并执行最近计划', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mycode-plan-')); roots.push(root);
+    const root = mkdtempSync(join(tmpdir(), 'bitori-plan-')); roots.push(root);
     const client = new MockLLMClient([
       [{type: 'tool_call_start', internalId: 'w', providerCallId: 'pw', position: 0, name: 'write_file'}, {type: 'tool_call_arguments_delta', internalId: 'w', delta: '{"path":"no.txt","content":"no"}'}, {type: 'tool_call_end', internalId: 'w'}, {type: 'completed', finishReason: 'tool_calls'}],
       [{type: 'text_delta', text: '计划完成'}, {type: 'completed', finishReason: 'stop'}],
@@ -29,14 +29,14 @@ describe('Plan Mode', () => {
     expect(controller.getState().agentMode).toBe('execute'); await controller.shutdown();
   }, 20_000);
   it('没有计划时 /do 不请求模型', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mycode-plan-')); roots.push(root); const client = new MockLLMClient([{type: 'completed', finishReason: 'stop'}]);
+    const root = mkdtempSync(join(tmpdir(), 'bitori-plan-')); roots.push(root); const client = new MockLLMClient([{type: 'completed', finishReason: 'stop'}]);
     const controller = new ChatController(client, new SessionRepository(join(root, 'db.sqlite')), createToolSystem(root)); await controller.initialize(profile); await controller.sendMessage('/do');
     expect(client.requests).toHaveLength(0); expect(controller.getState().visibleError).toContain('没有可执行计划'); await controller.shutdown();
   });
 
   // [s04] Plan 提醒注入节奏：首轮完整、每隔 3 轮重复完整、其余精简。
   it('Plan 模式按轮次注入完整或精简提醒', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mycode-plan-')); roots.push(root);
+    const root = mkdtempSync(join(tmpdir(), 'bitori-plan-')); roots.push(root);
     const client = new MockLLMClient(Array.from({length: 5}, () => [{type: 'completed', finishReason: 'stop'}] as never));
     const controller = new ChatController(client, new SessionRepository(join(root, 'db.sqlite')), createToolSystem(root)); await controller.initialize(profile);
     await controller.sendMessage('/plan');
@@ -58,7 +58,7 @@ describe('Plan Mode', () => {
   }, 20_000);
 
   it('/do 停止注入，再次 /plan 重新计轮，重启后提醒不残留', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mycode-plan-')); roots.push(root);
+    const root = mkdtempSync(join(tmpdir(), 'bitori-plan-')); roots.push(root);
     const database = join(root, 'db.sqlite');
     const client = new MockLLMClient([
       [{type: 'text_delta', text: '计划'}, {type: 'completed', finishReason: 'stop'}],

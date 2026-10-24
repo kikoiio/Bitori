@@ -2,7 +2,7 @@
 export type JsonObject = Record<string, unknown>;
 export type ToolEffect = 'read' | 'write' | 'command';
 
-export interface ToolDefinition {name: string; description: string; inputSchema: JsonObject}
+export interface ToolDefinition {name: string; description: string; inputSchema: JsonObject; strict?: boolean}
 export interface ToolLimits {timeoutMs: number; maxResultBytes: number; maxMatches: number}
 export interface ToolContext {workspaceRoot: string; signal: AbortSignal; limits: ToolLimits}
 
@@ -11,7 +11,7 @@ export type ToolErrorCode =
   | 'path_outside_workspace' | 'path_not_found' | 'path_already_exists'
   | 'not_a_file' | 'binary_file' | 'invalid_utf8' | 'permission_denied'
   | 'no_unique_match' | 'command_failed' | 'timeout' | 'denied'
-  | 'interrupted' | 'agent_loop_limit' | 'internal_error';
+  | 'interrupted' | 'agent_loop_limit' | 'mcp_error' | 'internal_error';
 export interface ToolError {code: ToolErrorCode; message: string; retryable: boolean; details?: JsonObject}
 export interface TruncationInfo {truncated: boolean; originalUnits: number; returnedUnits: number; unit: 'bytes' | 'matches'}
 export type ToolExecutionResult =
@@ -21,6 +21,7 @@ export type ToolExecutionResult =
 
 export interface Tool<TArgs extends JsonObject = JsonObject> {
   readonly name: string; readonly description: string; readonly effect: ToolEffect; readonly inputSchema: JsonObject;
+  readonly strict?: boolean;
   parseArguments(input: unknown): TArgs;
   execute(args: TArgs, context: ToolContext): Promise<ToolExecutionResult>;
 }

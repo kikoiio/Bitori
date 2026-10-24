@@ -68,7 +68,8 @@ export class OpenAIResponsesClient implements LLMClient {
         store: false, // [s01] 明确要求 OpenAI 不在服务端持久保存该响应。
         // [s04] 系统提示全文放入 instructions 字段；该协议无显式缓存标记，依赖服务端自动前缀缓存。
         ...(request.system?.length ? {instructions: request.system.map(block => block.text).join('\n\n')} : {}),
-        ...(request.phase === 'final' || !request.tools?.length ? {} : {tools: request.tools.map(tool => ({type: 'function' as const, name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: true}))}),
+        /* [s02 旧实现，s06 替换] 所有工具固定 strict: true。 */
+        ...(request.phase === 'final' || !request.tools?.length ? {} : {tools: request.tools.map(tool => ({type: 'function' as const, name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: tool.strict ?? true}))}),
       }, {signal});
 
       let emittedToolCall = false;

@@ -15,7 +15,7 @@ const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
 function toolCall(name: string, args: string, id = 'x'): StreamEvent[] { return [{type: 'tool_call_start', internalId: id, providerCallId: `p-${id}`, position: 0, name}, {type: 'tool_call_arguments_delta', internalId: id, delta: args}, {type: 'tool_call_end', internalId: id}, {type: 'completed', finishReason: 'tool_calls'}]; }
 async function run(scripts: StreamEvent[][], limits?: {maxIterations: number; maxUnknownToolIterations: number}, extra?: {system?: PromptBlock[]; reminders?: string[]}) {
-  const root = mkdtempSync(join(tmpdir(), 'mycode-runner-')); roots.push(root); writeFileSync(join(root, 'note.txt'), 'ok');
+  const root = mkdtempSync(join(tmpdir(), 'bitori-runner-')); roots.push(root); writeFileSync(join(root, 'note.txt'), 'ok');
   const client = new MockLLMClient(scripts); const tools = createToolSystem(root);
   const runner = new AgentRunner(client, tools.registry, new StreamCollector(), new SafetyBatchScheduler(tools.executor, tools.approvals));
   const events: AgentEvent[] = []; const generator = runner.run({runId: 'r', sessionId: 's', trigger: 'message', mode: 'execute', instruction: 'test', context: [{type: 'message', messageId: 'u', role: 'user', content: 'test'}], ...(limits ? {limits} : {}), ...(extra?.system ? {system: extra.system} : {}), ...(extra?.reminders ? {reminders: extra.reminders} : {})}, new AbortController().signal);

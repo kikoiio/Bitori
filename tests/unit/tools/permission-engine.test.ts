@@ -18,7 +18,7 @@ function engine(root: string, text: {user?: string; project?: string; local?: st
 
 describe('PermissionEngine', () => {
   it('黑名单和沙箱位于规则之前，放行规则也不能绕过', async () => {
-    const root = mkdtempSync('mycode-permission-'); roots.push(root);
+    const root = mkdtempSync('bitori-permission-'); roots.push(root);
     const permissions = engine(root, {user: 'rules:\n  - tool: run_command\n    pattern: "rm -rf *"\n    decision: allow\n'});
     permissions.setTier('bypass');
     await expect(permissions.evaluate(call('run_command', 'command', {command: 'rm -rf project'}))).resolves.toMatchObject({decision: 'deny', source: 'blacklist'});
@@ -26,7 +26,7 @@ describe('PermissionEngine', () => {
   });
 
   it('三层规则按 deny > ask > allow 合并，glob 可匹配工作区路径', async () => {
-    const root = mkdtempSync('mycode-permission-'); roots.push(root); writeFileSync(join(root, '.env'), 'secret', 'utf8');
+    const root = mkdtempSync('bitori-permission-'); roots.push(root); writeFileSync(join(root, '.env'), 'secret', 'utf8');
     const permissions = engine(root, {
       user: 'rules:\n  - tool: read_file\n    pattern: "**/*.env"\n    decision: allow\n',
       project: 'rules:\n  - tool: read_file\n    pattern: "**/*.env"\n    decision: ask\n',
@@ -36,7 +36,7 @@ describe('PermissionEngine', () => {
   });
 
   it('三档语义和永久规则可持久化', async () => {
-    const root = mkdtempSync('mycode-permission-'); roots.push(root); writeFileSync(join(root, 'note.txt'), 'ok', 'utf8');
+    const root = mkdtempSync('bitori-permission-'); roots.push(root); writeFileSync(join(root, 'note.txt'), 'ok', 'utf8');
     const permissions = engine(root);
     const write = call('write_file', 'write', {path: 'new.txt', content: 'x'});
     await expect(permissions.evaluate(write)).resolves.toMatchObject({decision: 'ask'});
@@ -48,7 +48,18 @@ describe('PermissionEngine', () => {
   });
 
   it('非法规则在加载时明确指出文件', () => {
-    const root = mkdtempSync('mycode-permission-'); roots.push(root); const bad = join(root, 'bad.yaml'); writeFileSync(bad, 'rules:\n  - tool: nope\n    pattern: "*"\n    decision: allow\n', 'utf8');
+    const root = mkdtempSync('bitori-permission-'); roots.push(root); const bad = join(root, 'bad.yaml'); writeFileSync(bad, 'rules:\n  - tool: nope\n    pattern: "*"\n    decision: allow\n', 'utf8');
     expect(() => new PermissionEngine({workspaceRoot: root, userRulesPath: bad, projectRulesPath: join(root, 'missing-project'), localRulesPath: join(root, 'missing-local')})).toThrow(new RegExp(`${bad.replaceAll('\\', '\\\\')}.*工具名无效`));
+  });
+
+  // [s06] 远端工具沿用权限引擎，生成的精确规则不能把参数中的 * 当作 glob。
+  it('MCP 工具默认询问并支持参数精确的会话放行', async () => {
+    const root = mkdtempSync('bitori-permission-'); roots.push(root);
+    const permissions = engine(root);
+    const remote = call('mcp__demo__search', 'command', {query: '*'});
+    await expect(permissions.evaluate(remote)).resolves.toMatchObject({decision: 'ask'});
+    permissions.addSessionAllow(remote);
+    await expect(permissions.evaluate(remote)).resolves.toMatchObject({decision: 'allow'});
+    await expect(permissions.evaluate(call('mcp__demo__search', 'command', {query: 'other'}))).resolves.toMatchObject({decision: 'ask'});
   });
 });
