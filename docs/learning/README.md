@@ -7,7 +7,7 @@
 - 每课交付一个可验证能力，不引入为下一课才需要的基础设施。
 - 先读现有代码，再写最小改动；改动必须落在课程指定的模块边界内。
 - 所有解释性源码注释使用中文并带 `[sNN]` 状态标签，符合 `AGENT.md` 的状态留痕规则。
-- 自动测试是每课的第一道门槛；涉及 Windows Terminal、真实模型或真实 MCP Server 的项目，在对应环境完成人工验收并记录到该课 `checklist.md`。
+- 自动测试是每课的第一道门槛；涉及真实终端、真实模型或真实 MCP Server 的项目，在对应环境完成人工验收并记录到该课 `checklist.md`。
 - 课程不要求外部 AI 生成代码。遇到不确定的实现，先读测试和相邻模块，再写最小实现。
 
 ## 学习路径
@@ -39,7 +39,7 @@
 
 ## 验证基线
 
-在 Windows 10/11、Node 24、Windows Terminal + PowerShell 中执行：
+在 Windows、Linux 或 macOS，Node 24 中执行：
 
 ```powershell
 npm ci
@@ -47,4 +47,4 @@ npm run check
 node dist/bin/bitori.js --help
 ```
 
-Linux 开发机可完成 typecheck、lint、build 与大多数非平台绑定测试；`run_command`、Windows 反斜杠路径和真实终端人工验收必须按 checklist 在 Windows 环境执行。
+GitHub Actions 会在 ubuntu-latest、windows-latest 和 macos-latest 三平台执行完整检查；真实终端人工验收按 checklist 在本机执行。

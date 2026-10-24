@@ -1,6 +1,6 @@
 # Bitori 项目约束
 
-Bitori 是一个使用 TypeScript 实现、仅支持 Windows 10/11 的终端 AI 对话助手。
+Bitori 是一个使用 TypeScript 实现的跨平台终端 AI 对话助手，支持 Windows、Linux 和 macOS；命令执行在 Windows 使用 PowerShell，在其他平台使用 bash。
 
 ## 语言
 
@@ -33,6 +33,6 @@ Bitori 是一个使用 TypeScript 实现、仅支持 Windows 10/11 的终端 AI 
 
 ## 验证
 
-开发完成后先运行 `npm run check`。人工端到端验收在 Windows Terminal 的 PowerShell 中执行：启动 Bitori、发送真实对话、观察流式输出和取消/恢复行为，并按 `checklist.md` 逐项记录真实结果。
+开发完成后先运行 `npm run check`。人工端到端验收在本机默认终端执行：启动 Bitori、发送真实对话、观察流式输出和取消/恢复行为，并按 `checklist.md` 逐项记录真实结果。
 
-2026-08-23 已完成真实 DeepSeek Anthropic 兼容端点验收（s03）。当前 Linux 开发机可完成 typecheck、lint、build 与绝大多数非平台绑定测试；`run_command`、Windows 反斜杠路径和真实终端人工验收需按 checklist 在 Windows 环境执行。官方三个原生供应商端点的分别实测仍是可选的完整供应商矩阵验收。
+2026-08-23 已完成真实 DeepSeek Anthropic 兼容端点验收（s03）。GitHub Actions 在 ubuntu-latest、windows-latest 和 macos-latest 三平台执行完整 `npm run check`。官方三个原生供应商端点的分别实测仍是可选的完整供应商矩阵验收。

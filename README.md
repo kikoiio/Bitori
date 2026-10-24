@@ -1,6 +1,6 @@
 # Bitori
 
-Bitori 是 Windows 优先的全屏终端 AI 对话客户端。它在 Anthropic Messages、OpenAI Responses 和 OpenAI Chat Completions 间提供一致的自主 Agent Loop、六个内置工具，以及启动时自动发现的 MCP 工具。
+Bitori 是跨平台的全屏终端 AI 对话客户端。它在 Anthropic Messages、OpenAI Responses 和 OpenAI Chat Completions 间提供一致的自主 Agent Loop、六个内置工具，以及启动时自动发现的 MCP 工具。命令执行在 Windows 使用 PowerShell，在 Linux/macOS 使用 bash。
 
 ## 课程与文档
 
@@ -30,9 +30,9 @@ Bitori 是 Windows 优先的全屏终端 AI 对话客户端。它在 Anthropic M
 
 ## 环境与安装
 
-- Windows 10/11
-- Windows Terminal + PowerShell
+- Windows 10/11、Linux 或 macOS
 - Node.js 24 LTS
+（终端任选；Windows Terminal + PowerShell 仅是推荐组合）
 
 ```powershell
 npm ci
@@ -139,4 +139,4 @@ node dist/bin/bitori.js --help
 
 ## 当前不支持
 
-Bitori 不支持多模态、多个用户任务并行、云同步、会话导入导出、断点续跑或非 Windows 平台。动态工具安装由 MCP、Slash Command、Skill、SubAgent、Teams 和 Worktree 的课程内机制覆盖。它不会自动批准副作用，不估算 token 成本，也不发送遥测。
+Bitori 不支持多模态、多个用户任务并行、云同步、会话导入导出或断点续跑。动态工具安装由 MCP、Slash Command、Skill、SubAgent、Teams 和 Worktree 的课程内机制覆盖。它不会自动批准副作用，不估算 token 成本，也不发送遥测。
