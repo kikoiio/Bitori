@@ -2,7 +2,7 @@ import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
-import {loadConfig, resolveProfile} from '../../../src/config/loader.js';
+import {loadConfig, resolveProfile, resolveProfileWithApiKey} from '../../../src/config/loader.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -70,7 +70,7 @@ describe('loadConfig', () => {
     base_url: https://example.com/v1
     api_key: \${MISSING}
 `);
-    expect(() => loadConfig(root)).toThrow(/MISSING/);
+    expect(() => resolveProfileWithApiKey(loadConfig(root))).toThrow(/API key/);
     expect(() => resolveProfile(loadConfig(home(`profiles:
   - name: one
     protocol: openai-chat
@@ -78,6 +78,25 @@ describe('loadConfig', () => {
     base_url: https://example.com/v1
     api_key: \${API_KEY}
 `)), 'missing')).toThrow(/missing/);
+  });
+
+  it('缺失 key 的 profile 不阻塞加载，但被选中时显错', () => {
+    const root = home(`profiles:
+  - name: empty
+    protocol: openai-chat
+    model: gpt
+    base_url: https://example.com/v1
+    api_key: \${EMPTY}
+  - name: valid
+    protocol: openai-chat
+    model: gpt
+    base_url: https://example.com/v1
+    api_key: \${API_KEY}
+`, 'EMPTY=\nAPI_KEY=test-secret\n');
+    const config = loadConfig(root);
+    expect(config.profiles).toHaveLength(2);
+    expect(resolveProfileWithApiKey(config, 'valid')?.apiKey).toBe('test-secret');
+    expect(() => resolveProfileWithApiKey(config, 'empty')).toThrow(/empty 的 API key/);
   });
 
   it('按用户级到项目级合并 MCP Server，并展开 env/header', () => {

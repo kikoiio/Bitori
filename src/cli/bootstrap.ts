@@ -1,5 +1,5 @@
 import {ChatController} from '../chat/agent-controller.js';
-import {loadConfig, resolveProfile} from '../config/loader.js';
+import {loadConfig, resolveProfileWithApiKey} from '../config/loader.js';
 import {toProfileSummary} from '../config/types.js';
 import type {ProviderProfile} from '../config/types.js';
 import {createLLMClient} from '../providers/factory.js';
@@ -28,14 +28,14 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   if (options.exec) {
     const workspace = resolve(options.exec.workspace ?? process.cwd());
     const config = loadConfig(undefined, workspace);
-    const profile = resolveProfile(config, options.profile);
+    const profile = resolveProfileWithApiKey(config, options.profile);
     if (profile === null) throw new Error('多 profile 时 exec 需要 --profile 指定');
     process.exitCode = await runExec(config, profile, options.exec);
     return;
   }
   // [s01] 配置读取、profile 选择、Provider/存储创建都集中在“组合根”中，UI 无需知道构造细节。
   const config = loadConfig(undefined, process.cwd());
-  const selected = resolveProfile(config, options.profile);
+  const selected = resolveProfileWithApiKey(config, options.profile);
   // [s02] 启动时固定捕获工作区；限制不来自配置或模型参数。
   // [s12] SubAgent 的模型映射先复用当前 profile；自定义模型路由在配置系统扩展后接入。
   const fallback = selected ?? config.profiles[0]!;

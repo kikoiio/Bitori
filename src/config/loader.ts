@@ -95,15 +95,13 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
       // [s01] `${NAME}` 去掉前后两个字符，得到 .env 中真正的变量名 NAME。
       const variable = source.api_key.slice(2, -1);
       const apiKey = environment[variable];
-      if (apiKey === undefined || apiKey.length === 0) {
-        throw new ConfigurationError(`.env 中缺少 ${variable}`);
-      }
+      // 缺失的 key 先置空；真正使用该 profile 时 resolveProfileWithApiKey 会显错。
       return {
         name: source.name,
         protocol: source.protocol,
         model: source.model,
         baseUrl: source.base_url,
-        apiKey,
+        apiKey: apiKey === undefined ? '' : apiKey,
         thinking: normalizeThinking(source.thinking),
         contextWindow: effectiveContextWindow(source.protocol, source.context_window),
       };
@@ -131,4 +129,14 @@ export function resolveProfile(config: AppConfig, requestedName?: string): Provi
   // [s01] 多 profile 且用户未指定时返回 null，表示应该进入 profile 选择界面。
   // [s01] `!` 告诉 TS：长度已经确认是 1，所以第 0 项一定存在。
   return config.profiles.length === 1 ? config.profiles[0]! : null;
+}
+
+/**
+ * 仅按需解析 profile 的密钥：缺失 key 的 profile 不阻塞启动，但一旦被选中就立即显错。
+ * 这样用户可以先只填 OpenRouter 或只填 Groq。
+ */
+export function resolveProfileWithApiKey(config: AppConfig, requestedName?: string): ProviderProfile | null {
+  const profile = resolveProfile(config, requestedName);
+  if (profile === null || profile.apiKey.length > 0) return profile;
+  throw new ConfigurationError(`.env 中缺少 profile ${profile.name} 的 API key`);
 }
