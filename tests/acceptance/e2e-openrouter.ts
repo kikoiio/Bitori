@@ -36,6 +36,7 @@ function workspace(): string {
   mkdirSync(join(root, 'notes'), {recursive: true});
   writeFileSync(join(root, 'notes', 'todo.md'), '- [ ] 买牛奶\n- [ ] 写周报\n', 'utf8');
   // bypass 让 edit 在无人值守 CI 中可执行；单独 deny run_command 防止模型执行 shell。
+  mkdirSync(join(root, '.bitori'), {recursive: true});
   writeFileSync(join(root, '.bitori', 'permissions.local.yaml'), 'mode: bypass\nrules:\n  - tool: run_command\n    pattern: "*"\n    decision: deny\n', 'utf8');
   return root;
 }
