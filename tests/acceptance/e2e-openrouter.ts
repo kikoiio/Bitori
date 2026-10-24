@@ -51,10 +51,12 @@ async function run(profile: ProviderProfile, root: string): Promise<void> {
     await controller.sendMessage('把 notes/todo.md 里的「买牛奶」改成「买燕麦奶」。完成后用一句话确认。');
     const state = controller.getState();
     const reply = [...state.messages].findLast(message => message.role === 'assistant')?.content ?? '';
+    const failed = [...state.messages].findLast(message => message.role === 'assistant' && message.status === 'failed');
     const content = readFileSync(join(root, 'notes', 'todo.md'), 'utf8');
 
     console.log(`模型请求次数：${client.requests.length}`);
     console.log(`工具调用序列：${client.toolCalls.join(' → ') || '（无）'}`);
+    console.log(`停止原因：${state.stopReason ?? '（无）'}；失败信息：${failed?.errorMessage ?? '（无）'}`);
     console.log(`最终回复：${reply.slice(0, 300)}`);
     console.log(`文件结果：${content.replaceAll('\n', ' / ')}`);
     assert(client.toolCalls.includes('read_file'), '必须先调用 read_file 读取文件');

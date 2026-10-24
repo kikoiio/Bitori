@@ -26,6 +26,7 @@ jobs:
       - name: Build
         run: npm run build
 
+      # OpenRouter 免费档每天约 50 次请求；异常时先看日志，不要连续重跑消耗额度。
       - name: Run real endpoint e2e
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
