@@ -24,14 +24,18 @@ instructions="$prompt
 4. 修改后运行 npm run typecheck 验证。
 "
 
+task_file="$(mktemp)"
+printf '%s\n' "$instructions" > "$task_file"
 set +e
 node dist/bin/bitori.js exec \
   --profile bench \
   --workspace "$PWD" \
   --max-iterations 12 \
-  --json <<< "$instructions"
+  --json \
+  --task "$(cat "$task_file")"
 exec_status=$?
 set -e
+rm -f "$task_file"
 
 # 复核 agent 没碰禁区；碰了就放弃本轮（不撤销，留 PR 里供检视）。
 violations=$(git status --porcelain -- benchmarks tests .github docs || true)
