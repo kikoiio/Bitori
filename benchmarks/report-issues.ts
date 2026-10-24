@@ -15,6 +15,17 @@ function signature(result: TaskResult): string {
   return `bench:${result.taskId}:${reason}`;
 }
 
+/** 失败分诊：Issue 自带标签，打开就知道该修哪一层。 */
+function triageLabels(result: TaskResult): string[] {
+  if (result.error !== null && /429|rate limit|quota/i.test(result.error)) return ['provider'];
+  if (result.error !== null && /iteration_limit/i.test(result.error)) return ['model-limit'];
+  if (result.exitReason === 'constraint' && result.error !== null && result.error.includes('禁止使用工具')) return ['agent-behavior'];
+  if (result.exitReason === 'constraint') return ['task-assertion'];
+  if (result.exitReason === 'verify' && result.toolSequence.length === 0) return ['agent-behavior'];
+  if (result.exitReason === 'verify') return ['needs-triage'];
+  return ['agent-behavior'];
+}
+
 const headers = {Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`};
 const openResponse = await fetch('https://api.github.com/repos/kikoiio/Bitori/issues?state=open&labels=benchmark&per_page=100', {headers});
 if (!openResponse.ok) throw new Error(`读取开放 Issue 失败：${openResponse.status} ${await openResponse.text()}`);
@@ -43,7 +54,7 @@ for (const result of ledger.results.filter(item => item.status !== 'pass')) {
   const created = await fetch('https://api.github.com/repos/kikoiio/Bitori/issues', {
     method: 'POST',
     headers: {...headers, 'Content-Type': 'application/json'},
-    body: JSON.stringify({title, body, labels: ['benchmark']}),
+    body: JSON.stringify({title, body, labels: ['benchmark', ...triageLabels(result)]}),
   });
   if (!created.ok) throw new Error(`创建 Issue 失败：${created.status} ${await created.text()}`);
   console.log(`已创建 Issue：${title}`);
