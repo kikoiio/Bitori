@@ -21,6 +21,8 @@ export interface ExecResult {
   inputTokens: number;
   outputTokens: number;
   reply: string;
+  errorCode: string | null;
+  errorMessage: string | null;
   error: string | null;
 }
 
@@ -56,6 +58,7 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
     await controller.initialize(profile);
     await controller.sendMessage(options.task);
     const state = controller.getState();
+    const failed = [...state.messages].findLast(message => message.role === 'assistant' && message.status === 'failed');
     const result: ExecResult = {
       task: options.task,
       status: state.requestStatus,
@@ -65,6 +68,8 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
       inputTokens: state.runUsage.inputTokens,
       outputTokens: state.runUsage.outputTokens,
       reply: [...state.messages].findLast(message => message.role === 'assistant')?.content ?? '',
+      errorCode: failed?.errorCode ?? null,
+      errorMessage: failed?.errorMessage ?? null,
       error: state.visibleError,
     };
     if (state.requestStatus === 'failed' || state.stopReason === null || state.visibleError !== null) exitCode = 1;
@@ -73,7 +78,7 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
   } catch (error) {
     exitCode = 1;
     const message = error instanceof Error ? error.message : String(error);
-    if (options.json) process.stdout.write(`${JSON.stringify({task: options.task, status: 'failed', stopReason: null, iterations: 0, toolCalls: [], inputTokens: 0, outputTokens: 0, reply: '', error: message})}\n`);
+    if (options.json) process.stdout.write(`${JSON.stringify({task: options.task, status: 'failed', stopReason: null, iterations: 0, toolCalls: [], inputTokens: 0, outputTokens: 0, reply: '', errorCode: null, errorMessage: message, error: message})}\n`);
     else process.stderr.write(`Bitori exec 失败：${message}\n`);
   } finally {
     await controller.shutdown();

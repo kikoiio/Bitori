@@ -43,7 +43,9 @@ export class AgentEventProjector {
     } else if (event.type === 'run_finished') {
       const latestPlan = this.#mode === 'plan' && event.result.stopReason === 'natural_completion' ? event.result.finalIterationId ?? undefined : undefined;
       await this.repository.finishAgentRun(event.runId, event.result, latestPlan);
-      const message = event.result.stopReason === 'natural_completion' ? null : `Agent 已停止：${event.result.stopReason}`;
+      const failed = [...this.#state.messages].findLast(message => message.role === 'assistant' && message.status === 'failed');
+      const detail = failed?.errorMessage === undefined || failed.errorMessage === null ? '' : `：${failed.errorMessage}`;
+      const message = event.result.stopReason === 'natural_completion' ? null : `Agent 已停止：${event.result.stopReason}${detail}`;
       this.#set({...this.#state, activeRunId: null, requestStatus: event.result.status === 'failed' ? 'failed' : 'idle', agentPhase: 'finishing', runUsage: event.result.usage, stopReason: event.result.stopReason, approvalPrompt: null, visibleError: message});
     }
   }

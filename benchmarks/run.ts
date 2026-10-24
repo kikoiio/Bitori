@@ -35,10 +35,11 @@ interface ExecSummary {
   reply: string;
   stopReason: string | null;
   error: string | null;
+  errorMessage: string | null;
 }
 
 function parseExecSummary(stdout: string, stderr: string): ExecSummary {
-  const fallback: ExecSummary = {iterations: 0, inputTokens: 0, outputTokens: 0, toolCalls: [], reply: '', stopReason: null, error: stderr || 'exec 未返回 JSON'};
+  const fallback: ExecSummary = {iterations: 0, inputTokens: 0, outputTokens: 0, toolCalls: [], reply: '', stopReason: null, error: stderr || 'exec 未返回 JSON', errorMessage: null};
   const line = stdout.trimEnd().split('\n').at(-1);
   if (!line?.startsWith('{')) return fallback;
   try {
@@ -84,7 +85,8 @@ async function runTask(task: {definition: TaskDefinition; directory: string}): P
     const summary = parseExecSummary(invocation.stdout, invocation.stderr);
     const constraints = violatedConstraints(task.definition, summary);
     const verifyError = await verify(task, workspace);
-    const errors = [invocation.exitCode !== 0 ? summary.error ?? invocation.stderr : null, ...constraints, verifyError].filter(item => item !== null);
+    const agentError = invocation.exitCode !== 0 ? [summary.error, summary.errorMessage].filter(item => item !== null).join('\n') || invocation.stderr : null;
+    const errors = [agentError, ...constraints, verifyError].filter(item => item !== null);
     const status: TaskResult['status'] = errors.length > 0 ? 'fail' : 'pass';
     return {
       taskId: task.definition.id,
