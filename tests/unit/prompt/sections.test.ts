@@ -21,4 +21,11 @@ describe('prompt sections', () => {
     expect(constraints!.text).toContain('工作区');
     expect(constraints!.text).toContain('批准');
   });
+
+  it('动作执行模块包含查找类任务的终止判据', () => {
+    const action = FIXED_SECTIONS.find(section => section.id === 'action_execution');
+    expect(action).toBeDefined();
+    expect(action!.text).toContain('信息足够即作答');
+    expect(action!.text).toContain('立即停止探索并给出答案');
+  });
 });
