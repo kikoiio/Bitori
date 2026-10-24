@@ -46,6 +46,7 @@ export class AgentRunner {
     const policy = new ToolPolicy(this.registry, input.mode);
     let total: Usage = {inputTokens: 0, outputTokens: 0}; let unknownIterations = 0; let finalIterationId: string | null = null;
     const replacementState = new ToolResultReplacementState(); const recovery = new RecoveryState(); const tracking = {consecutiveFailures: 0}; let usageAnchor: UsageAnchor | null = null;
+    let retryDelayMs = 5_000;
     const base = () => ({runId: input.runId, sessionId: input.sessionId, at: now()});
     await this.hooks?.fire('turn_start', {event: 'turn_start', message: input.instruction});
     try {
@@ -73,14 +74,21 @@ export class AgentRunner {
       }
       requestItems = input.contextManagement ? applyToolResultBudget(requestItems, input.contextManagement.workspaceRoot, replacementState) : requestItems;
       await this.hooks?.fire('pre_send', {event: 'pre_send', message: input.instruction});
-      const generator = this.collector.collect({runId: input.runId, sessionId: input.sessionId, iterationId, iteration, stream: this.client.streamChat({items: requestItems, messages: [], tools: policy.definitions(), ...(input.system ? {system: input.system} : {})}, signal), toolPolicy: policy, signal});
       let response;
       while (true) {
-        const step = await generator.next();
-        if (step.done) { response = step.value; break; }
-        const event = step.value;
-        if (event.type === 'usage_updated') yield {...event, totalUsage: addUsage(total, event.iterationUsage)};
-        else yield event;
+        const generator = this.collector.collect({runId: input.runId, sessionId: input.sessionId, iterationId, iteration, stream: this.client.streamChat({items: requestItems, messages: [], tools: policy.definitions(), ...(input.system ? {system: input.system} : {})}, signal), toolPolicy: policy, signal});
+        while (true) {
+          const step = await generator.next();
+          if (step.done) { response = step.value; break; }
+          const event = step.value;
+          if (event.type === 'usage_updated') yield {...event, totalUsage: addUsage(total, event.iterationUsage)};
+          else yield event;
+        }
+        // [s12] 429/网络/5xx 属于瞬时故障：指数退避后重发同一迭代，而不是终止整个任务。
+        if (!response.error?.retryable || signal.aborted) { retryDelayMs = 5_000; break; }
+        await this.hooks?.fire('error', {event: 'error', error: `第 ${iteration} 轮请求失败（${response.error.code}），${retryDelayMs / 1000} 秒后重试`});
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        retryDelayMs = Math.min(retryDelayMs * 2, 60_000);
       }
       total = addUsage(total, response.usage); usageAnchor = usageAnchorFrom(response.usage, requestItems);
       yield {...base(), type: 'iteration_finished', iterationId, iteration, response};

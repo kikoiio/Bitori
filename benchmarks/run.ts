@@ -86,7 +86,7 @@ async function runTask(task: {definition: TaskDefinition; directory: string}): P
     const summary = parseExecSummary(invocation.stdout, invocation.stderr);
     const constraints = violatedConstraints(task.definition, summary);
     const verifyError = await verify(task, workspace);
-    const agentError = invocation.exitCode !== 0 ? [summary.error, summary.errorMessage].filter(item => item !== null).join('\n') || invocation.stderr : null;
+    const agentError = invocation.exitCode !== 0 ? [...new Set([summary.error, summary.errorMessage].filter(item => item !== null))].join('\n') || invocation.stderr : null;
     const errors = [...new Set([agentError, ...constraints, verifyError].filter(item => item !== null))];
     const status: TaskResult['status'] = errors.length > 0 ? 'fail' : 'pass';
     return {
