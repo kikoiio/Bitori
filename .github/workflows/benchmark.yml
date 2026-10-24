@@ -18,6 +18,8 @@ on:
         required: false
         default: true
         type: boolean
+  schedule:
+    - cron: '0 15 * * 1'
 
 jobs:
   benchmark:
@@ -51,14 +53,14 @@ jobs:
           YAML
           printf 'LLM_API_KEY=%s\n' "$LLM_API_KEY" > "$HOME/.bitori/.env"
         env:
-          LLM_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
-          LLM_API_KEY: ${{ (inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
-          LLM_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
+          LLM_BASE_URL: ${{ (inputs.provider || 'groq') == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
+          LLM_API_KEY: ${{ ((inputs.provider || 'groq') == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
+          LLM_MODEL: ${{ inputs.model || ((inputs.provider || 'groq') == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
 
       - name: Run benchmarks
         id: bench
         env:
-          BITORI_BENCH_PROVIDER: ${{ inputs.provider }}
+          BITORI_BENCH_PROVIDER: ${{ inputs.provider || 'groq' }}
           BITORI_BENCH_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
           BITORI_BENCH_PROFILE: bench
         run: |
@@ -71,7 +73,7 @@ jobs:
           exit "$bench_status"
 
       - name: Report failures as issues
-        if: failure() && inputs.report_issues && steps.bench.outputs.run_id
+        if: failure() && (github.event_name == 'schedule' || inputs.report_issues) && steps.bench.outputs.run_id
         env:
           GH_TOKEN: ${{ github.token }}
         run: npx tsx benchmarks/report-issues.ts "${{ steps.bench.outputs.run_id }}"
