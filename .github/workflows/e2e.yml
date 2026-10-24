@@ -6,7 +6,7 @@ on:
       model:
         description: OpenRouter model id
         required: false
-        default: ${{ vars.OPENROUTER_MODEL }}
+        default: ''
 
 jobs:
   openrouter:
