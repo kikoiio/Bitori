@@ -20,7 +20,6 @@ export class StreamCollector {
         if (event.type === 'text_delta') { text += event.text; yield {...base, type: 'text_delta', delta: event.text}; }
         else if (event.type === 'thinking_delta') { thinking += event.text; yield {...base, type: 'thinking_delta', delta: event.text}; }
         else if (event.type === 'usage') {
-          /* [s03 旧实现，s04 替换] usage 聚合只保留 inputTokens 与 outputTokens。 */
           // [s04] 缓存字段沿用「有值才覆盖」的保留语义：Anthropic 只在 message_start 上报，后续 usage 事件不清空已收到的值。
           usage = {
             inputTokens: event.usage.inputTokens || usage.inputTokens,

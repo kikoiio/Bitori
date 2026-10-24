@@ -48,7 +48,6 @@ const mcpServersSchema = z.record(
   z.discriminatedUnion('transport', [stdioMcpServerSchema, httpMcpServerSchema]),
 );
 
-/* [s01 旧实现，s06 替换] export const configSchema = z.object({profiles: z.array(profileSchema).min(1, '至少需要一个 profile')}) */
 export const configSchema = z
   .object({
     profiles: z.array(profileSchema).min(1, '至少需要一个 profile'),

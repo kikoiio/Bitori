@@ -58,7 +58,6 @@ export class AgentRunner {
       const iterationId = createId(); finalIterationId = iterationId;
       yield {...base(), type: 'iteration_started', iterationId, iteration};
       yield {...base(), type: 'progress', iteration, maxIterations, phase: 'streaming', completedTools: 0, totalTools: 0};
-      /* [s03 旧实现，s04 替换] streamChat 请求不携带系统提示。 */
       /* [s07] 每次请求前先做全量摘要兜底，再做工具结果轻量预算；替换决策冻结以保护缓存前缀。 */
       let requestItems = [...context.items()];
       if (input.contextManagement?.windowTokens) {
@@ -78,7 +77,6 @@ export class AgentRunner {
         const step = await generator.next();
         if (step.done) { response = step.value; break; }
         const event = step.value;
-        /* [s03 旧实现，s04 替换] totalUsage 只累计 inputTokens 与 outputTokens。 */
         if (event.type === 'usage_updated') yield {...event, totalUsage: addUsage(total, event.iterationUsage)};
         else yield event;
       }

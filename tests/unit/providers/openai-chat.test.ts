@@ -26,7 +26,7 @@ describe('OpenAIChatClient', () => {
       yield {choices: [{delta: {tool_calls: [{index: 0, function: {arguments: '"a"}'}}]}, finish_reason: 'tool_calls'}]};
     }
     const create = vi.fn().mockResolvedValue(toolChunks()); const sdk = {chat: {completions: {create}}} as unknown as OpenAI; const events = [];
-    for await (const event of new OpenAIChatClient(profile, sdk).streamChat({messages: [], phase: 'initial', tools: [{name: 'read_file', description: 'read', inputSchema: {type: 'object'}}]}, new AbortController().signal)) events.push(event);
+    for await (const event of new OpenAIChatClient(profile, sdk).streamChat({messages: [], tools: [{name: 'read_file', description: 'read', inputSchema: {type: 'object'}}]}, new AbortController().signal)) events.push(event);
     expect(create).toHaveBeenCalledTimes(1);
     expect(events).toContainEqual({type: 'tool_call_start', internalId: 'chat-0', providerCallId: 'p1', position: 0, name: 'read_file'});
     expect(events).toContainEqual({type: 'tool_call_arguments_delta', internalId: 'chat-0', delta: '"a"}'});

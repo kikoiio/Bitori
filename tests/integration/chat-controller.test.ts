@@ -2,7 +2,7 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
-import {ChatController} from '../../src/chat/controller.js';
+import {ChatController} from '../../src/chat/agent-controller.js';
 import type {ProviderProfile} from '../../src/config/types.js';
 import {SessionRepository} from '../../src/storage/repository.js';
 import {MockLLMClient} from '../helpers/mock-llm-client.js';

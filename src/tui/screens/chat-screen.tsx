@@ -1,6 +1,6 @@
 import {Box, useInput, usePaste} from 'ink';
 import {useState} from 'react';
-import type {ChatController} from '../../chat/controller.js';
+import type {ChatController} from '../../chat/agent-controller.js';
 import type {AppState} from '../../chat/state.js';
 import type {Session} from '../../storage/types.js';
 import {ErrorBanner} from '../components/error-banner.js';

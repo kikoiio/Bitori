@@ -8,7 +8,6 @@ import type {PermissionTier} from '../tools/permission-engine.js';
 
 /** [s01] 当前要显示的顶层页面，以及一次请求在 UI 中可能出现的状态。 */
 export type Screen = 'profile_select' | 'chat' | 'session_list' | 'terminal_too_small';
-/* [s01 旧实现，s02 替换] RequestStatus 不含 approving 与 executing_tools。 */
 export type RequestStatus = 'idle' | 'thinking' | 'streaming' | 'approving' | 'executing_tools' | 'cancelling' | 'failed';
 
 /** [s01]

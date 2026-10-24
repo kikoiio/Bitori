@@ -43,24 +43,14 @@ export class OpenAIResponsesClient implements LLMClient {
         } else if (item.type === 'reminder') input.push({role: 'user', content: item.text});
         else for (const entry of item.results) input.push({type: 'function_call_output', call_id: entry.providerCallId ?? entry.callId, output: JSON.stringify(entry.result)});
       }
-      const history = new Map<string, NonNullable<ChatRequest['toolHistory']>>();
-      for (const call of request.toolHistory ?? []) history.set(call.assistantMessageId, [...(history.get(call.assistantMessageId) ?? []), call]);
-      for (const message of request.items ? [] : request.messages) {
-        const calls = message.messageId ? history.get(message.messageId) ?? [] : [];
-        if (message.role === 'assistant' && message.providerState?.protocol === 'openai-responses'
-          && isReplayPayload(message.providerState.payload)) {
-          // [s02] function_call 由统一工具记录表达；恢复 state 只重放 reasoning/message 等非工具项，避免同一调用重复。
-          input.push(...message.providerState.payload.filter(item => calls.length === 0 || typeof item !== 'object' || item === null || !('type' in item) || (item.type !== 'function_call' && item.type !== 'function_call_output')));
-        } else {
-          input.push({role: message.role, content: message.content});
-        }
-        for (const call of calls) {
-          input.push({type: 'function_call', call_id: call.callId, name: call.name, arguments: JSON.stringify(call.arguments)});
-          input.push({type: 'function_call_output', call_id: call.callId, output: JSON.stringify(call.result)});
+      if (input.length === 0 && request.system === undefined) {
+        for (const message of request.messages) {
+          if (message.role === 'assistant' && message.providerState?.protocol === 'openai-responses' && isReplayPayload(message.providerState.payload)) {
+            // [s02] 纯文本请求可重放非工具项；工具循环始终通过 items 精确重建调用与结果。
+            input.push(...message.providerState.payload.filter(item => typeof item !== 'object' || item === null || !('type' in item) || (item.type !== 'function_call' && item.type !== 'function_call_output')));
+          } else input.push({role: message.role, content: message.content});
         }
       }
-      if (!request.items && !request.toolHistory?.length) for (const call of request.toolCalls ?? []) input.push({type: 'function_call', call_id: call.callId, name: call.name, arguments: JSON.stringify(call.arguments)});
-      if (!request.items && !request.toolHistory?.length) for (const result of request.toolResults ?? []) input.push({type: 'function_call_output', call_id: result.callId, output: JSON.stringify(result.result)});
       const stream = await this.#client.responses.create({
         model: this.#profile.model,
         input: input as never,
@@ -68,8 +58,7 @@ export class OpenAIResponsesClient implements LLMClient {
         store: false, // [s01] 明确要求 OpenAI 不在服务端持久保存该响应。
         // [s04] 系统提示全文放入 instructions 字段；该协议无显式缓存标记，依赖服务端自动前缀缓存。
         ...(request.system?.length ? {instructions: request.system.map(block => block.text).join('\n\n')} : {}),
-        /* [s02 旧实现，s06 替换] 所有工具固定 strict: true。 */
-        ...(request.phase === 'final' || !request.tools?.length ? {} : {tools: request.tools.map(tool => ({type: 'function' as const, name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: tool.strict ?? true}))}),
+        ...(!request.tools?.length ? {} : {tools: request.tools.map(tool => ({type: 'function' as const, name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: tool.strict ?? true}))}),
       }, {signal});
 
       let emittedToolCall = false;

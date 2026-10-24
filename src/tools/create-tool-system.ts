@@ -25,7 +25,6 @@ export const fixedToolLimits = {
 } as const;
 
 /** [s02] 组合根只需调用一次，三个 Provider 共享同一注册集合。 */
-/* [s02 旧实现，s06 替换] createToolSystem(workspaceRoot) 只注册六个内置工具。 */
 export function createToolSystem(workspaceRoot: string, mcpServers: Record<string, McpServerConfig> = {}, options: {services?: AgentServices; clientFor?: (model: string | null) => LLMClient; memoryClient?: LLMClient} = {}) {
   const permissions = new PermissionEngine({workspaceRoot});
   const services = options.services ?? createAgentServices({workDir: workspaceRoot});

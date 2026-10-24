@@ -73,9 +73,8 @@ export class AnthropicClient implements LLMClient {
         ? {type: 'enabled', budget_tokens: config.budgetTokens}
         : undefined;
     // [s01] 对象展开只在 thinking 存在时加入字段，避免把 thinking: undefined 发给 SDK。
-    /* [s01 旧实现，s02 替换] parameters.messages 直接使用 request.messages.map(...)。 */
     const messages: unknown[] = [];
-    if (request.items) for (const item of request.items) {
+    for (const item of request.items ?? []) {
       if (item.type === 'message') messages.push({role: item.role, content: item.content});
       else if (item.type === 'assistant_iteration') messages.push({role: 'assistant', content: [
         ...(item.content ? [{type: 'text', text: item.content}] : []),
@@ -85,24 +84,15 @@ export class AnthropicClient implements LLMClient {
       else if (item.type === 'reminder') messages.push({role: 'user', content: item.text});
       else messages.push({role: 'user', content: item.results.map(entry => ({type: 'tool_result', tool_use_id: entry.providerCallId ?? entry.callId, content: JSON.stringify(entry.result), is_error: entry.result.status !== 'success'}))});
     }
-    const history = new Map<string, NonNullable<ChatRequest['toolHistory']>>();
-    for (const call of request.toolHistory ?? []) history.set(call.assistantMessageId, [...(history.get(call.assistantMessageId) ?? []), call]);
-    for (const message of request.items ? [] : request.messages) {
-      const calls = message.messageId ? history.get(message.messageId) ?? [] : [];
-      if (message.role === 'assistant' && calls.length > 0) {
-        messages.push({role: 'assistant', content: [...(message.content ? [{type: 'text', text: message.content}] : []), ...calls.map(call => ({type: 'tool_use', id: call.callId, name: call.name, input: call.arguments}))]});
-        messages.push({role: 'user', content: calls.map(call => ({type: 'tool_result', tool_use_id: call.callId, content: JSON.stringify(call.result), is_error: call.result?.status !== 'success'}))});
-      } else messages.push({role: message.role, content: message.content});
+    if (messages.length === 0 && request.system === undefined) {
+      for (const message of request.messages) messages.push({role: message.role, content: message.content});
     }
-    if (!request.items && !request.toolHistory?.length && request.toolCalls?.length) messages.push({role: 'assistant', content: request.toolCalls.map(call => ({type: 'tool_use', id: call.callId, name: call.name, input: call.arguments}))});
-    if (!request.items && !request.toolHistory?.length && request.toolResults?.length) messages.push({role: 'user', content: request.toolResults.map(result => ({type: 'tool_result', tool_use_id: result.callId, content: JSON.stringify(result.result), is_error: result.result?.status !== 'success'}))});
     const parameters = {
       model: this.#profile.model,
       max_tokens: maxTokens,
       messages,
-      /* [s01 旧实现，s04 替换] tools 映射不携带 cache_control。 */
       // [s04] 缓存断点利用「缓存到此为止的全部前缀」语义：末位工具一个断点覆盖全部工具定义，稳定块一个断点覆盖系统提示固定模块。
-      ...(request.phase === 'final' || !request.tools?.length ? {} : {tools: request.tools.map((tool, index, all) => ({name: tool.name, description: tool.description, input_schema: tool.inputSchema, ...(index === all.length - 1 ? {cache_control: {type: 'ephemeral'}} : {})}))}),
+      ...(!request.tools?.length ? {} : {tools: request.tools.map((tool, index, all) => ({name: tool.name, description: tool.description, input_schema: tool.inputSchema, ...(index === all.length - 1 ? {cache_control: {type: 'ephemeral'}} : {})}))}),
       // [s04] 结构化系统提示映射为 system 块数组；仅可缓存块携带 cache_control。
       ...(request.system?.length ? {system: request.system.map(block => ({type: 'text', text: block.text, ...(block.cacheable ? {cache_control: {type: 'ephemeral'}} : {})}))} : {}),
       ...(thinking === undefined ? {} : {thinking}),
@@ -124,7 +114,6 @@ export class AnthropicClient implements LLMClient {
         if (event.delta?.type === 'input_json_delta' && event.index !== undefined && toolIds.has(event.index)) yield {type: 'tool_call_arguments_delta', internalId: toolIds.get(event.index)!, delta: event.delta.partial_json ?? ''};
       } else if (event.type === 'message_start' && event.message?.usage?.input_tokens !== undefined) {
         // [s01] Anthropic 在流的开始给 input tokens，在后续 message_delta 给 output tokens。
-        /* [s01 旧实现，s04 替换] usage 事件只映射 inputTokens 与 outputTokens。 */
         // [s04] 缓存创建/命中字段只在 message_start 上报，存在时才加入事件。
         const startUsage = event.message.usage;
         yield {type: 'usage', usage: {

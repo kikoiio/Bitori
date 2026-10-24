@@ -15,9 +15,7 @@ class BoundedOutput {
   text(): ReturnType<typeof truncateUtf8> { return truncateUtf8(Buffer.concat(this.#chunks).toString('utf8'), this.maximumBytes); }
 }
 
-/* [s02 旧实现，s14 跨平台替换] 命令固定由 PowerShell 执行。 */
 export class RunCommandTool implements Tool<{command: string}> {
-  /* [s02 旧实现，s04 替换] readonly description = '从当前工作区执行 PowerShell 命令' */
   // [s04] 与系统提示双重强化「优先使用专用工具」规则。
   readonly name = 'run_command'; readonly description = IS_WINDOWS ? '从当前工作区执行 PowerShell 命令；能用 read_file、write_file、edit_file、find_files、search_text 完成的操作优先使用专用工具' : '从当前工作区执行 bash 命令；能用 read_file、write_file、edit_file、find_files、search_text 完成的操作优先使用专用工具'; readonly effect = 'command' as const;
   readonly inputSchema = {type: 'object', properties: {command: {type: 'string'}}, required: ['command'], additionalProperties: false};

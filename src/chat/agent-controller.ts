@@ -90,14 +90,12 @@ export class ChatController {
     const session = await this.#repository.findLatestSession(profile.name) ?? await this.#repository.createSession(profile.name);
     const conversation = await this.#repository.getConversation(session.id);
     const messages = conversation?.messages ?? await this.#repository.getMessages(session.id);
-    /* [s03 旧实现，s03 验收修复替换] 初始化会话时把 runUsage、latestUsage 和 stopReason 留在初始零值。 */
     this.#publish({...initialAppState(toProfileSummary(profile)), session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls: conversation?.toolCalls ?? [], ...restoredRunState(messages, conversation?.agentRuns ?? [])});
   }
   async sendMessage(text: string): Promise<void> {
     if (this.#closed) throw new Error('控制器已经关闭');
     if (this.#active) { this.#error('已有请求正在进行'); return; }
     if (!text.trim() || !this.#state.session) return;
-    /* [s09 旧实现，s09 集成替换] parseChatCommand 只识别四条硬编码命令。 */
     const legacy = parseChatCommand(text);
     if (legacy !== null && typeof legacy === 'object' && legacy.type === 'unknown') {
       const known = this.#commands.find(text.trim().slice(1).split(/\s+/)[0] ?? '');
@@ -177,7 +175,6 @@ export class ChatController {
     this.#systemBlocks = buildSystemPrompt(collectEnvironment(this.#profile, process.cwd()), optional).blocks;
   }
   #canChangeSession(): boolean { if (this.#active) { this.#error('生成期间不能新建或切换会话'); return false; } return true; }
-  /* [s03 旧实现，s03 验收修复替换] 切换会话时无条件清零 latestUsage/runUsage，且沿用了前一会话的 stopReason。 */
   #publishSession(session: Session, messages: StoredMessage[], toolCalls: ToolCallRecord[] = [], agentRuns: AgentRunRecord[] = []): void { this.#publish({...this.#state, screen: 'chat', session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls, requestStatus: 'idle', ...restoredRunState(messages, agentRuns), activeRunId: null, iteration: 0, agentPhase: null, expandedThinkingIds: new Set(), selectedMessageId: null, visibleError: null, approvalPrompt: null}); }
   #error(message: string): void { this.#publish({...this.#state, visibleError: message}); }
   #publish(state: AppState): void { if (state === this.#state) return; this.#state = state; for (const listener of this.#listeners) listener(state); }

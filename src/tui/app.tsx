@@ -1,6 +1,6 @@
 import {Box, Text, useWindowSize} from 'ink';
 import {useState} from 'react';
-import type {ChatController} from '../chat/controller.js';
+import type {ChatController} from '../chat/agent-controller.js';
 import type {ProfileSummary} from '../config/types.js';
 import {useChatController} from './hooks/use-chat-controller.js';
 import {ChatScreen} from './screens/chat-screen.js';

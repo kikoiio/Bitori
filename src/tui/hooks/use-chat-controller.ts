@@ -1,5 +1,5 @@
 import {useSyncExternalStore} from 'react';
-import type {ChatController} from '../../chat/controller.js';
+import type {ChatController} from '../../chat/agent-controller.js';
 import type {AppState} from '../../chat/state.js';
 
 /** [s01]

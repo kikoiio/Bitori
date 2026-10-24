@@ -5,7 +5,7 @@ Bitori 是跨平台的全屏终端 AI 对话客户端。它在 Anthropic Message
 ## 课程与文档
 
 - 实战课程入口：[docs/learning/README.md](docs/learning/README.md)。
-- 每阶段源码导读：`Project_Guide/sNN.md`，当前已覆盖 `s01`～`s14`。
+- 每阶段源码导读：`docs/Project_Guide/sNN.md`，当前已覆盖 `s01`～`s14`。
 
 ## 核心能力
 

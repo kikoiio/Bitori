@@ -22,14 +22,6 @@ export interface ChatMessage {
   messageId?: string;
 }
 
-export interface HistoricalToolCall {
-  assistantMessageId: string;
-  callId: string;
-  name: string;
-  arguments: JsonObject;
-  result: ToolExecutionResult | null;
-}
-
 /** [s03] Agent 使用严格有序的上下文表达任意多轮工具链。 */
 export interface ModelMessageItem {
   type: 'message';
@@ -71,16 +63,13 @@ export interface ModelReminderItem {
 export type ModelContextItem = ModelMessageItem | ModelAssistantIterationItem | ModelToolResultsItem | ModelReminderItem;
 
 export interface ChatRequest {
-  /** [s03] 新 Agent 主流程只使用 items；旧字段在迁移期保留。 */
+  /** [s03] Agent 主流程的严格有序上下文；工具循环必须使用 items。 */
   items?: ModelContextItem[];
-  /** [s04] 结构化系统提示；缺省时行为与 s03 一致（不发送系统提示）。 */
+  /** [s04] 结构化系统提示；缺省时不发送系统提示。 */
   system?: PromptBlock[];
+  /** [s04] 纯文本摘要等无工具请求仍可使用消息形态。 */
   messages: ChatMessage[];
   tools?: ToolDefinition[];
-  phase?: 'initial' | 'final';
-  toolCalls?: Array<{callId: string; name: string; arguments: JsonObject}>;
-  toolResults?: Array<{callId: string; name: string; result: ToolExecutionResult | null}>;
-  toolHistory?: HistoricalToolCall[];
 }
 
 export interface Usage {

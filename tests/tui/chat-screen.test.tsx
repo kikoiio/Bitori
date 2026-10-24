@@ -5,7 +5,7 @@ import {Message} from '../../src/tui/components/message.js';
 import type {StoredMessage} from '../../src/storage/types.js';
 import {ChatScreen} from '../../src/tui/screens/chat-screen.js';
 import {initialAppState} from '../../src/chat/state.js';
-import type {ChatController} from '../../src/chat/controller.js';
+import type {ChatController} from '../../src/chat/agent-controller.js';
 
 const message: StoredMessage = {id: 'm', sessionId: 's', role: 'assistant', content: '中文\n```ts\nconst x = 1\n```',
   thinking: '分析', status: 'completed', errorCode: null, errorMessage: null, usage: null, providerState: null,

@@ -5,7 +5,7 @@ import {loadConfig} from '../../src/config/loader.js';
 import type {ProviderProfile} from '../../src/config/types.js';
 import {createLLMClient} from '../../src/providers/factory.js';
 import type {ChatRequest, LLMClient, StreamEvent} from '../../src/providers/types.js';
-import {ChatController} from '../../src/chat/controller.js';
+import {ChatController} from '../../src/chat/agent-controller.js';
 import {SessionRepository} from '../../src/storage/repository.js';
 import {createToolSystem} from '../../src/tools/create-tool-system.js';
 
@@ -36,7 +36,7 @@ class RecordingClient implements LLMClient {
     }
       if (!failed || signal.aborted || ++attempt >= 3) return;
       this.#streamErrors++;
-      console.log(`OpenRouter 流失败，${retryDelayMs / 1000} 秒后重试（第 ${attempt + 1} 次）`);
+      console.log(`模型流失败，${retryDelayMs / 1000} 秒后重试（第 ${attempt + 1} 次）`);
       await sleep(retryDelayMs);
     }
   }
@@ -91,8 +91,8 @@ async function run(profile: ProviderProfile, root: string): Promise<void> {
   }
 }
 
-const model = process.env.OPENROUTER_MODEL;
-if (!model) throw new Error('缺少 OPENROUTER_MODEL 环境变量');
+const model = process.env.LLM_MODEL;
+if (!model) throw new Error('缺少 LLM_MODEL 环境变量');
 if (model === '__list__') {
   const response = await fetch(`${baseUrl}/models`, {headers: {Authorization: `Bearer ${process.env.LLM_API_KEY ?? ''}`}});
   const body = await response.json() as {data?: Array<{id?: string; context_window?: number}>};
@@ -118,4 +118,4 @@ writeFileSync(join(configDirectory, '.bitori', '.env'), `LLM_API_KEY=${process.e
 const profile = loadConfig(configDirectory, root).profiles[0]!;
 console.log(`profile：${profile.name}（${profile.protocol}，${profile.model}）`);
 await run(profile, root);
-console.log('OpenRouter E2E 全部通过');
+console.log('真实端点 E2E 全部通过');

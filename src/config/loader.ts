@@ -79,7 +79,6 @@ function resolveMcpServer(name: string, source: McpServerConfigSource, environme
   };
 }
 
-/* [s01 旧实现，s06 替换] export function loadConfig(homeDirectory = homedir()): AppConfig */
 export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cwd(), runtimeEnvironment: NodeJS.ProcessEnv = process.env): AppConfig {
   const paths = configPaths(homeDirectory);
   const yamlText = readRequired(paths.config, '配置文件');
@@ -112,7 +111,6 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     // [s06] map 按 user → project 浅合并；同名 Server 由项目级完整覆盖。
     const sources = {...(parsed.mcp_servers ?? {}), ...(project.mcp_servers ?? {})};
     const mcpServers = Object.fromEntries(Object.entries(sources).map(([name, source]) => [name, resolveMcpServer(name, source, environment)]));
-    /* [s01 旧实现，s06 替换] return {profiles}; */
     return {profiles, mcpServers};
   } catch (error) {
     // [s01] 已经是面向用户的配置错误就原样保留；Zod 错误则合并所有校验消息。

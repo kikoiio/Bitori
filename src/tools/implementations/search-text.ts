@@ -9,7 +9,6 @@ import type {Tool, ToolContext, ToolExecutionResult} from '../types.js';
 const schema = z.object({query: z.string().min(1), filePattern: z.string().min(1).optional()}).strict();
 type SearchTextArguments = {query: string; filePattern?: string | undefined};
 export class SearchTextTool implements Tool<SearchTextArguments> {
-  /* [s02 旧实现，s04 替换] readonly description = '在工作区 UTF-8 文件中搜索普通文本' */
   // [s04] 与系统提示双重强化「路径先查证」规则。
   readonly name = 'search_text'; readonly description = '在工作区 UTF-8 文件中搜索普通文本；定位代码或内容前先用本工具查证，不要猜测位置'; readonly effect = 'read' as const;
   readonly inputSchema = {type: 'object', properties: {query: {type: 'string'}, filePattern: {type: 'string'}}, required: ['query'], additionalProperties: false};

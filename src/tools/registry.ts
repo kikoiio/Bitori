@@ -9,6 +9,5 @@ export class ToolRegistry {
   }
   get(name: string): Tool | undefined { return this.#tools.get(name); }
   entries(): Tool[] { return [...this.#tools.values()]; }
-  /* [s02 旧实现，s06 替换] definitions() 只映射 name、description、inputSchema。 */
   definitions(): ToolDefinition[] { return this.entries().map(({name, description, inputSchema, strict}) => ({name, description, inputSchema, ...(strict === undefined ? {} : {strict})})); }
 }

@@ -1,4 +1,4 @@
-import {ChatController} from '../chat/controller.js';
+import {ChatController} from '../chat/agent-controller.js';
 import {loadConfig, resolveProfile} from '../config/loader.js';
 import {toProfileSummary} from '../config/types.js';
 import type {ProviderProfile} from '../config/types.js';
@@ -24,11 +24,9 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   }
   assertRuntime();
   // [s01] 配置读取、profile 选择、Provider/存储创建都集中在“组合根”中，UI 无需知道构造细节。
-  /* [s01 旧实现，s06 替换] const config = loadConfig(); */
   const config = loadConfig(undefined, process.cwd());
   const selected = resolveProfile(config, options.profile);
   // [s02] 启动时固定捕获工作区；限制不来自配置或模型参数。
-  /* [s02 旧实现，s06 替换] const toolSystem = createToolSystem(process.cwd()); */
   // [s12] SubAgent 的模型映射先复用当前 profile；自定义模型路由在配置系统扩展后接入。
   const toolOptions: {clientFor: (model: string | null) => ReturnType<typeof createLLMClient>; memoryClient?: ReturnType<typeof createLLMClient>} = {clientFor: () => createLLMClient(selected ?? config.profiles[0]!)};
   if (selected) toolOptions.memoryClient = createLLMClient(selected);
@@ -42,7 +40,6 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   const createController = async (profile: ProviderProfile): Promise<ChatController> => {
     // [s01] 每个 controller 拥有一条独立的存储 Worker 客户端和一个具体模型客户端。
     const repository = new SessionRepository();
-    /* [s01 旧实现，s02 替换] const controller = new ChatController(createLLMClient(profile), repository); */
     const controller = new ChatController(createLLMClient(profile), repository, toolSystem);
     try {
       await controller.initialize(profile);

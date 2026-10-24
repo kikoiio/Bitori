@@ -1,4 +1,4 @@
-import type {ChatController} from '../chat/controller.js';
+import type {ChatController} from '../chat/agent-controller.js';
 import type {TerminalSession} from './session.js';
 
 export type ShutdownReason = 'user' | 'fatal_error';

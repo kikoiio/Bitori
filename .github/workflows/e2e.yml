@@ -37,5 +37,5 @@ jobs:
         env:
           LLM_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
           LLM_API_KEY: ${{ (inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
-          OPENROUTER_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
+          LLM_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
         run: npx tsx tests/acceptance/e2e-openrouter.ts

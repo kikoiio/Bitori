@@ -29,13 +29,13 @@
 | [13](lessons/13.md) | Worktree | 安全 slug、快速恢复、创建后设置、变更保护与清理 |
 | [14](lessons/14.md) | Agent Teams | 团队花名册、成员文件邮箱、锁与游标恢复、进度状态 |
 
-每课文件开头列出前置课次、预计时长和所需环境。完成顺序固定；跳课前至少通读前一课的 `Project_Guide/sNN.md`。
+每课文件开头列出前置课次、预计时长和所需环境。完成顺序固定；跳课前至少通读前一课的 `docs/Project_Guide/sNN.md`。
 
 ## 文档地图
 
 - 课程总览与学习路径：本文件。
 - 每课讲义：`lessons/NN.md`。
-- 阶段实现导读：`../../Project_Guide/sNN.md`。
+- 阶段实现导读：`../Project_Guide/sNN.md`。
 
 ## 验证基线
 

@@ -8,8 +8,6 @@ export interface Migration {
   sql: string;
 }
 
-/* [s01 旧实现，s02 替换] export const migrations = [initialMigration]; */
-/* [s02 旧实现，s03 替换] export const migrations = [initialMigration, toolCallsMigration]; */
 export const migrations: readonly Migration[] = [initialMigration, toolCallsMigration, agentLoopMigration];
 
 /** [s01] 只描述迁移器需要的最小数据库能力，避免它绑定到具体 SQLite 类。 */
