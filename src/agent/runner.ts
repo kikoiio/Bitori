@@ -63,6 +63,7 @@ export class AgentRunner {
       if (input.contextManagement?.windowTokens) {
         const compact = await manageContext({items: requestItems, client: this.client, contextWindow: input.contextManagement.windowTokens, tracking, recovery, tools: policy.definitions(), anchor: usageAnchor, signal});
         if (compact.compacted) {
+          await this.hooks?.fire('compact', {event: 'compact', message: `${compact.beforeTokens} -> ${compact.afterTokens}`});
           context.replaceItems([
             {type: 'message', messageId: 'compact-summary', role: 'user', content: `${compact.summary ?? ''}\n\n${recovery.buildRecoveryAttachment(policy.definitions())}`},
             ...requestItems.slice(computeKeep(requestItems))],
@@ -71,6 +72,7 @@ export class AgentRunner {
         }
       }
       requestItems = input.contextManagement ? applyToolResultBudget(requestItems, input.contextManagement.workspaceRoot, replacementState) : requestItems;
+      await this.hooks?.fire('pre_send', {event: 'pre_send', message: input.instruction});
       const generator = this.collector.collect({runId: input.runId, sessionId: input.sessionId, iterationId, iteration, stream: this.client.streamChat({items: requestItems, messages: [], tools: policy.definitions(), ...(input.system ? {system: input.system} : {})}, signal), toolPolicy: policy, signal});
       let response;
       while (true) {
@@ -82,6 +84,8 @@ export class AgentRunner {
       }
       total = addUsage(total, response.usage); usageAnchor = usageAnchorFrom(response.usage, requestItems);
       yield {...base(), type: 'iteration_finished', iterationId, iteration, response};
+      if (response.error) await this.hooks?.fire('error', {event: 'error', error: response.error.message});
+      else await this.hooks?.fire('post_receive', {event: 'post_receive', message: response.text});
       if (response.cancelled || signal.aborted) {
         const result: AgentRunResult = {runId: input.runId, status: 'cancelled', stopReason: 'user_cancelled', iterationCount: iteration, usage: total, finalIterationId};
         yield {...base(), type: 'run_finished', result}; return result;

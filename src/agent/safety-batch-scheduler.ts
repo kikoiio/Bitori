@@ -4,6 +4,7 @@ import type {ToolExecutor} from '../tools/executor.js';
 import type {PreparedToolCall, ToolCall, ToolExecutionResult} from '../tools/types.js';
 import type {ApprovalDecision} from '../tools/types.js';
 import type {PermissionCheck, PermissionEngine} from '../tools/permission-engine.js';
+import type {HookEngine} from '../hooks/engine.js';
 import type {AgentEvent} from './types.js';
 
 export type ToolExecutionSegment = {kind: 'parallel_reads'; calls: ToolCall[]} | {kind: 'side_effect'; call: ToolCall};
@@ -16,7 +17,11 @@ function status(result: ToolExecutionResult) { return result.status === 'success
 /** [s03] 连续读取并发；每个副作用形成审批与执行屏障。 */
 export class SafetyBatchScheduler {
   readonly permissions: PermissionEngine | undefined;
-  constructor(readonly executor: ToolExecutor, readonly approvals: ApprovalCoordinator, permissions?: PermissionEngine) { this.permissions = permissions ?? executor.options.permissions; }
+  readonly #hooks: HookEngine | null;
+  constructor(readonly executor: ToolExecutor, readonly approvals: ApprovalCoordinator, permissions?: PermissionEngine, hooks?: HookEngine | null) {
+    this.permissions = permissions ?? executor.options.permissions;
+    this.#hooks = hooks ?? null;
+  }
 
   segments(calls: PreparedToolCall[], checks = new Map<string, PermissionCheck>()): ToolExecutionSegment[] {
     const segments: ToolExecutionSegment[] = [];
@@ -54,25 +59,44 @@ export class SafetyBatchScheduler {
       if (input.signal.aborted) break;
       if (segment.kind === 'parallel_reads') {
         for (const call of segment.calls) yield {...base(), type: 'tool_status', callId: call.internalId, status: 'running'};
-        const settled = await Promise.all(segment.calls.map(async call => [call, await this.executor.execute(call, input.signal)] as const));
-        for (const [call, result] of settled) { results.set(call.internalId, result); completed++; yield {...base(), type: 'tool_status', callId: call.internalId, status: status(result)}; yield {...base(), type: 'tool_result', callId: call.internalId, result}; }
+        const settled = await Promise.all(segment.calls.map(async call => [call, await this.#executeWithReadGuard(call, input.signal)] as const));
+        for (const [call, result] of settled) {
+          results.set(call.internalId, result); completed++;
+          yield {...base(), type: 'tool_status', callId: call.internalId, status: status(result)};
+          yield {...base(), type: 'tool_result', callId: call.internalId, result};
+          await this.#afterTool(call, result);
+        }
       } else {
         const call = segment.call;
         const check = checks.get(call.internalId); const needsApproval = check?.decision === 'ask' || (!this.permissions && call.effect !== 'read');
         const prompt = this.#prompt(call, check?.reason);
-        let decision: ApprovalDecision = 'approved';
-        if (needsApproval) {
+        let decision: ApprovalDecision;
+        let hookRejected: string | null = null;
+        if (this.#hooks) {
+          const guard = await this.#hooks.firePreToolHooks(call.name, call.arguments);
+          if (guard.rejected) hookRejected = guard.reason;
+        }
+        let result: ToolExecutionResult;
+        if (hookRejected !== null) {
+          result = {status: 'denied', error: {code: 'hook_rejected', message: hookRejected, retryable: false}};
+        } else if (needsApproval) {
+          await this.#hooks?.fire('permission_request', {event: 'permission_request', toolName: call.name, args: call.arguments});
           yield {...base(), type: 'approval_requested', callId: call.internalId, prompt};
           decision = await this.approvals.request(call, true, check?.reason);
           yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision};
           if (decision === 'approved_session' && this.permissions) this.permissions.addSessionAllow(call);
           if (decision === 'approved_permanent' && this.permissions) this.permissions.addPermanentAllow(call);
-        } else if (call.effect !== 'read') yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision: 'approved'};
-        let result: ToolExecutionResult;
-        if (input.signal.aborted) result = interrupted();
-        else if (decision === 'denied') result = {status: 'denied', error: {code: 'denied', message: '用户拒绝了工具调用', retryable: false, details: {source: 'human', reason: '用户在人在回路中拒绝了调用'}}};
-        else { yield {...base(), type: 'tool_status', callId: call.internalId, status: 'running'}; result = await this.executor.execute(call, input.signal); }
+          result = input.signal.aborted
+            ? interrupted()
+            : decision === 'denied'
+              ? {status: 'denied', error: {code: 'denied', message: '用户拒绝了工具调用', retryable: false, details: {source: 'human', reason: '用户在人在回路中拒绝了调用'}}}
+              : await this.#executeChecked(call, input.signal);
+        } else {
+          if (call.effect !== 'read') yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision: 'approved'};
+          result = input.signal.aborted ? interrupted() : await this.#executeChecked(call, input.signal);
+        }
         results.set(call.internalId, result); completed++; yield {...base(), type: 'tool_status', callId: call.internalId, status: status(result)}; yield {...base(), type: 'tool_result', callId: call.internalId, result};
+        await this.#afterTool(call, result);
       }
       yield {runId: input.runId, sessionId: input.sessionId, at: now(), type: 'progress', iteration: input.iteration, maxIterations: input.maxIterations, phase: 'executing_tools', completedTools: completed, totalTools: input.calls.length};
     }
@@ -84,4 +108,23 @@ export class SafetyBatchScheduler {
   }
 
   #prompt(call: ToolCall, reason?: string) { return {callId: call.internalId, toolName: call.name, effect: call.effect, argumentSummary: JSON.stringify(call.arguments), riskMessage: call.effect === 'command' ? '批准的命令可能访问网络、启动子进程或影响工作区外资源。' : null, ...(reason === undefined ? {} : {reason})}; }
+
+  async #executeWithReadGuard(call: ToolCall, signal: AbortSignal): Promise<ToolExecutionResult> {
+    if (this.#hooks) {
+      const guard = await this.#hooks.firePreToolHooks(call.name, call.arguments);
+      if (guard.rejected) return {status: 'denied', error: {code: 'hook_rejected', message: guard.reason, retryable: false}};
+    }
+    return this.#executeChecked(call, signal);
+  }
+
+  async #executeChecked(call: ToolCall, signal: AbortSignal): Promise<ToolExecutionResult> {
+    if (call.effect === 'command') await this.#hooks?.fire('command_execute', {event: 'command_execute', toolName: call.name, args: call.arguments});
+    return this.executor.execute(call, signal);
+  }
+
+  async #afterTool(call: ToolCall, result: ToolExecutionResult): Promise<void> {
+    const path = typeof call.arguments.path === 'string' ? call.arguments.path : undefined;
+    await this.#hooks?.fire('post_tool_use', {event: 'post_tool_use', toolName: call.name, args: call.arguments, result: result.status === 'success' ? 'success' : result.status, ...(path === undefined ? {} : {filePath: path})});
+    if (path !== undefined && (call.name === 'write_file' || call.name === 'edit_file')) await this.#hooks?.fire('file_change', {event: 'file_change', toolName: call.name, args: call.arguments, filePath: path});
+  }
 }

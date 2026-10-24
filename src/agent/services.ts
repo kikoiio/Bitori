@@ -8,6 +8,7 @@ import type {AgentDefinition} from '../subagents/types.js';
 import {loadAgentDefinitions} from '../subagents/loader.js';
 import {TeamManager} from '../teams/team.js';
 import {HookEngine} from '../hooks/engine.js';
+import {loadHookConfigs} from '../hooks/loader.js';
 import type {HookConfig} from '../hooks/types.js';
 import type {LLMClient} from '../providers/types.js';
 
@@ -40,7 +41,7 @@ export function createAgentServices(options: {workDir?: string; hooks?: readonly
     tasks: new TaskManager(),
     agents: loadAgentDefinitions(workDir, home),
     teams: new TeamManager(home),
-    hooks: new HookEngine(options.hooks ?? []),
+    hooks: new HookEngine(options.hooks ?? loadHookConfigs(workDir)),
     close: () => undefined,
   };
 }

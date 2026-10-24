@@ -80,7 +80,7 @@ export class ChatController {
     this.#services = withServices?.services ?? null;
     this.#memoryClient = withServices?.memoryClient ?? null;
     this.#commands = loadUserCommands(process.cwd(), undefined, createDefaultRegistry());
-    this.#runner = runner ?? new AgentRunner(client, registry, new StreamCollector(), new SafetyBatchScheduler(executor, approvals), this.#services?.hooks ?? null);
+    this.#runner = runner ?? new AgentRunner(client, registry, new StreamCollector(), new SafetyBatchScheduler(executor, approvals, undefined, this.#services?.hooks ?? null), this.#services?.hooks ?? null);
   }
   getState(): AppState { return this.#state; }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
@@ -90,6 +90,7 @@ export class ChatController {
     const session = await this.#repository.findLatestSession(profile.name) ?? await this.#repository.createSession(profile.name);
     const conversation = await this.#repository.getConversation(session.id);
     const messages = conversation?.messages ?? await this.#repository.getMessages(session.id);
+    await this.#services?.hooks.fire('session_start', {event: 'session_start', message: session.id});
     this.#publish({...initialAppState(toProfileSummary(profile)), session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls: conversation?.toolCalls ?? [], ...restoredRunState(messages, conversation?.agentRuns ?? [])});
   }
   async sendMessage(text: string): Promise<void> {
@@ -122,6 +123,7 @@ export class ChatController {
     const items = AgentContext.fromConversation(conversation).items();
     const tools = this.#tools.registry.definitions();
     const result = await manageContext({items, client: this.#client, contextWindow: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), tracking: {consecutiveFailures: 0}, recovery: new RecoveryState(), tools, anchor: null, signal: new AbortController().signal}, {force: true, safetyMargin: 3_000});
+    await this.#services?.hooks.fire('compact', {event: 'compact', message: result.compacted ? `${result.beforeTokens} -> ${result.afterTokens}` : result.reason});
     if (result.compacted) this.#error(`上下文已压缩：估算 ${result.beforeTokens} → ${result.afterTokens} tokens`);
     else this.#error(`上下文未压缩：${result.reason}`);
   }
@@ -153,13 +155,13 @@ export class ChatController {
   async cancelActiveRequest(): Promise<void> { const active = this.#active; if (!active || active.abortController.signal.aborted) return; this.#publish({...this.#state, requestStatus: 'cancelling'}); active.abortController.abort(); this.#tools.approvals.interruptAll(); await active.promise; }
   resolveToolApproval(decision: ApprovalDecision): void { const prompt = this.#state.approvalPrompt; if (prompt) this.#tools.approvals.resolve(prompt.callId, decision); }
   setPermissionTier(tier: PermissionTier): void { this.#setPermissionTier(tier); }
-  async createSession(): Promise<void> { if (!this.#canChangeSession() || !this.#profile) return; this.#rebuildSystemPrompt(); this.#publishSession(await this.#repository.createSession(this.#profile.name), []); }
+  async createSession(): Promise<void> { if (!this.#canChangeSession() || !this.#profile) return; this.#rebuildSystemPrompt(); await this.#publishSession(await this.#repository.createSession(this.#profile.name), []); }
   async listSessions(): Promise<Session[]> { return this.#profile ? this.#repository.listSessions(this.#profile.name) : []; }
-  async switchSession(sessionId: string): Promise<void> { if (!this.#canChangeSession() || !this.#profile) return; const session = await this.#repository.getSession(sessionId); if (!session || session.profileName !== this.#profile.name) { this.#error('该会话不属于当前 profile'); return; } this.#rebuildSystemPrompt(); const conversation = await this.#repository.getConversation(session.id); this.#publishSession(session, conversation?.messages ?? await this.#repository.getMessages(session.id), conversation?.toolCalls ?? [], conversation?.agentRuns ?? []); }
+  async switchSession(sessionId: string): Promise<void> { if (!this.#canChangeSession() || !this.#profile) return; const session = await this.#repository.getSession(sessionId); if (!session || session.profileName !== this.#profile.name) { this.#error('该会话不属于当前 profile'); return; } this.#rebuildSystemPrompt(); const conversation = await this.#repository.getConversation(session.id); await this.#publishSession(session, conversation?.messages ?? await this.#repository.getMessages(session.id), conversation?.toolCalls ?? [], conversation?.agentRuns ?? []); }
   setScreen(screen: AppState['screen']): void { this.#publish({...this.#state, screen}); }
   selectMessage(messageId: string | null): void { this.#publish({...this.#state, selectedMessageId: messageId}); }
   toggleThinking(messageId: string): void { const expanded = new Set(this.#state.expandedThinkingIds); if (expanded.has(messageId)) expanded.delete(messageId); else expanded.add(messageId); this.#publish({...this.#state, expandedThinkingIds: expanded}); }
-  shutdown(): Promise<void> { if (this.#shutdownPromise) return this.#shutdownPromise; this.#shutdownPromise = (async () => { this.#closed = true; if (this.#active) await this.cancelActiveRequest(); await this.#repository.close(); })(); return this.#shutdownPromise; }
+  shutdown(): Promise<void> { if (this.#shutdownPromise) return this.#shutdownPromise; this.#shutdownPromise = (async () => { this.#closed = true; if (this.#active) await this.cancelActiveRequest(); await this.#services?.hooks.fire('shutdown', {event: 'shutdown'}); await this.#repository.close(); })(); return this.#shutdownPromise; }
   async #setMode(mode: 'plan' | 'execute'): Promise<void> { const session = this.#state.session; if (!session) return; const updated = await this.#repository.setSessionMode(session.id, mode); this.#publish({...this.#state, session: updated, agentMode: mode, visibleError: null}); }
   #setPermissionTier(tier: PermissionTier): void { if (!this.#tools.permissions) { this.#error('当前工具系统未启用权限引擎'); return; } this.#tools.permissions.setTier(tier); this.#publish({...this.#state, permissionTier: tier, visibleError: null}); }
   /** [s04] 会话激活时采集环境并冻结系统提示；同一会话内逐字节稳定，保证 Anthropic 可缓存前缀不被破坏。 */
@@ -175,7 +177,7 @@ export class ChatController {
     this.#systemBlocks = buildSystemPrompt(collectEnvironment(this.#profile, process.cwd()), optional).blocks;
   }
   #canChangeSession(): boolean { if (this.#active) { this.#error('生成期间不能新建或切换会话'); return false; } return true; }
-  #publishSession(session: Session, messages: StoredMessage[], toolCalls: ToolCallRecord[] = [], agentRuns: AgentRunRecord[] = []): void { this.#publish({...this.#state, screen: 'chat', session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls, requestStatus: 'idle', ...restoredRunState(messages, agentRuns), activeRunId: null, iteration: 0, agentPhase: null, expandedThinkingIds: new Set(), selectedMessageId: null, visibleError: null, approvalPrompt: null}); }
+  async #publishSession(session: Session, messages: StoredMessage[], toolCalls: ToolCallRecord[] = [], agentRuns: AgentRunRecord[] = []): Promise<void> { await this.#services?.hooks.fire('session_end', {event: 'session_end'}); this.#publish({...this.#state, screen: 'chat', session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls, requestStatus: 'idle', ...restoredRunState(messages, agentRuns), activeRunId: null, iteration: 0, agentPhase: null, expandedThinkingIds: new Set(), selectedMessageId: null, visibleError: null, approvalPrompt: null}); }
   #error(message: string): void { this.#publish({...this.#state, visibleError: message}); }
   #publish(state: AppState): void { if (state === this.#state) return; this.#state = state; for (const listener of this.#listeners) listener(state); }
 }

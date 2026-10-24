@@ -11,7 +11,7 @@ export type ToolErrorCode =
   | 'path_outside_workspace' | 'path_not_found' | 'path_already_exists'
   | 'not_a_file' | 'binary_file' | 'invalid_utf8' | 'permission_denied'
   | 'no_unique_match' | 'command_failed' | 'timeout' | 'denied'
-  | 'interrupted' | 'agent_loop_limit' | 'mcp_error' | 'internal_error';
+  | 'interrupted' | 'agent_loop_limit' | 'hook_rejected' | 'mcp_error' | 'internal_error';
 export interface ToolError {code: ToolErrorCode; message: string; retryable: boolean; details?: JsonObject}
 export interface TruncationInfo {truncated: boolean; originalUnits: number; returnedUnits: number; unit: 'bytes' | 'matches'}
 export type ToolExecutionResult =

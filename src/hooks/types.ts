@@ -29,6 +29,7 @@ export interface HookContext {
   event: HookEvent;
   toolName?: string;
   args?: Record<string, unknown>;
+  result?: 'success' | 'error' | 'denied' | 'timeout' | 'interrupted';
   filePath?: string;
   message?: string;
   error?: string;

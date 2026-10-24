@@ -43,3 +43,7 @@ mcp_servers:
     url: https://example.com/mcp
     headers:
       Authorization: Bearer ${MCP_REMOTE_TOKEN}
+
+# 可选：SubAgent 逻辑模型名 -> profile 名；未命中时回退当前 profile。
+# models:
+#   haiku: claude-main

@@ -47,11 +47,13 @@ const mcpServersSchema = z.record(
   z.string().trim().min(1, 'MCP Server 名称不能为空'),
   z.discriminatedUnion('transport', [stdioMcpServerSchema, httpMcpServerSchema]),
 );
+const modelAliasesSchema = z.record(z.string().trim().min(1), z.string().trim().min(1));
 
 export const configSchema = z
   .object({
     profiles: z.array(profileSchema).min(1, '至少需要一个 profile'),
     mcp_servers: mcpServersSchema.optional(),
+    models: modelAliasesSchema.optional(),
   })
   .superRefine((value, context) => {
     // [s01] superRefine 适合做跨字段/跨数组项校验：单个字段的 schema 无法判断名称是否重复。

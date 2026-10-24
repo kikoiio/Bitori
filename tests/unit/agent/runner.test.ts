@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {AgentRunner} from '../../../src/agent/runner.js';
 import {SafetyBatchScheduler} from '../../../src/agent/safety-batch-scheduler.js';
+import {HookEngine} from '../../../src/hooks/engine.js';
 import {StreamCollector} from '../../../src/agent/stream-collector.js';
 import type {AgentEvent, AgentRunResult} from '../../../src/agent/types.js';
 import type {StreamEvent} from '../../../src/providers/types.js';
@@ -14,10 +15,10 @@ import {MockLLMClient} from '../../helpers/mock-llm-client.js';
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
 function toolCall(name: string, args: string, id = 'x'): StreamEvent[] { return [{type: 'tool_call_start', internalId: id, providerCallId: `p-${id}`, position: 0, name}, {type: 'tool_call_arguments_delta', internalId: id, delta: args}, {type: 'tool_call_end', internalId: id}, {type: 'completed', finishReason: 'tool_calls'}]; }
-async function run(scripts: StreamEvent[][], limits?: {maxIterations: number; maxUnknownToolIterations: number}, extra?: {system?: PromptBlock[]; reminders?: string[]}) {
+async function run(scripts: StreamEvent[][], limits?: {maxIterations: number; maxUnknownToolIterations: number}, extra?: {system?: PromptBlock[]; reminders?: string[]; hooks?: HookEngine}) {
   const root = mkdtempSync(join(tmpdir(), 'bitori-runner-')); roots.push(root); writeFileSync(join(root, 'note.txt'), 'ok');
   const client = new MockLLMClient(scripts); const tools = createToolSystem(root);
-  const runner = new AgentRunner(client, tools.registry, new StreamCollector(), new SafetyBatchScheduler(tools.executor, tools.approvals));
+  const runner = new AgentRunner(client, tools.registry, new StreamCollector(), new SafetyBatchScheduler(tools.executor, tools.approvals, undefined, extra?.hooks ?? null), extra?.hooks ?? null);
   const events: AgentEvent[] = []; const generator = runner.run({runId: 'r', sessionId: 's', trigger: 'message', mode: 'execute', instruction: 'test', context: [{type: 'message', messageId: 'u', role: 'user', content: 'test'}], ...(limits ? {limits} : {}), ...(extra?.system ? {system: extra.system} : {}), ...(extra?.reminders ? {reminders: extra.reminders} : {})}, new AbortController().signal);
   let result: AgentRunResult;
   while (true) { const step = await generator.next(); if (step.done) { result = step.value; break; } events.push(step.value); }
@@ -67,5 +68,21 @@ describe('AgentRunner', () => {
     const value = await run([first, second]);
     expect(value.events.some(event => event.type === 'usage_updated' && event.iterationUsage.cacheReadInputTokens === 10)).toBe(true);
     expect(value.result.usage).toMatchObject({inputTokens: 30, outputTokens: 3, cacheReadInputTokens: 15, cacheCreationInputTokens: 100});
+  });
+
+  it('Hook 拦截写入工具并触发生命周期事件', async () => {
+    const hooks = new HookEngine([
+      {event: 'pre_send', action: {type: 'prompt', prompt: 'send'}},
+      {event: 'post_receive', action: {type: 'prompt', prompt: 'receive'}},
+      {event: 'pre_tool_use', condition: '$TOOL_NAME == write_file', reject: true, action: {type: 'prompt', prompt: 'blocked'}},
+      {event: 'post_tool_use', action: {type: 'prompt', prompt: 'done'}},
+    ]);
+    const value = await run([
+      [{type: 'tool_call_start', internalId: 'w', providerCallId: 'p', position: 0, name: 'write_file'}, {type: 'tool_call_arguments_delta', internalId: 'w', delta: '{"path":"new.txt","content":"x"}'}, {type: 'tool_call_end', internalId: 'w'}, {type: 'completed', finishReason: 'tool_calls'}],
+      [{type: 'completed', finishReason: 'stop'}],
+    ], undefined, {hooks});
+    expect(value.result.status).toBe('completed');
+    expect(value.events.some(event => event.type === 'tool_result' && event.result.status === 'denied' && event.result.error.code === 'hook_rejected')).toBe(true);
+    expect(value.client.requests[1]?.items?.some(item => item.type === 'tool_results' && item.results.some(entry => entry.result.status === 'denied' && entry.result.error.code === 'hook_rejected'))).toBe(true);
   });
 });

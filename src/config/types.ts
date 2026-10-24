@@ -60,11 +60,14 @@ export type ProfileSummary = Pick<ProviderProfile, 'name' | 'protocol' | 'model'
 export interface AppConfig {
   profiles: ProviderProfile[];
   mcpServers: Record<string, McpServerConfig>;
+  /** [s12] SubAgent 的逻辑模型名到 profile 名映射；缺失时回退当前 profile。 */
+  models: Record<string, string>;
 }
 
 export interface ParsedConfig {
   profiles: ProviderProfileSource[];
   mcp_servers?: Record<string, McpServerConfigSource>;
+  models?: Record<string, string>;
 }
 
 /** [s07] 跨协议默认上下文窗口；配置值只做覆盖。 */

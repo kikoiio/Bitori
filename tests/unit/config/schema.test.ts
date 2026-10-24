@@ -39,4 +39,9 @@ describe('config schema', () => {
     expect(Object.keys(parsed.mcp_servers ?? {})).toEqual(['local', 'remote']);
     expect(() => parseConfig({profiles: [base], mcp_servers: {bad: {transport: 'http', url: ''}}})).toThrow(/url/);
   });
+
+  it('models 别名映射到 profile 名', () => {
+    const parsed = parseConfig({profiles: [base], models: {haiku: 'main'}});
+    expect(parsed.models).toEqual({haiku: 'main'});
+  });
 });

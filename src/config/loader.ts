@@ -111,7 +111,7 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     // [s06] map 按 user → project 浅合并；同名 Server 由项目级完整覆盖。
     const sources = {...(parsed.mcp_servers ?? {}), ...(project.mcp_servers ?? {})};
     const mcpServers = Object.fromEntries(Object.entries(sources).map(([name, source]) => [name, resolveMcpServer(name, source, environment)]));
-    return {profiles, mcpServers};
+    return {profiles, mcpServers, models: parsed.models ?? {}};
   } catch (error) {
     // [s01] 已经是面向用户的配置错误就原样保留；Zod 错误则合并所有校验消息。
     if (error instanceof ConfigurationError) throw error;

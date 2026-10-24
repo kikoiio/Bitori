@@ -28,11 +28,21 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   const selected = resolveProfile(config, options.profile);
   // [s02] 启动时固定捕获工作区；限制不来自配置或模型参数。
   // [s12] SubAgent 的模型映射先复用当前 profile；自定义模型路由在配置系统扩展后接入。
-  const toolOptions: {clientFor: (model: string | null) => ReturnType<typeof createLLMClient>; memoryClient?: ReturnType<typeof createLLMClient>} = {clientFor: () => createLLMClient(selected ?? config.profiles[0]!)};
+  const fallback = selected ?? config.profiles[0]!;
+  const profileByName = new Map(config.profiles.map(profile => [profile.name, profile]));
+  const clientCache = new Map<string, ReturnType<typeof createLLMClient>>();
+  const clientFor = (model: string | null): ReturnType<typeof createLLMClient> => {
+    const profileName = model === null ? fallback.name : config.models[model] ?? (profileByName.has(model) ? model : fallback.name);
+    const cached = clientCache.get(profileName); if (cached) return cached;
+    const profile = profileByName.get(profileName) ?? fallback;
+    const client = createLLMClient(profile); clientCache.set(profileName, client); return client;
+  };
+  const toolOptions: {clientFor: (model: string | null) => ReturnType<typeof createLLMClient>; memoryClient?: ReturnType<typeof createLLMClient>} = {clientFor};
   if (selected) toolOptions.memoryClient = createLLMClient(selected);
   const toolSystem = createToolSystem(process.cwd(), config.mcpServers, toolOptions);
   // [s06] Server 逐个隔离初始化；可用工具先注册，失败项只告警而不阻断应用。
   const mcpResult = await toolSystem.mcp.initialize();
+  await toolSystem.services.hooks.fire('startup', {event: 'startup'});
   for (const failure of mcpResult.failed) process.stderr.write(`MCP Server ${failure.name} 启动失败：${failure.error.message}\n`);
   let activeController: ChatController | null = null;
   let terminal: TerminalSession | null = null;
