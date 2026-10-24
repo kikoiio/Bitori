@@ -13,6 +13,7 @@ const tasksRoot = join(root, 'benchmarks', 'tasks');
 const provider = process.env.BITORI_BENCH_PROVIDER ?? 'groq';
 const model = process.env.BITORI_BENCH_MODEL ?? process.env.LLM_MODEL ?? '';
 const profile = process.env.BITORI_BENCH_PROFILE ?? '';
+const taskDelayMs = Number.parseInt(process.env.BITORI_BENCH_TASK_DELAY_MS ?? '15000', 10);
 
 function discoverTasks(): Array<{definition: TaskDefinition; directory: string}> {
   if (!existsSync(tasksRoot)) return [];
@@ -86,7 +87,7 @@ async function runTask(task: {definition: TaskDefinition; directory: string}): P
     const constraints = violatedConstraints(task.definition, summary);
     const verifyError = await verify(task, workspace);
     const agentError = invocation.exitCode !== 0 ? [summary.error, summary.errorMessage].filter(item => item !== null).join('\n') || invocation.stderr : null;
-    const errors = [agentError, ...constraints, verifyError].filter(item => item !== null);
+    const errors = [...new Set([agentError, ...constraints, verifyError].filter(item => item !== null))];
     const status: TaskResult['status'] = errors.length > 0 ? 'fail' : 'pass';
     return {
       taskId: task.definition.id,
@@ -102,10 +103,24 @@ async function runTask(task: {definition: TaskDefinition; directory: string}): P
       reply: summary.reply,
       error: errors.length > 0 ? errors.join('\n') : null,
       durationMs: Date.now() - started,
+      attempts: 1,
     };
   } finally {
     rmSync(workspace, {recursive: true, force: true});
   }
+}
+
+function sleep(ms: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function runTaskWithRateLimitRetry(task: {definition: TaskDefinition; directory: string}): Promise<TaskResult> {
+  let result = await runTask(task);
+  if (result.status !== 'pass' && result.error !== null && /429|rate_limit/i.test(result.error)) {
+    process.stderr.write('  429 限流，45 秒后重试一次\n');
+    await sleep(45_000);
+    result = await runTask(task);
+    return {...result, attempts: 2};
+  }
+  return result;
 }
 
 if (!model) throw new Error('缺少 BITORI_BENCH_MODEL 或 LLM_MODEL');
@@ -114,13 +129,14 @@ if (tasks.length === 0) throw new Error('未发现 benchmark 任务');
 const runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${provider}`;
 const results: TaskResult[] = [];
 for (const task of tasks) {
+  if (results.length > 0 && taskDelayMs > 0) await sleep(taskDelayMs);
   process.stderr.write(`[${results.length + 1}/${tasks.length}] ${task.definition.id} ... `);
   const started = Date.now();
   try {
-    results.push(await runTask(task));
+    results.push(await runTaskWithRateLimitRetry(task));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    results.push({taskId: task.definition.id, model, provider, status: 'error', exitCode: 1, exitReason: 'harness', iterations: 0, inputTokens: 0, outputTokens: 0, toolSequence: [], reply: '', error: message, durationMs: Date.now() - started});
+    results.push({taskId: task.definition.id, model, provider, status: 'error', exitCode: 1, exitReason: 'harness', iterations: 0, inputTokens: 0, outputTokens: 0, toolSequence: [], reply: '', error: message, durationMs: Date.now() - started, attempts: 1});
   }
   const result = results.at(-1)!;
   process.stderr.write(`${result.status} (${result.durationMs}ms)\n`);

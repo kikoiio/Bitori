@@ -23,6 +23,7 @@ export interface TaskResult {
   reply: string;
   error: string | null;
   durationMs: number;
+  attempts: number;
 }
 
 export interface RunLedger {
