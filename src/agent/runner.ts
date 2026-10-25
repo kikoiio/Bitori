@@ -1,5 +1,7 @@
 import {createId, now} from '../shared/ids.js';
+import {createHash} from 'node:crypto';
 import type {LLMClient, ModelAssistantIterationItem, ModelToolResultsItem, Usage} from '../providers/types.js';
+import type {ToolDefinition} from '../tools/types.js';
 import type {ToolRegistry} from '../tools/registry.js';
 import type {PreparedToolCall, ToolExecutionResult} from '../tools/types.js';
 import {AgentContext} from './context.js';
@@ -19,6 +21,11 @@ function callId(call: PreparedToolCall): string { return call.availability === '
 function providerCallId(call: PreparedToolCall): string | null { return call.availability === 'available' ? call.call.providerCallId : call.draft.providerCallId; }
 function callName(call: PreparedToolCall): string { return call.availability === 'available' ? call.call.name : call.draft.name; }
 function limitResult(): ToolExecutionResult { return {status: 'error', error: {code: 'agent_loop_limit', message: '已达到 20 次模型迭代上限，新的工具调用未执行', retryable: false}}; }
+
+/** [s15] 工具定义指纹：内容变化才随 request_prepared 携带完整定义，其余轮次只带摘要。 */
+function definitionsDigest(definitions: readonly ToolDefinition[]): string {
+  return createHash('sha256').update(JSON.stringify(definitions)).digest('hex').slice(0, 16);
+}
 
 /** [s04] 累计用量；缓存字段只在 Anthropic 协议出现，双方都缺省时不带入结果。 */
 function addUsage(a: Usage, b: Usage): Usage {
@@ -46,8 +53,10 @@ export class AgentRunner {
     const policy = new ToolPolicy(this.registry, input.mode);
     let total: Usage = {inputTokens: 0, outputTokens: 0}; let unknownIterations = 0; let finalIterationId: string | null = null;
     const replacementState = new ToolResultReplacementState(); const recovery = new RecoveryState(); const tracking = {consecutiveFailures: 0}; let usageAnchor: UsageAnchor | null = null;
-    let retryDelayMs = 5_000;
+    const retryBaseDelayMs = input.limits?.retryBaseDelayMs ?? 5_000;
+    let retryDelayMs = retryBaseDelayMs;
     let retriesLeft = 3;
+    let lastToolDefinitionDigest: string | null = null;
     const base = () => ({runId: input.runId, sessionId: input.sessionId, at: now()});
     await this.hooks?.fire('turn_start', {event: 'turn_start', message: input.instruction});
     try {
@@ -66,6 +75,7 @@ export class AgentRunner {
         const compact = await manageContext({items: requestItems, client: this.client, contextWindow: input.contextManagement.windowTokens, tracking, recovery, tools: policy.definitions(), anchor: usageAnchor, signal});
         if (compact.compacted) {
           await this.hooks?.fire('compact', {event: 'compact', message: `${compact.beforeTokens} -> ${compact.afterTokens}`});
+          yield {...base(), type: 'context_compacted', beforeTokens: compact.beforeTokens, afterTokens: compact.afterTokens, keepIndex: computeKeep(requestItems), reason: 'auto'};
           context.replaceItems([
             {type: 'message', messageId: 'compact-summary', role: 'user', content: `${compact.summary ?? ''}\n\n${recovery.buildRecoveryAttachment(policy.definitions())}`},
             ...requestItems.slice(computeKeep(requestItems))],
@@ -75,7 +85,14 @@ export class AgentRunner {
       }
       requestItems = input.contextManagement ? applyToolResultBudget(requestItems, input.contextManagement.workspaceRoot, replacementState) : requestItems;
       await this.hooks?.fire('pre_send', {event: 'pre_send', message: input.instruction});
+      // [s15] 每次迭代发出请求级事件；工具定义内容变化才携带完整定义。
+      const definitions = policy.definitions();
+      const toolDefinitionDigest = definitionsDigest(definitions);
+      const definitionsChanged = toolDefinitionDigest !== lastToolDefinitionDigest;
+      lastToolDefinitionDigest = toolDefinitionDigest;
+      yield {...base(), type: 'request_prepared', iterationId, iteration, items: requestItems, system: input.system ?? [], toolDefinitions: definitionsChanged ? definitions : [], toolDefinitionDigest};
       let response;
+      let attempt = 1;
       while (true) {
         const generator = this.collector.collect({runId: input.runId, sessionId: input.sessionId, iterationId, iteration, stream: this.client.streamChat({items: requestItems, messages: [], tools: policy.definitions(), ...(input.system ? {system: input.system} : {})}, signal), toolPolicy: policy, signal});
         while (true) {
@@ -86,9 +103,11 @@ export class AgentRunner {
           else yield event;
         }
         // [s12] 429/网络/5xx 属于瞬时故障：指数退避后重发同一迭代，而不是终止整个任务。
-        if (!response.error?.retryable || signal.aborted || retriesLeft === 0) { retryDelayMs = 5_000; retriesLeft = 3; break; }
+        if (!response.error?.retryable || signal.aborted || retriesLeft === 0) { retryDelayMs = retryBaseDelayMs; retriesLeft = 3; break; }
         await this.hooks?.fire('error', {event: 'error', error: `第 ${iteration} 轮请求失败（${response.error.code}），${retryDelayMs / 1000} 秒后重试`});
+        yield {...base(), type: 'request_retry', iterationId, iteration, attempt, delayMs: retryDelayMs, error: response.error};
         retriesLeft--;
+        attempt += 1;
         await new Promise(resolve => setTimeout(resolve, retryDelayMs));
         retryDelayMs = Math.min(retryDelayMs * 2, 60_000);
       }

@@ -1,7 +1,10 @@
 import {existsSync, readdirSync} from 'node:fs';
 import {join} from 'node:path';
+import {getLogger} from '../shared/logger.js';
 import {parseSkillFile} from './parser.js';
 import type {Skill, SkillCatalogEntry} from './types.js';
+
+const logger = getLogger('skills');
 
 /** [s10] 启动期只保留轻量目录；get 时重读磁盘实现热更新，失败回退缓存。 */
 export class SkillLoader {
@@ -22,7 +25,11 @@ export class SkillLoader {
         try {
           const parsed = parseSkillFile(path);
           this.#skills.set(parsed.meta.name, {meta: parsed.meta, body: parsed.body, sourcePath: path, source});
-        } catch { /* 单个坏 Skill 不阻断目录扫描。 */ }
+        } catch (error) {
+          // [s10] 单个坏 Skill 不阻断目录扫描。
+          // [s15] 坏文件以 debug 日志留痕，便于发现失效技能。
+          logger.debug('Skill 文件解析失败，已跳过', {path, error: error instanceof Error ? error.message : String(error)});
+        }
       }
     }
     return this.catalog();
@@ -48,7 +55,11 @@ export class SkillLoader {
     try {
       const parsed = parseSkillFile(cached.sourcePath);
       return {...cached, meta: parsed.meta, body: parsed.body};
-    } catch { return cached; }
+    } catch (error) {
+      // [s15] 热更新重读失败保留旧缓存，同时留痕。
+      logger.debug('Skill 热更新重读失败，回退缓存', {path: cached.sourcePath, error: error instanceof Error ? error.message : String(error)});
+      return cached;
+    }
   }
   catalog(): SkillCatalogEntry[] { return [...this.#skills.values()].map(skill => ({name: skill.meta.name, description: skill.meta.description, source: skill.source})); }
   names(): string[] { return [...this.#skills.keys()]; }

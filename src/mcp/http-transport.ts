@@ -1,4 +1,8 @@
+import {errorMessage} from '../shared/errors.js';
+import {getLogger} from '../shared/logger.js';
 import {MCP_PROTOCOL_VERSION, McpProtocolError} from './types.js';
+
+const logger = getLogger('mcp');
 import type {JsonRpcMessage, McpTransport} from './types.js';
 
 function sseData(text: string): string[] {
@@ -52,7 +56,9 @@ export class StreamableHttpMcpTransport implements McpTransport {
     const headers = new Headers(this.customHeaders);
     headers.set('Mcp-Session-Id', this.#sessionId);
     headers.set('MCP-Protocol-Version', this.#protocolVersion ?? MCP_PROTOCOL_VERSION);
+    // [s06] 关闭阶段不因远端不可达阻塞应用退出。
+    // [s15] 关闭失败降级为日志，会话资源泄漏可被观察。
     try { await this.fetcher(this.url, {method: 'DELETE', headers}); }
-    catch { /* [s06] 关闭阶段不因远端不可达阻塞应用退出。 */ }
+    catch (error) { logger.debug('MCP HTTP 会话关闭失败', {url: this.url, error: errorMessage(error)}); }
   }
 }

@@ -2,8 +2,8 @@ import type {EnvironmentInfo} from './environment.js';
 import {environmentSection} from './environment.js';
 import {FIXED_SECTIONS} from './sections.js';
 
-/** [s04] 一段可独立形成缓存边界的系统提示文本。 */
-export interface PromptBlock { text: string; cacheable: boolean }
+/** [s04] 一段可独立形成缓存边界的系统提示文本；[s15] sectionId 供上下文组成分析识别桶。 */
+export interface PromptBlock { text: string; cacheable: boolean; sectionId?: string }
 
 /** [s04] 一个按优先级参与拼装的提示模块；可选模块也经此注册。 */
 export interface PromptSection { id: string; priority: number; text: string }
@@ -36,9 +36,9 @@ export function buildSystemPrompt(env: EnvironmentInfo, optionalSections: readon
     .filter(section => section.text.trim().length > 0)
     .sort((a, b) => a.priority - b.priority);
   const blocks: PromptBlock[] = [
-    {text: stableText, cacheable: true},
-    {text: environmentSection(env).text, cacheable: false},
-    ...extras.map(section => ({text: section.text, cacheable: false})),
+    {text: stableText, cacheable: true, sectionId: 'fixed_system'},
+    {text: environmentSection(env).text, cacheable: false, sectionId: 'environment'},
+    ...extras.map(section => ({text: section.text, cacheable: false, sectionId: section.id})),
   ];
   return {blocks, text: blocks.map(block => block.text).join('\n\n')};
 }

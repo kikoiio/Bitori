@@ -33,6 +33,8 @@ export interface AppState {
   runUsage: Usage;
   stopReason: AgentStopReason | null;
   permissionTier: PermissionTier;
+  /** [s15] 调试面板开关；面板内容实时从控制器 tap 读取。 */
+  debugOpen: boolean;
 }
 
 export function initialAppState(profile: ProfileSummary | null = null): AppState {
@@ -50,6 +52,7 @@ export function initialAppState(profile: ProfileSummary | null = null): AppState
     agentMode: 'execute', activeRunId: null, iteration: 0, maxIterations: 20,
     agentPhase: null, runUsage: {inputTokens: 0, outputTokens: 0}, stopReason: null,
     permissionTier: 'default',
+    debugOpen: false,
   };
 }
 

@@ -29,6 +29,7 @@ Bitori 是一个使用 TypeScript 实现的跨平台终端 AI 对话助手，支
 - s12 提供内置 SubAgent 角色（plan/explore/general-purpose）、三级加载、多层工具过滤与后台任务通知。
 - s13 提供 Worktree 安全 slug、纯文件系统 HEAD 读取、快速恢复、创建后设置、变更保护与清理。
 - s14 提供团队花名册、成员文件邮箱、`wx` 文件锁、JSONL 游标恢复与进度状态。
+- s15 提供可观察性系统：结构化日志层、每会话请求级 JSONL trace（重试/压缩/审批事实可回放）、上下文组成分析、技能与命令使用统计、`trace`/`usage`/`sessions` 只读子命令与 `Ctrl+T` 调试面板；日志与 trace 落盘前统一脱敏。
 
 ## 验证
 

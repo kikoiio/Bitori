@@ -1,5 +1,9 @@
 import {execFile} from 'node:child_process';
+import {errorMessage} from '../shared/errors.js';
+import {getLogger} from '../shared/logger.js';
 import {hookEvents, type HookConfig, type HookContext, type HookEvent, type HookResult} from './types.js';
+
+const logger = getLogger('hooks');
 
 const OPERATORS = ['!=', '=~', '~=', '=='] as const;
 type Operator = (typeof OPERATORS)[number];
@@ -114,7 +118,8 @@ export class HookEngine {
       if (hook.condition && !evaluateCondition(hook.condition, context)) continue;
       if (hook.once) this.#firedOnce.add(key);
       const promise = this.#execute(hook, context);
-      if (hook.async) void promise.catch(() => undefined);
+      // [s15] async Hook 的失败此前完全静默，现在降级为 warn 日志。
+      if (hook.async) void promise.catch((error: unknown) => { logger.warn('异步 Hook 执行失败', {event, hook: key, error: errorMessage(error)}); });
       else results.push(await promise);
     }
     return results;

@@ -49,11 +49,22 @@ const mcpServersSchema = z.record(
 );
 const modelAliasesSchema = z.record(z.string().trim().min(1), z.string().trim().min(1));
 
+/** [s15] 可观察性配置：日志级别/保留期与 trace 保留期，均可缺省。 */
+const loggingSchema = z.strictObject({
+  level: z.enum(['debug', 'info', 'warn', 'error']).optional(),
+  retention_days: z.number().int().positive().max(365).optional(),
+});
+const traceSchema = z.strictObject({
+  retention_days: z.number().int().positive().max(365).optional(),
+});
+
 export const configSchema = z
   .object({
     profiles: z.array(profileSchema).min(1, '至少需要一个 profile'),
     mcp_servers: mcpServersSchema.optional(),
     models: modelAliasesSchema.optional(),
+    logging: loggingSchema.optional(),
+    trace: traceSchema.optional(),
   })
   .superRefine((value, context) => {
     // [s01] superRefine 适合做跨字段/跨数组项校验：单个字段的 schema 无法判断名称是否重复。

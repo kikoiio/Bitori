@@ -1,6 +1,9 @@
 import {cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {dirname, join, resolve} from 'node:path';
+import {getLogger} from '../shared/logger.js';
+
+const logger = getLogger('worktree');
 
 export const SAFE_SLUG_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 export const SHA_RE = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
@@ -116,9 +119,13 @@ export function hasWorktreeChanges(worktreePath: string, headCommit: string | nu
 export function removeAgentWorktree(worktreePath: string, branch: string, gitRoot: string): void {
   if (!resolve(worktreePath).startsWith(resolve(gitRoot))) throw new Error('Worktree 路径越界');
   try { git(gitRoot, ['worktree', 'remove', '--force', worktreePath]); }
-  catch { git(gitRoot, ['worktree', 'remove', '--force', worktreePath]); }
+  catch (error) { logger.warn('Worktree git remove 失败，回退目录重删', {worktreePath, error: error instanceof Error ? error.message : String(error)}); }
   if (existsSync(worktreePath)) rmSync(worktreePath, {recursive: true, force: true, maxRetries: 5, retryDelay: 50});
-  try { git(gitRoot, ['branch', '-D', branch]); } catch { /* 分支可能已被合并或删除。 */ }
+  try { git(gitRoot, ['branch', '-D', branch]); }
+  catch (error) {
+    // 分支可能已被合并或删除，属预期分支；留 debug 痕迹即可。
+    logger.debug('Worktree 分支删除失败', {branch, error: error instanceof Error ? error.message : String(error)});
+  }
 }
 
 export function listWorktrees(workspaceRoot = process.cwd()): WorktreeResult[] {

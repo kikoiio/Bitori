@@ -1,6 +1,12 @@
-import type {LLMClient, ModelContextItem, Usage} from '../providers/types.js';
+import type {LLMClient, ModelContextItem} from '../providers/types.js';
 import type {RecoveryState} from './recovery.js';
 import type {ToolDefinition} from '../tools/types.js';
+import {estimateContextTokens, serializedItem} from '../shared/token-estimate.js';
+import type {UsageAnchor} from '../shared/token-estimate.js';
+
+// [s15] 估算器提取至 shared/token-estimate；这里保留导出兼容既有调用方。
+export {estimateContextTokens, usageAnchorFrom} from '../shared/token-estimate.js';
+export type {UsageAnchor} from '../shared/token-estimate.js';
 
 export const SUMMARY_OUTPUT_RESERVE = 20_000;
 export const AUTO_COMPACT_SAFETY_MARGIN = 13_000;
@@ -8,9 +14,7 @@ export const MANUAL_COMPACT_SAFETY_MARGIN = 3_000;
 export const RECENT_TOKEN_FLOOR = 10_000;
 export const RECENT_ITEM_FLOOR = 5;
 export const MAX_AUTO_COMPACT_FAILURES = 3;
-const CHARS_PER_TOKEN = 3.5;
 
-export interface UsageAnchor {tokens: number; itemLength: number}
 export interface CompactTrackingState {consecutiveFailures: number}
 export interface ManageContextInput {
   items: readonly ModelContextItem[];
@@ -23,26 +27,6 @@ export interface ManageContextInput {
   signal: AbortSignal;
 }
 export interface CompactResult {compacted: boolean; beforeTokens: number; afterTokens: number; summary: string | null; reason: 'auto' | 'manual' | 'below_threshold' | 'circuit_open' | 'too_few_messages'}
-
-function serialized(item: ModelContextItem): string {
-  if (item.type === 'message') return item.content;
-  if (item.type === 'reminder') return item.text;
-  if (item.type === 'assistant_iteration') return item.content + item.thinking + JSON.stringify(item.toolCalls);
-  return JSON.stringify(item.results);
-}
-
-/** [s07] provider usage 作锚点，新增内容按 3.5 字符/token 估算增量。 */
-export function estimateContextTokens(items: readonly ModelContextItem[], anchor: UsageAnchor | null): number {
-  const length = items.reduce((sum, item) => sum + Buffer.byteLength(serialized(item), 'utf8'), 0);
-  if (!anchor) return Math.ceil(length / CHARS_PER_TOKEN);
-  return Math.max(anchor.tokens, 0) + Math.ceil(Math.max(length - anchor.itemLength, 0) / CHARS_PER_TOKEN);
-}
-
-export function usageAnchorFrom(usage: Usage, items: readonly ModelContextItem[]): UsageAnchor {
-  const cacheRead = usage.cacheReadInputTokens ?? 0;
-  const cacheCreation = usage.cacheCreationInputTokens ?? 0;
-  return {tokens: usage.inputTokens + cacheRead + cacheCreation + usage.outputTokens, itemLength: items.reduce((sum, item) => sum + Buffer.byteLength(serialized(item), 'utf8'), 0)};
-}
 
 function promptFor(items: readonly ModelContextItem[]): string {
   const dialogue = items.map(item => {
@@ -64,11 +48,12 @@ function parseSummary(text: string): string {
 }
 
 export function computeKeepStartIndex(items: readonly ModelContextItem[]): number {
+  const CHARS_PER_TOKEN = 3.5;
   let tokens = 0;
   let index = items.length;
   const boundary = Math.max(0, items.length - RECENT_ITEM_FLOOR);
   for (let i = items.length - 1; i >= boundary; i--) {
-    tokens += Math.ceil(Buffer.byteLength(serialized(items[i]!), 'utf8') / CHARS_PER_TOKEN);
+    tokens += Math.ceil(Buffer.byteLength(serializedItem(items[i]!), 'utf8') / CHARS_PER_TOKEN);
     index = i;
     if (tokens >= RECENT_TOKEN_FLOOR) break;
   }

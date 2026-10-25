@@ -17,6 +17,56 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('解析全局与 exec 内的 --log-level', () => {
+    expect(parseCliArgs(['--log-level', 'debug'])).toEqual({help: false, logLevel: 'debug'});
+    expect(parseCliArgs(['--profile', 'claude', '--log-level', 'error'])).toEqual({help: false, profile: 'claude', logLevel: 'error'});
+    expect(parseCliArgs(['exec', '--task', 'demo', '--log-level', 'warn'])).toEqual({help: false, exec: {task: 'demo', json: false}, logLevel: 'warn'});
+  });
+
+  it.each([
+    ['--log-level'],
+    ['--log-level', '--help'],
+    ['--log-level', 'verbose'],
+    ['--log-level', 'debug', '--log-level', 'info'],
+    ['exec', '--task', 'demo', '--log-level'],
+    ['exec', '--task', 'demo', '--log-level', 'loud'],
+  ])('拒绝非法 --log-level %#', (...args) => {
+    expect(() => parseCliArgs(args)).toThrow();
+  });
+
+  it('解析 trace 子命令', () => {
+    expect(parseCliArgs(['trace', 'show', 'abc', '--iteration', '2'])).toEqual({
+      help: false, trace: {action: 'show', sessionId: 'abc', iteration: 2, json: false},
+    });
+    expect(parseCliArgs(['trace', 'tail', '--session', 'abc'])).toEqual({help: false, trace: {action: 'tail', sessionId: 'abc', json: false}});
+    expect(parseCliArgs(['trace', 'export', 'abc', '--out', 'o.jsonl', '--raw'])).toEqual({help: false, trace: {action: 'export', sessionId: 'abc', out: 'o.jsonl', raw: true, json: false}});
+    expect(parseCliArgs(['trace', 'replay', 'x.jsonl', '--json'])).toEqual({help: false, trace: {action: 'replay', file: 'x.jsonl', json: true}});
+  });
+
+  it('解析 usage 与 sessions 子命令', () => {
+    expect(parseCliArgs(['usage', 'stats', '--kind', 'skill'])).toEqual({help: false, usage: {action: 'stats', kind: 'skill', json: false}});
+    expect(parseCliArgs(['usage', 'tail'])).toEqual({help: false, usage: {action: 'tail', json: false}});
+    expect(parseCliArgs(['sessions', 'list'])).toEqual({help: false, sessions: {action: 'list', json: false}});
+    expect(parseCliArgs(['--profile', 'claude', 'sessions', 'show', 'abc', '--json'])).toEqual({
+      help: false, profile: 'claude', sessions: {action: 'show', sessionId: 'abc', json: true},
+    });
+  });
+
+  it.each([
+    ['trace'],
+    ['trace', 'fly'],
+    ['usage'],
+    ['usage', 'count'],
+    ['sessions'],
+    ['sessions', 'delete'],
+    ['trace', 'show'],
+    ['trace', 'show', 'abc', '--iteration', '0'],
+    ['usage', 'stats', '--kind', 'other'],
+    ['trace', 'show', 'abc', '--unknown'],
+  ])('拒绝非法子命令 %#', (...args) => {
+    expect(() => parseCliArgs(args)).toThrow();
+  });
+
   it.each([
     ['--unknown'],
     ['--profile'],

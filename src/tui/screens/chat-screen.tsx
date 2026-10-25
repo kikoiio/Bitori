@@ -3,6 +3,7 @@ import {useState} from 'react';
 import type {ChatController} from '../../chat/agent-controller.js';
 import type {AppState} from '../../chat/state.js';
 import type {Session} from '../../storage/types.js';
+import {DebugPanel} from '../components/debug-panel.js';
 import {ErrorBanner} from '../components/error-banner.js';
 import {MessageList} from '../components/message-list.js';
 import {PromptInput} from '../components/prompt-input.js';
@@ -52,6 +53,8 @@ export function ChatScreen({state, controller, height, onExit}: ChatScreenProps)
       return;
     }
     if (key.tab) { setFocus(value => value === 'input' ? 'messages' : 'input'); return; }
+    // [s15] Ctrl+T 切换调试面板；面板内容随每次状态发布刷新。
+    if (input === 't' && key.ctrl) { controller.toggleDebugPanel(); return; }
     // [s01] offset=0 表示视图贴近最新消息；PageUp 增大 offset，相当于向历史移动。
     if (key.pageUp) { setOffset(value => Math.min(state.messages.length - 1, value + 1)); return; }
     if (key.pageDown) { setOffset(value => Math.max(0, value - 1)); return; }
@@ -77,13 +80,15 @@ export function ChatScreen({state, controller, height, onExit}: ChatScreenProps)
   });
 
   // [s01] 为状态栏、错误框和输入框预留高度，其余空间交给消息区，且至少保留 5 行。
-  const messageHeight = Math.max(5, height - 7 - (state.visibleError === null ? 0 : 3));
+  const debugHeight = state.debugOpen ? Math.max(8, Math.floor(height / 3)) : 0;
+  const messageHeight = Math.max(5, height - 7 - (state.visibleError === null ? 0 : 3) - debugHeight);
   return <Box flexDirection="column" height={height}>
     <StatusBar state={state} />
     <ErrorBanner message={state.visibleError} />
     <MessageList messages={state.messages} height={messageHeight} offset={offset}
       selectedMessageId={state.selectedMessageId} expandedThinkingIds={state.expandedThinkingIds} toolCalls={state.toolCalls} />
     {state.approvalPrompt ? <ToolApprovalPanel prompt={state.approvalPrompt} /> : null}
+    {state.debugOpen ? <DebugPanel state={state} controller={controller} height={debugHeight} /> : null}
     <PromptInput value={draft} focused={focus === 'input'} disabled={busy} />
     {sessions === null ? null : <SessionList sessions={sessions} selectedIndex={sessionIndex} />}
   </Box>;

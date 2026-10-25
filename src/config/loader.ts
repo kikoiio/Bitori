@@ -13,6 +13,10 @@ export interface ConfigPaths {
   config: string;
   environment: string;
   database: string;
+  /** [s15] 可观察性数据的固定落点：日志、请求级 trace 与使用统计。 */
+  logs: string;
+  traces: string;
+  usage: string;
 }
 
 const environmentInterpolation = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
@@ -25,6 +29,9 @@ export function configPaths(homeDirectory = homedir()): ConfigPaths {
     config: join(directory, 'config.yaml'),
     environment: join(directory, '.env'),
     database: join(directory, 'bitori.db'),
+    logs: join(directory, 'logs'),
+    traces: join(directory, 'traces'),
+    usage: join(directory, 'usage'),
   };
 }
 
@@ -109,7 +116,7 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     // [s06] map 按 user → project 浅合并；同名 Server 由项目级完整覆盖。
     const sources = {...(parsed.mcp_servers ?? {}), ...(project.mcp_servers ?? {})};
     const mcpServers = Object.fromEntries(Object.entries(sources).map(([name, source]) => [name, resolveMcpServer(name, source, environment)]));
-    return {profiles, mcpServers, models: parsed.models ?? {}};
+    return {profiles, mcpServers, models: parsed.models ?? {}, logging: parsed.logging ?? {}, trace: parsed.trace ?? {}};
   } catch (error) {
     // [s01] 已经是面向用户的配置错误就原样保留；Zod 错误则合并所有校验消息。
     if (error instanceof ConfigurationError) throw error;
@@ -118,6 +125,21 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     }
     throw new ConfigurationError('配置文件不是有效的 YAML', {cause: error});
   }
+}
+
+/** [s15] 读取 `.env` 的全部键值作为脱敏字典来源；只用于替换，不回显。 */
+export function readEnvironmentSecrets(homeDirectory = homedir()): string[] {
+  try {
+    const text = readFileSync(configPaths(homeDirectory).environment, 'utf8');
+    return Object.values(parseEnv(text)).filter((value): value is string => value !== undefined && value.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/** [s15] 在解析 profile 的同时收集全部已解析密钥值，供 Redactor 与 trace 使用。 */
+export function collectSecretValues(config: AppConfig, homeDirectory = homedir()): string[] {
+  return [...readEnvironmentSecrets(homeDirectory), ...config.profiles.map(profile => profile.apiKey).filter(key => key.length > 0)];
 }
 
 export function resolveProfile(config: AppConfig, requestedName?: string): ProviderProfile | null {

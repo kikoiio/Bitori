@@ -62,12 +62,29 @@ export interface AppConfig {
   mcpServers: Record<string, McpServerConfig>;
   /** [s12] SubAgent 的逻辑模型名到 profile 名映射；缺失时回退当前 profile。 */
   models: Record<string, string>;
+  /** [s15] 日志配置；字段缺省时使用 shared/logger 的默认值。 */
+  logging: LoggingConfig;
+  /** [s15] trace 配置；字段缺省时使用默认保留期。 */
+  trace: TraceConfig;
+}
+
+/** [s15] YAML `logging:` 段的内部形状。 */
+export interface LoggingConfig {
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  retention_days?: number;
+}
+
+/** [s15] YAML `trace:` 段的内部形状。 */
+export interface TraceConfig {
+  retention_days?: number;
 }
 
 export interface ParsedConfig {
   profiles: ProviderProfileSource[];
   mcp_servers?: Record<string, McpServerConfigSource>;
   models?: Record<string, string>;
+  logging?: LoggingConfig;
+  trace?: TraceConfig;
 }
 
 /** [s07] 跨协议默认上下文窗口；配置值只做覆盖。 */

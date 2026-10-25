@@ -1,12 +1,15 @@
 import {parentPort, workerData} from 'node:worker_threads';
 import {DatabaseSync} from 'node:sqlite';
 import {createId, now} from '../shared/ids.js';
+import {getLogger} from '../shared/logger.js';
 import {isProviderState} from '../providers/types.js';
 import {runMigrations} from './migrations/index.js';
 import type {MigrationDatabase} from './migrations/index.js';
 import {serializeWorkerError} from './worker-client.js';
 import type {StorageOperation, StorageRequest, StorageResponse} from './worker-protocol.js';
 import type {AgentRunRecord, BeginTurnResult, FinalMessageUpdate, Session, StoredMessage, ToolCallRecord} from './types.js';
+
+const logger = getLogger('storage');
 
 // [s01] Worker 入口收到数据库路径；下面两个 Row 接口保留 SQLite 的 snake_case 列名。
 interface WorkerData {databasePath: string}
@@ -57,7 +60,11 @@ function message(row: MessageRow): StoredMessage {
     try {
       const parsed: unknown = JSON.parse(row.provider_state);
       if (isProviderState(parsed)) providerState = parsed;
-    } catch {/* [s01] 损坏的可重放状态安全降级为普通文本。 */}
+    } catch (error) {
+      // [s01] 损坏的可重放状态安全降级为普通文本。
+      // [s15] 降级发生时记录日志，便于发现持久化数据异常。
+      logger.debug('provider_state 反序列化失败，已降级为普通文本', {error: error instanceof Error ? error.message : String(error)});
+    }
   }
   const usage = row.input_tokens === null || row.output_tokens === null
     ? null : {inputTokens: row.input_tokens, outputTokens: row.output_tokens};

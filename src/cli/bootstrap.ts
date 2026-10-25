@@ -1,8 +1,11 @@
 import {ChatController} from '../chat/agent-controller.js';
-import {loadConfig, resolveProfileWithApiKey} from '../config/loader.js';
+import {collectSecretValues, configPaths, loadConfig, resolveProfileWithApiKey} from '../config/loader.js';
 import {toProfileSummary} from '../config/types.js';
 import type {ProviderProfile} from '../config/types.js';
 import {createLLMClient} from '../providers/factory.js';
+import {configureLogging} from '../shared/logger.js';
+import {createRedactor, setGlobalRedactor} from '../shared/redact.js';
+import {cleanupExpiredTraces} from '../trace/retention.js';
 import {SessionRepository} from '../storage/repository.js';
 import {resolve} from 'node:path';
 import {createShutdownOnce} from '../terminal/shutdown.js';
@@ -12,11 +15,29 @@ import {usage} from './args.js';
 import type {CliOptions} from './args.js';
 import {createToolSystem} from '../tools/create-tool-system.js';
 import {runExec} from './exec.js';
+import {runSessionsCommand} from './commands/sessions.js';
+import {runTraceCommand} from './commands/trace.js';
+import {runUsageCommand} from './commands/usage.js';
 
 /** [s01] 在读取配置和创建资源前先拒绝不受支持的运行环境。 */
 function assertRuntime(): void {
   const major = Number.parseInt(process.versions.node.split('.')[0] ?? '', 10);
   if (major !== 24) throw new Error(`Bitori 需要 Node.js 24 LTS，当前为 ${process.versions.node}`);
+}
+
+/** [s15] 日志与脱敏在拿到配置后立即启用；CLI 级别优先于配置文件。trace 保留期超期清理顺带执行。 */
+function setupLogging(config: ReturnType<typeof loadConfig>, logLevel?: CliOptions['logLevel']): void {
+  const paths = configPaths();
+  const redactor = createRedactor(collectSecretValues(config));
+  setGlobalRedactor(redactor);
+  configureLogging({
+    ...(logLevel === undefined ? {} : {level: logLevel}),
+    ...(config.logging.level === undefined ? {} : {level: config.logging.level}),
+    directory: paths.logs,
+    ...(config.logging.retention_days === undefined ? {} : {retentionDays: config.logging.retention_days}),
+    redactor,
+  });
+  cleanupExpiredTraces(paths.traces, config.trace.retention_days ?? 30);
 }
 
 export async function bootstrap(options: CliOptions): Promise<void> {
@@ -25,9 +46,19 @@ export async function bootstrap(options: CliOptions): Promise<void> {
     return;
   }
   assertRuntime();
+  // [s15] 只读观察子命令：配置与日志照常启用，不进入 TUI 或 exec 主链路。
+  if (options.trace !== undefined || options.usage !== undefined || options.sessions !== undefined) {
+    const config = loadConfig(undefined, process.cwd());
+    setupLogging(config, options.logLevel);
+    if (options.trace !== undefined) process.exitCode = runTraceCommand(options.trace);
+    else if (options.usage !== undefined) process.exitCode = runUsageCommand(options.usage);
+    else if (options.sessions !== undefined) process.exitCode = await runSessionsCommand(options.sessions, options.profile);
+    return;
+  }
   if (options.exec) {
     const workspace = resolve(options.exec.workspace ?? process.cwd());
     const config = loadConfig(undefined, workspace);
+    setupLogging(config, options.logLevel);
     const profile = resolveProfileWithApiKey(config, options.profile);
     if (profile === null) throw new Error('多 profile 时 exec 需要 --profile 指定');
     process.exitCode = await runExec(config, profile, options.exec);
@@ -35,6 +66,7 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   }
   // [s01] 配置读取、profile 选择、Provider/存储创建都集中在“组合根”中，UI 无需知道构造细节。
   const config = loadConfig(undefined, process.cwd());
+  setupLogging(config, options.logLevel);
   const selected = resolveProfileWithApiKey(config, options.profile);
   // [s02] 启动时固定捕获工作区；限制不来自配置或模型参数。
   // [s12] SubAgent 的模型映射先复用当前 profile；自定义模型路由在配置系统扩展后接入。

@@ -5,7 +5,7 @@ Bitori 是跨平台的全屏终端 AI 对话客户端。它在 Anthropic Message
 ## 课程与文档
 
 - 实战课程入口：[docs/learning/README.md](docs/learning/README.md)。
-- 每课包含讲义、实现任务与阶段实现快照：`docs/learning/lessons/NN.md`，当前已覆盖第 01～14 课。
+- 每课包含讲义、实现任务与阶段实现快照：`docs/learning/lessons/NN.md`，当前已覆盖第 01～15 课。
 
 ## 核心能力
 
@@ -19,6 +19,7 @@ Bitori 是跨平台的全屏终端 AI 对话客户端。它在 Anthropic Message
 - **Hook**：15 个生命周期事件、条件表达式、command/prompt/http 动作和 `pre_tool_use` 拦截。
 - **SubAgent 与 Teams**：内置角色、三级加载、多层工具过滤、后台任务通知；团队花名册、成员文件邮箱、锁与游标恢复、进度状态。
 - **Worktree**：安全 slug、快速恢复、创建后设置、变更保护与清理。
+- **可观察性**：结构化日志层、每会话请求级 JSONL trace（请求/响应/重试/压缩/审批可回放）、上下文组成分析、技能与命令使用统计、`trace`/`usage`/`sessions` 只读子命令与 `Ctrl+T` 调试面板。
 
 文件读取、查找和搜索自动执行，但始终受启动工作区真实路径边界约束。创建文件、修改文件和执行命令会逐项显示参数并等待 `Y/N` 决定。命令仅固定从工作区启动，获批命令仍可能访问网络、启动子进程或影响工作区外资源。
 

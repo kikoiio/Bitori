@@ -8,4 +8,6 @@ export const keys = {
   pageUp: 'pageup',
   pageDown: 'pagedown',
   close: 'escape',
+  /** [s15] 调试面板开关。 */
+  debugPanel: 'ctrl+t',
 } as const;

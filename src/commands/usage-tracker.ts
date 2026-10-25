@@ -1,5 +1,8 @@
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
+import {getLogger} from '../shared/logger.js';
+
+const logger = getLogger('commands');
 
 export interface CommandUsage {count: number; lastUsedAt: number}
 
@@ -12,7 +15,11 @@ export class CommandUsageTracker {
     this.#path = path;
     if (existsSync(path)) {
       try { this.#usage = JSON.parse(readFileSync(path, 'utf8')) as Record<string, CommandUsage>; }
-      catch { this.#usage = {}; }
+      catch (error) {
+        this.#usage = {};
+        // [s15] 统计文件损坏不再静默，降级为日志后从空统计继续。
+        logger.warn('命令使用统计文件损坏，已重置', {path, error: error instanceof Error ? error.message : String(error)});
+      }
     }
   }
 
@@ -22,7 +29,10 @@ export class CommandUsageTracker {
     try {
       mkdirSync(dirname(this.#path), {recursive: true});
       writeFileSync(this.#path, JSON.stringify(this.#usage), 'utf8');
-    } catch { /* 使用统计是可丢弃数据。 */ }
+    } catch (error) {
+      // 使用统计是可丢弃数据，但失败原因应可见。
+      logger.debug('命令使用统计写入失败', {path: this.#path, error: error instanceof Error ? error.message : String(error)});
+    }
   }
 
   score(name: string): number {

@@ -1,10 +1,14 @@
 import type {McpServerConfig} from '../config/types.js';
 import type {ToolRegistry} from '../tools/registry.js';
+import {errorMessage} from '../shared/errors.js';
+import {getLogger} from '../shared/logger.js';
 import {McpClient} from './client.js';
 import {StreamableHttpMcpTransport} from './http-transport.js';
 import {StdioMcpTransport} from './stdio-transport.js';
 import {McpToolAdapter, mcpPublicToolName} from './tool-adapter.js';
 import type {McpTransport} from './types.js';
+
+const logger = getLogger('mcp');
 
 export interface McpServerFailure {name: string; error: Error}
 export interface McpInitializationResult {connected: string[]; failed: McpServerFailure[]; registeredTools: string[]}
@@ -56,7 +60,8 @@ export class McpManager {
         const tools = await client.listTools();
         return {name, client, tools};
       } catch (error) {
-        await client.close().catch(() => undefined);
+        // [s15] 初始化失败后的关闭也降级记录，避免传输资源泄漏不可见。
+        await client.close().catch((closeError: unknown) => { logger.warn('MCP Server 初始化失败后关闭连接异常', {server: name, error: errorMessage(closeError)}); });
         throw new McpServerInitializationError(name, error instanceof Error ? error : new Error(String(error)));
       }
     }));
@@ -77,7 +82,8 @@ export class McpManager {
       const duplicate = names.find((publicName, index) => names.indexOf(publicName) !== index || this.registry.get(publicName) !== undefined);
       if (duplicate) {
         failed.push({name, error: new Error(`MCP 工具名称冲突：${duplicate}`)});
-        await client.close().catch(() => undefined);
+        // [s15] 冲突淘汰路径的关闭失败同样可见。
+        await client.close().catch((closeError: unknown) => { logger.warn('MCP Server 工具名冲突后关闭连接异常', {server: name, error: errorMessage(closeError)}); });
         continue;
       }
       for (const [index, tool] of tools.entries()) {
