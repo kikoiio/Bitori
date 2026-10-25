@@ -1,12 +1,8 @@
 import type {LLMClient, ModelContextItem} from '../providers/types.js';
 import type {RecoveryState} from './recovery.js';
 import type {ToolDefinition} from '../tools/types.js';
-import {estimateContextTokens, serializedItem} from '../shared/token-estimate.js';
+import {CHARS_PER_TOKEN, estimateContextTokens, serializedItem} from '../shared/token-estimate.js';
 import type {UsageAnchor} from '../shared/token-estimate.js';
-
-// [s15] 估算器提取至 shared/token-estimate；这里保留导出兼容既有调用方。
-export {estimateContextTokens, usageAnchorFrom} from '../shared/token-estimate.js';
-export type {UsageAnchor} from '../shared/token-estimate.js';
 
 export const SUMMARY_OUTPUT_RESERVE = 20_000;
 export const AUTO_COMPACT_SAFETY_MARGIN = 13_000;
@@ -48,7 +44,6 @@ function parseSummary(text: string): string {
 }
 
 export function computeKeepStartIndex(items: readonly ModelContextItem[]): number {
-  const CHARS_PER_TOKEN = 3.5;
   let tokens = 0;
   let index = items.length;
   const boundary = Math.max(0, items.length - RECENT_ITEM_FLOOR);

@@ -24,7 +24,6 @@ export interface AgentTraceTapOptions {
 }
 
 interface PendingRequest {
-  sessionId: string;
   items: readonly ModelContextItem[];
   system: readonly PromptBlock[];
   preparedAt: number;
@@ -88,7 +87,7 @@ export class AgentTraceTap {
   #dispatch(event: AgentEvent): void {
     switch (event.type) {
       case 'request_prepared': {
-        this.#pending.set(event.runId, {sessionId: event.sessionId, items: event.items, system: event.system, preparedAt: event.at});
+        this.#pending.set(event.runId, {items: event.items, system: event.system, preparedAt: event.at});
         if (event.toolDefinitions.length > 0) this.#lastToolDefinitions = event.toolDefinitions;
         this.#writer.append({v: TRACE_VERSION, at: event.at, sessionId: event.sessionId, type: 'request_prepared', runId: event.runId, iterationId: event.iterationId, iteration: event.iteration, items: event.items, system: event.system, toolDefinitions: event.toolDefinitions, toolDefinitionDigest: event.toolDefinitionDigest});
         this.#debugPush(`it${event.iteration} 请求 ${event.items.length} 项`);

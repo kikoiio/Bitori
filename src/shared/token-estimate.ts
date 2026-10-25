@@ -1,7 +1,7 @@
 import type {ModelContextItem, Usage} from '../providers/types.js';
 
 /** [s15] 上下文 token 估算器；原实现在 compact 中，s15 提取共享并保持行为不变。 */
-const CHARS_PER_TOKEN = 3.5;
+export const CHARS_PER_TOKEN = 3.5;
 
 export interface UsageAnchor {tokens: number; itemLength: number}
 

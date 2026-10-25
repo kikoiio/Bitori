@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {LLMClient, ModelContextItem, StreamEvent} from '../../../src/providers/types.js';
-import {computeKeepStartIndex, estimateContextTokens, manageContext, usageAnchorFrom} from '../../../src/compact/compact.js';
+import {computeKeepStartIndex, manageContext} from '../../../src/compact/compact.js';
+import {estimateContextTokens, usageAnchorFrom} from '../../../src/shared/token-estimate.js';
 import {RecoveryState} from '../../../src/compact/recovery.js';
 import type {ToolDefinition} from '../../../src/tools/types.js';
 

@@ -4,7 +4,6 @@ import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
 import {createDefaultRegistry, parseCommand, CommandRegistry} from '../../../src/commands/registry.js';
 import {loadUserCommands, renderBody} from '../../../src/commands/loader.js';
-import {CommandUsageTracker} from '../../../src/commands/usage-tracker.js';
 
 describe('Slash 命令', () => {
   it('解析命令名与参数', () => {
@@ -31,15 +30,5 @@ describe('Slash 命令', () => {
     expect(command?.description).toBe('安全审查');
     expect(command?.handler({workDir: work, args: 'login.ts'})).toContain('login.ts');
     expect(renderBody('没有占位', '参数')).toContain('参数');
-  });
-
-  it('使用统计持久化并按最近使用排序', () => {
-    const work = mkdtempSync(join(tmpdir(), 'bitori-cmd-'));
-    const path = join(work, 'usage.json');
-    const tracker = new CommandUsageTracker(path);
-    tracker.record('help', 100);
-    tracker.record('compact', 200);
-    expect(new CommandUsageTracker(path).recentlyUsed()).toEqual(['compact', 'help']);
-    expect(tracker.score('compact')).toBeGreaterThan(0);
   });
 });

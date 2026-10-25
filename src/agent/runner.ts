@@ -12,7 +12,8 @@ import {ToolPolicy} from './tool-policy.js';
 import {ToolResultReplacementState} from '../toolresult/state.js';
 import {applyToolResultBudget} from '../toolresult/budget.js';
 import type {ModelContextItem} from '../providers/types.js';
-import {computeKeepStartIndex, manageContext, usageAnchorFrom, type UsageAnchor} from '../compact/compact.js';
+import {computeKeepStartIndex, manageContext} from '../compact/compact.js';
+import {usageAnchorFrom, type UsageAnchor} from '../shared/token-estimate.js';
 import type {HookEngine} from '../hooks/engine.js';
 function computeKeep(items: readonly ModelContextItem[]): number { return computeKeepStartIndex(items); }
 import {RecoveryState} from '../compact/recovery.js';

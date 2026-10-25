@@ -1,4 +1,5 @@
-import {resolve} from 'node:path';
+import {resolve, join} from 'node:path';
+import {configPaths} from '../config/loader.js';
 import type {AppConfig, ProviderProfile} from '../config/types.js';
 import {createLLMClient} from '../providers/factory.js';
 import {SessionRepository} from '../storage/repository.js';
@@ -45,7 +46,9 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
   };
   const tools = createToolSystem(workspace, config.mcpServers, {clientFor, memoryClient: client});
   const repository = new SessionRepository(`${workspace}/.bitori/bitori.db`);
-  const controller = new ChatController(client, repository, tools, undefined, options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations});
+  // [s15] exec 一次性任务同样开启观测面，trace 可被 benchmarks 消费。
+  const observability = {traceDirectory: configPaths().traces, usagePath: join(configPaths().usage, 'skills.jsonl')};
+  const controller = new ChatController(client, repository, tools, undefined, {observability, ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
   // 无头环境没有审批 UI；未通过权限规则放行的副作用工具一律自动拒绝。
   controller.subscribe(state => {
     if (state.approvalPrompt) controller.resolveToolApproval('denied');

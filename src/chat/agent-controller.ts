@@ -77,16 +77,23 @@ export class ChatController {
   readonly #services: AgentServices | null;
   readonly #memoryClient: LLMClient | null;
   readonly #maxIterations: number;
-  // [s15] trace 写入器与每 profile 的投影 tap；未 initialize 时为 null。
-  readonly #traceWriter = new TraceWriter();
+  // [s15] trace 写入器与每 profile 的投影 tap；组合根未注入观测目录时保持 null，测试因此不写用户主目录。
+  #traceWriter: TraceWriter | null = null;
   #tap: AgentTraceTap | null = null;
   // [s15] 技能与命令使用统计（JSONL）；可丢弃数据。
-  readonly #usage = new UsageRecorder();
+  readonly #usage: UsageRecorder | null;
   // [s15] 本会话已激活技能（面板展示与统计双用）。
   readonly #activeSkills = new Set<string>();
 
-  constructor(client: LLMClient, repository: SessionRepositoryContract, tools: ControllerToolSystem | null = null, runner?: AgentRunner, options: {maxIterations?: number} = {}) {
+  constructor(client: LLMClient, repository: SessionRepositoryContract, tools: ControllerToolSystem | null = null, runner?: AgentRunner, options: {maxIterations?: number; observability?: {traceDirectory: string; usagePath: string}} = {}) {
     this.#repository = repository; this.#client = client;
+    // [s15] 观测面只在组合根显式给出目录时启用；缺省完全关闭，测试不污染用户主目录。
+    if (options.observability !== undefined) {
+      this.#traceWriter = new TraceWriter(options.observability.traceDirectory);
+      this.#usage = new UsageRecorder(options.observability.usagePath);
+    } else {
+      this.#usage = null;
+    }
     const registry = tools?.registry ?? new ToolRegistry(); const approvals = tools?.approvals ?? new ApprovalCoordinator();
     const executor = tools?.executor ?? new ToolExecutor(registry, {workspaceRoot: process.cwd(), limits: fixedToolLimits});
     this.#tools = {registry, approvals, executor, ...(tools?.permissions === undefined && executor.options.permissions === undefined ? {} : {permissions: tools?.permissions ?? executor.options.permissions})};
@@ -102,10 +109,13 @@ export class ChatController {
   async initialize(profile: ProviderProfile): Promise<void> {
     if (this.#profile) return; this.#profile = profile; await this.#repository.initialize();
     // [s15] profile 就绪后创建 trace tap；真实路径沙箱与 trace 共用工作目录事实。
-    this.#tap = new AgentTraceTap(this.#traceWriter, {profileName: profile.name, model: profile.model, protocol: profile.protocol, workspaceRoot: process.cwd(), onSkillActivated: (name, sessionId) => {
-      this.#activeSkills.add(name);
-      this.#usage.record({kind: 'skill', name, source: 'model', sessionId, profileName: profile.name});
-    }});
+    if (this.#traceWriter !== null && this.#usage !== null) {
+      const usageRecorder = this.#usage;
+      this.#tap = new AgentTraceTap(this.#traceWriter, {profileName: profile.name, model: profile.model, protocol: profile.protocol, workspaceRoot: process.cwd(), onSkillActivated: (name, sessionId) => {
+        this.#activeSkills.add(name);
+        usageRecorder.record({kind: 'skill', name, source: 'model', sessionId, profileName: profile.name});
+      }});
+    }
     this.#rebuildSystemPrompt();
     const session = await this.#repository.findLatestSession(profile.name) ?? await this.#repository.createSession(profile.name);
     const conversation = await this.#repository.getConversation(session.id);
@@ -122,7 +132,7 @@ export class ChatController {
       const known = this.#commands.find(text.trim().slice(1).split(/\s+/)[0] ?? '');
       if (!known) { this.#error(`未知命令：${text.trim()}。输入 /help 查看可用命令`); return; }
       // [s15] 命令使用统计与 trace 事实；prompt 与 local 命令都算一次使用。
-      this.#usage.record({kind: 'command', name: known.name, source: 'user', sessionId: this.#state.session?.id ?? '', ...(this.#profile === null ? {} : {profileName: this.#profile.name})});
+      this.#usage?.record({kind: 'command', name: known.name, source: 'user', sessionId: this.#state.session?.id ?? '', ...(this.#profile === null ? {} : {profileName: this.#profile.name})});
       if (this.#state.session) this.#tap?.fact(this.#state.session.id, 'command_executed', {name: known.name});
       if (known.type === 'prompt') { await this.#startRun(text, known.handler({workDir: process.cwd(), args: text.trim().slice(1).split(' ').slice(1).join(' ')}), 'message'); return; }
       const local = known.handler({workDir: process.cwd(), args: ''});

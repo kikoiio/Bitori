@@ -1,5 +1,6 @@
 import {ChatController} from '../chat/agent-controller.js';
 import {collectSecretValues, configPaths, loadConfig, resolveProfileWithApiKey} from '../config/loader.js';
+import {join} from 'node:path';
 import {toProfileSummary} from '../config/types.js';
 import type {ProviderProfile} from '../config/types.js';
 import {createLLMClient} from '../providers/factory.js';
@@ -92,7 +93,9 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   const createController = async (profile: ProviderProfile): Promise<ChatController> => {
     // [s01] 每个 controller 拥有一条独立的存储 Worker 客户端和一个具体模型客户端。
     const repository = new SessionRepository();
-    const controller = new ChatController(createLLMClient(profile), repository, toolSystem);
+    // [s15] 组合根显式开启观测面：trace 与使用统计落在配置目录，测试缺省关闭。
+    const paths = configPaths();
+    const controller = new ChatController(createLLMClient(profile), repository, toolSystem, undefined, {observability: {traceDirectory: paths.traces, usagePath: join(paths.usage, 'skills.jsonl')}});
     try {
       await controller.initialize(profile);
       return controller;
