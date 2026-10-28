@@ -219,26 +219,24 @@ export class ChatController {
   }
   async #consume(runId: string, instruction: string, trigger: 'message' | 'do', context: AgentContext, signal: AbortSignal, reminders: string[]): Promise<void> {
     const session = this.#state.session!; const projector = new AgentEventProjector(this.#repository, this.#state, state => this.#publish(state), this.#state.agentMode);
-    try {
-      const generator = this.#runner.run({runId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders, limits: {maxIterations: this.#maxIterations, maxUnknownToolIterations: 3}, ...(this.#profile ? {contextManagement: {windowTokens: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), workspaceRoot: this.#workspaceRoot}} : {})}, signal);
-      let finished = false;
-      while (true) {
-        const step = await generator.next();
-        if (step.done) break;
-        if (step.value.type === 'run_finished') finished = true;
-        // trace 订阅者同步火后不理，不进入持久化屏障。
-        this.#tap?.record(step.value);
-        await projector.project(step.value);
-      }
-      if (!finished) throw new Error('Agent 未生成终态事件');
-      await projector.flush(); const restored = await this.#repository.getSession(session.id); if (restored) this.#publish({...this.#state, session: restored, agentMode: restored.agentMode});
-      // 回合自然停止后异步提取记忆；提取失败不影响本轮结果。
-      if (this.#services && this.#profile && this.#memoryClient) {
-        const dialogue = [...this.#state.messages].slice(-20).map(message => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`).join('\n');
-        // 记忆提取失败记录日志，不影响当前回合。
-        void this.#services.memoryExtractor(this.#memoryClient).extract(dialogue).catch((error: unknown) => { logger.warn('记忆提取失败', {error: errorMessage(error)}); });
-      }
-    } catch (error) { throw error; }
+    const generator = this.#runner.run({runId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders, limits: {maxIterations: this.#maxIterations, maxUnknownToolIterations: 3}, ...(this.#profile ? {contextManagement: {windowTokens: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), workspaceRoot: this.#workspaceRoot}} : {})}, signal);
+    let finished = false;
+    while (true) {
+      const step = await generator.next();
+      if (step.done) break;
+      if (step.value.type === 'run_finished') finished = true;
+      // trace 订阅者同步火后不理，不进入持久化屏障。
+      this.#tap?.record(step.value);
+      await projector.project(step.value);
+    }
+    if (!finished) throw new Error('Agent 未生成终态事件');
+    await projector.flush(); const restored = await this.#repository.getSession(session.id); if (restored) this.#publish({...this.#state, session: restored, agentMode: restored.agentMode});
+    // 回合自然停止后异步提取记忆；提取失败不影响本轮结果。
+    if (this.#services && this.#profile && this.#memoryClient) {
+      const dialogue = [...this.#state.messages].slice(-20).map(message => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`).join('\n');
+      // 记忆提取失败记录日志，不影响当前回合。
+      void this.#services.memoryExtractor(this.#memoryClient).extract(dialogue).catch((error: unknown) => { logger.warn('记忆提取失败', {error: errorMessage(error)}); });
+    }
   }
   async cancelActiveRequest(): Promise<void> { const active = this.#active; if (!active) return; if (active.abortController.signal.aborted) { await active.promise; return; } this.#publish({...this.#state, requestStatus: 'cancelling'}); active.abortController.abort(); this.#tools.approvals.interruptAll(); await active.promise; }
   resolveToolApproval(decision: ApprovalDecision): void { const prompt = this.#state.approvalPrompt; if (prompt) this.#tools.approvals.resolve(prompt.callId, decision); }

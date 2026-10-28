@@ -6,7 +6,7 @@ class ControlledTransport implements McpTransport {
   sent: JsonRpcMessage[] = [];
   receiver: ((message: unknown) => void) | null = null;
   start(onMessage: (message: unknown) => void): Promise<void> { this.receiver = onMessage; return Promise.resolve(); }
-  send(message: JsonRpcMessage, _signal?: AbortSignal): Promise<void> { this.sent.push(message); return Promise.resolve(); }
+  send(message: JsonRpcMessage, signal?: AbortSignal): Promise<void> { void signal; this.sent.push(message); return Promise.resolve(); }
   close(): Promise<void> { return Promise.resolve(); }
   receive(message: unknown): void { this.receiver?.(message); }
 }

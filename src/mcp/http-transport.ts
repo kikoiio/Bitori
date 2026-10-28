@@ -9,7 +9,7 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 async function readBody(response: Response, signal: AbortSignal, onEvent: (value: unknown) => void, sse: boolean): Promise<void> {
   if (!response.body) return;
-  const reader = response.body.getReader();
+  const reader = response.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
   const decoder = new TextDecoder();
   let buffer = '';
   let data: string[] = [];
@@ -32,7 +32,8 @@ async function readBody(response: Response, signal: AbortSignal, onEvent: (value
   try {
     if (signal.aborted) throw new DOMException('MCP 请求已取消', 'AbortError');
     while (true) {
-      const {done, value} = await reader.read();
+      const read = await reader.read() as unknown as {done: boolean; value?: Uint8Array};
+      const {done, value} = read;
       if (signal.aborted) throw new DOMException('MCP 请求已取消', 'AbortError');
       buffer += decoder.decode(value, {stream: !done});
       if (sse) {

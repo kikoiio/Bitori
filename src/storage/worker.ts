@@ -7,7 +7,7 @@ import {runMigrations} from './migrations/index.js';
 import type {MigrationDatabase} from './migrations/index.js';
 import {serializeWorkerError} from './worker-client.js';
 import type {StorageOperation, StorageRequest, StorageResponse} from './worker-protocol.js';
-import type {AgentRunRecord, BeginTurnResult, FinalMessageUpdate, Session, StoredMessage, ToolCallRecord} from './types.js';
+import type {AgentRunRecord, BeginTurnResult, ContextCheckpoint, FinalMessageUpdate, Session, StoredConversation, StoredMessage, ToolCallRecord} from './types.js';
 
 const logger = getLogger('storage');
 
@@ -146,7 +146,21 @@ function execute(operation: StorageOperation): unknown {
     }
     case 'get_messages':
       return (database.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC, rowid ASC').all(operation.sessionId) as unknown as MessageRow[]).map(message);
-    case 'get_conversation': { const row = database.prepare('SELECT * FROM sessions WHERE id = ?').get(operation.sessionId) as SessionRow | undefined; if (!row) return null; const messages = (database.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC, rowid ASC').all(operation.sessionId) as unknown as MessageRow[]).map(message); const toolCalls = (database.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY assistant_message_id, position').all(operation.sessionId) as unknown as ToolCallRow[]).map(toolCall); const agentRuns = (database.prepare('SELECT * FROM agent_runs WHERE session_id = ? ORDER BY started_at ASC').all(operation.sessionId) as unknown as AgentRunRow[]).map(agentRun); const checkpointRow = database.prepare('SELECT boundary_message_id, items_json FROM context_checkpoints WHERE session_id=?').get(operation.sessionId) as {boundary_message_id: string; items_json: string} | undefined; const checkpoint = checkpointRow ? {boundaryMessageId: checkpointRow.boundary_message_id, items: JSON.parse(checkpointRow.items_json)} : null; return {session: session(row), messages, toolCalls, agentRuns, checkpoint}; }
+    case 'get_conversation': {
+      const row = database.prepare('SELECT * FROM sessions WHERE id = ?').get(operation.sessionId) as SessionRow | undefined;
+      if (!row) return null;
+      const messages = (database.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC, rowid ASC').all(operation.sessionId) as unknown as MessageRow[]).map(message);
+      const toolCalls = (database.prepare('SELECT * FROM tool_calls WHERE session_id = ? ORDER BY assistant_message_id, position').all(operation.sessionId) as unknown as ToolCallRow[]).map(toolCall);
+      const agentRuns = (database.prepare('SELECT * FROM agent_runs WHERE session_id = ? ORDER BY started_at ASC').all(operation.sessionId) as unknown as AgentRunRow[]).map(agentRun);
+      const checkpointRow = database.prepare('SELECT boundary_message_id, items_json FROM context_checkpoints WHERE session_id=?').get(operation.sessionId) as {boundary_message_id: string; items_json: string} | undefined;
+      let checkpoint: StoredConversation['checkpoint'] = null;
+      if (checkpointRow) {
+        const parsed: unknown = JSON.parse(checkpointRow.items_json);
+        if (!Array.isArray(parsed)) throw new Error('压缩检查点格式无效');
+        checkpoint = {boundaryMessageId: checkpointRow.boundary_message_id, items: parsed as ContextCheckpoint['items']};
+      }
+      return {session: session(row), messages, toolCalls, agentRuns, checkpoint};
+    }
     case 'save_context_checkpoint': transaction(() => {
       const boundary = database.prepare('SELECT rowid FROM messages WHERE id=? AND session_id=?').get(operation.checkpoint.boundaryMessageId, operation.sessionId) as {rowid: number} | undefined;
       if (!boundary) throw new Error('压缩检查点边界不存在');

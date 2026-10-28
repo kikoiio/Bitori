@@ -7,7 +7,7 @@ describe('StreamableHttpMcpTransport', () => {
   it('初始化等待 HTTP 响应头超时并中止 fetch', async () => {
     let aborted = false;
     const fetcher: typeof fetch = async (_input, init) => new Promise((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => { aborted = true; reject(init.signal?.reason); }, {once: true});
+      init?.signal?.addEventListener('abort', () => { aborted = true; reject(new DOMException('aborted', 'AbortError')); }, {once: true});
     });
     const client = new McpClient(new StreamableHttpMcpTransport('https://example.invalid', {}, fetcher), 20);
     await expect(client.initialize()).rejects.toThrow('超时');

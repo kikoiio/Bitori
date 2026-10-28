@@ -156,7 +156,7 @@ export class HookEngine {
         };
         let abort = () => {};
         try { return await new Promise<HookResult>((resolve, reject) => {
-          abort = () => reject(requestSignal.reason);
+          abort = () => reject(requestSignal.reason instanceof Error ? requestSignal.reason : new DOMException('Hook 请求已取消', 'AbortError'));
           if (requestSignal.aborted) { abort(); return; }
           requestSignal.addEventListener('abort', abort, {once: true});
           void operation().then(resolve, reject);

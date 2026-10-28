@@ -5,7 +5,7 @@ import type {HookConfig} from '../../../src/hooks/types.js';
 describe('Hook 系统', () => {
   it('HTTP 超时与网络失败按失败策略拦截或放行', async () => {
     const hanging: typeof fetch = async (_input, init) => new Promise((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), {once: true});
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {once: true});
     });
     const hook: HookConfig = {event: 'pre_tool_use', reject: true, timeoutMs: 20, action: {type: 'http', url: 'https://example.invalid'}};
     const closed = new HookEngine([hook], hanging);
