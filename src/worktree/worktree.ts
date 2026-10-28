@@ -1,4 +1,4 @@
-import {constants, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, symlinkSync} from 'node:fs';
+import {constants, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 
@@ -62,6 +62,11 @@ function lstatIfPresent(path: string): ReturnType<typeof lstatSync> | undefined 
 function canonicalPath(path: string): string {
   try { return realpathSync(path); }
   catch { return resolve(path); }
+}
+
+function comparablePath(path: string): string {
+  const canonical = canonicalPath(path);
+  return process.platform === 'win32' ? canonical.toLowerCase() : canonical;
 }
 
 /** 不跟随任一目标目录链接，也不覆盖已有文件。 */
@@ -159,9 +164,10 @@ export function hasWorktreeChanges(worktreePath: string, headCommit: string | nu
 
 export function removeAgentWorktree(worktreePath: string, branch: string, gitRoot: string, force = false): void {
   const slug = branch.startsWith('worktree-') ? branch.slice('worktree-'.length) : '';
-  if (!isSafeSlug(slug) || canonicalPath(worktreePath) !== canonicalPath(join(gitRoot, '.bitori', 'worktrees', slug))) throw new Error('Worktree 路径越界');
+  if (!isSafeSlug(slug) || comparablePath(worktreePath) !== comparablePath(join(gitRoot, '.bitori', 'worktrees', slug))) throw new Error('Worktree 路径越界');
   if (!force && hasWorktreeChanges(worktreePath, null, gitRoot)) throw new Error('Worktree 存在未提交文件或独有提交');
   git(gitRoot, ['worktree', 'remove', ...(force ? ['--force'] : []), worktreePath]);
+  if (force && existsSync(worktreePath)) rmSync(worktreePath, {recursive: true, force: true, maxRetries: 5, retryDelay: 50});
 }
 
 export function listWorktrees(workspaceRoot = process.cwd()): WorktreeResult[] {
@@ -175,7 +181,7 @@ export function listWorktrees(workspaceRoot = process.cwd()): WorktreeResult[] {
 }
 
 export function worktreeRelativePath(parentRoot: string, worktreePath: string): string | null {
-  const path = relative(canonicalPath(parentRoot), canonicalPath(worktreePath));
+  const path = relative(comparablePath(parentRoot), comparablePath(worktreePath));
   return path && path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path) ? path : null;
 }
 

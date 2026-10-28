@@ -57,7 +57,7 @@ describe('Worktree', () => {
     const worktree = createAgentWorktree('locked', root);
     execFileSync('git', ['worktree', 'lock', worktree.path], {cwd: root});
     expect(() => removeAgentWorktree(worktree.path, worktree.branch, root)).toThrow();
-    expect(readFileSync(join(worktree.path, 'README.md'), 'utf8')).toBe('init\n');
+    expect(readFileSync(join(worktree.path, 'README.md'), 'utf8').replaceAll('\r\n', '\n')).toBe('init\n');
     execFileSync('git', ['worktree', 'unlock', worktree.path], {cwd: root});
     removeAgentWorktree(worktree.path, worktree.branch, root);
   });
@@ -95,7 +95,7 @@ describe('Worktree', () => {
     writeFileSync(join(root, '.worktreeinclude'), 'README.md\n');
     writeFileSync(join(root, 'README.md'), 'local source\n');
     const worktree = createAgentWorktree('include', root);
-    expect(readFileSync(join(worktree.path, 'README.md'), 'utf8')).toBe('init\n');
+    expect(readFileSync(join(worktree.path, 'README.md'), 'utf8').replaceAll('\r\n', '\n')).toBe('init\n');
     removeAgentWorktree(worktree.path, worktree.branch, root);
     rmSync(join(root, '.worktreeinclude')); writeFileSync(join(root, 'README.md'), 'init\n');
   });

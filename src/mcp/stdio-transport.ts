@@ -38,7 +38,10 @@ export class StdioMcpTransport implements McpTransport {
       onClose(this.#closing ? undefined : new McpProtocolError(`MCP stdio Server 提前退出（code=${String(code)}, signal=${String(signal)}）`));
     });
     await new Promise<void>((resolve, reject) => {
-      child.once('spawn', resolve);
+      child.once('spawn', () => {
+        if (this.#closing) reject(new McpProtocolError('MCP stdio 连接已经关闭'));
+        else resolve();
+      });
       child.once('error', error => { this.#child = null; reject(error); });
     });
   }
