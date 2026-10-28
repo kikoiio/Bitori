@@ -36,6 +36,9 @@ def grade(dataset, instance_id, predictions, run_id):
         logfile = reports[0].parent / 'run_instance.log'
         if logfile.is_file():
             report['log_tail'] = logfile.read_text(errors='replace')[-6000:].replace(os.environ.get('BITORI_API_KEY', ''), '[redacted]')
+        test_output = reports[0].parent / 'test_output.txt'
+        if test_output.is_file():
+            report['test_output_tail'] = test_output.read_text(errors='replace')[-6000:].replace(os.environ.get('BITORI_API_KEY', ''), '[redacted]')
     return report
 
 
