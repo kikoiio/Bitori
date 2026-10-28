@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-KEYS = ('dataset', 'dataset_revision', 'split', 'model', 'provider')
+KEYS = ('dataset', 'dataset_revision', 'split', 'model', 'provider', 'protocol')
 
 
 def load(directory):

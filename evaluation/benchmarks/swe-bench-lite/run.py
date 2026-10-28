@@ -22,6 +22,17 @@ def image_for(instance):
             f"docker.io/swebench/sweb.eval.x86_64.{instance['instance_id'].replace('__', '_1776_')}:latest").lower()
 
 
+def provider_settings(environment):
+    protocol = environment.get('BITORI_PROTOCOL', 'openai-chat')
+    if protocol not in ('anthropic', 'openai-chat', 'openai-responses'):
+        raise ValueError(f'不支持的模型协议: {protocol}')
+    base_url = environment['BITORI_BASE_URL']
+    normalized = base_url.rstrip('/')
+    if protocol == 'openai-responses' and normalized.endswith('/responses'):
+        base_url = normalized.removesuffix('/responses')
+    return protocol, base_url
+
+
 def grade(dataset, instance_id, predictions, run_id):
     from swebench.harness.constants import RUN_EVALUATION_LOG_DIR
     command([sys.executable, '-m', 'swebench.harness.run_evaluation',
@@ -59,6 +70,7 @@ def main():
     parser.add_argument('--index', type=int, required=True)
     parser.add_argument('--output', type=Path, default=Path('evaluation-output'))
     args = parser.parse_args()
+    protocol, base_url = provider_settings(os.environ)
     from datasets import load_dataset
 
     instances = sorted(load_dataset(DATASET, revision=REVISION, split='dev'), key=lambda item: item['instance_id'])
@@ -73,7 +85,8 @@ def main():
     started = time.monotonic()
     result = {'instance_id': iid, 'dataset': DATASET, 'dataset_revision': REVISION,
               'split': 'dev', 'model': os.environ['BITORI_MODEL'],
-              'provider': os.environ['BITORI_PROVIDER'], 'commit': os.environ.get('GITHUB_SHA', 'unknown'),
+              'provider': os.environ['BITORI_PROVIDER'], 'protocol': protocol,
+              'commit': os.environ.get('GITHUB_SHA', 'unknown'),
               'status': 'infrastructure_error', 'gold_verified': False}
     container = None
     try:
@@ -96,9 +109,9 @@ def main():
                              'tail', '-f', '/dev/null'], capture_output=True).stdout.strip()
         # Only the task container sees the model credential; never record its output.
         setup = "mkdir -p /tmp/bitori-home/.bitori /testbed/.bitori; touch /tmp/bitori-home/.bitori/.env; printf 'mode: bypass\\n' > /testbed/.bitori/permissions.local.yaml; cat > /tmp/bitori-home/.bitori/config.yaml"
-        config = ('profiles:\n  - name: bench\n    protocol: openai-chat\n'
+        config = (f'profiles:\n  - name: bench\n    protocol: {json.dumps(protocol)}\n'
                   f'    model: {json.dumps(os.environ["BITORI_MODEL"])}\n'
-                  f'    base_url: {json.dumps(os.environ["BITORI_BASE_URL"])}\n'
+                  f'    base_url: {json.dumps(base_url)}\n'
                   '    api_key: ${BITORI_API_KEY}\n    context_window: 131072\n')
         command(['docker', 'exec', '-i', container, 'sh', '-c', setup], input=config, capture_output=True)
         run = subprocess.run(['docker', 'exec', '-e', 'HOME=/tmp/bitori-home',

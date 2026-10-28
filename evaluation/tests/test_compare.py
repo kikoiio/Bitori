@@ -12,11 +12,14 @@ spec.loader.exec_module(compare)
 aggregate_spec = importlib.util.spec_from_file_location('aggregate', Path(__file__).parents[1] / 'rsi' / 'aggregate.py')
 aggregate = importlib.util.module_from_spec(aggregate_spec)
 aggregate_spec.loader.exec_module(aggregate)
+runner_spec = importlib.util.spec_from_file_location('runner', Path(__file__).parents[1] / 'benchmarks' / 'swe-bench-lite' / 'run.py')
+runner = importlib.util.module_from_spec(runner_spec)
+runner_spec.loader.exec_module(runner)
 
 
 def row(status):
     return {'dataset': 'test', 'dataset_revision': 'sha', 'split': 'dev',
-            'model': 'model', 'provider': 'provider', 'status': status}
+            'model': 'model', 'provider': 'provider', 'protocol': 'openai-chat', 'status': status}
 
 
 class ComparisonTests(unittest.TestCase):
@@ -32,6 +35,10 @@ class ComparisonTests(unittest.TestCase):
             compare.compare({'a': row('resolved')}, {'b': row('resolved')})
         changed = row('resolved')
         changed['model'] = 'other'
+        with self.assertRaises(ValueError):
+            compare.compare({'a': row('resolved')}, {'a': changed})
+        changed['model'] = 'model'
+        changed['protocol'] = 'openai-responses'
         with self.assertRaises(ValueError):
             compare.compare({'a': row('resolved')}, {'a': changed})
 
@@ -61,6 +68,27 @@ class ComparisonTests(unittest.TestCase):
             result = aggregate.aggregate(root, [0, 1, 2])
             self.assertEqual(result['missing_indices'], [2])
             self.assertEqual(result['duplicate_instances'], ['same'])
+
+
+class ProviderSettingsTests(unittest.TestCase):
+    def test_normalizes_complete_responses_endpoint(self):
+        for url in ('https://example.com/v1/responses', 'https://example.com/v1/responses/'):
+            with self.subTest(url=url):
+                self.assertEqual(runner.provider_settings({
+                    'BITORI_PROTOCOL': 'openai-responses', 'BITORI_BASE_URL': url,
+                }), ('openai-responses', 'https://example.com/v1'))
+        self.assertEqual(runner.provider_settings({
+            'BITORI_PROTOCOL': 'openai-responses', 'BITORI_BASE_URL': 'https://example.com/v1',
+        }), ('openai-responses', 'https://example.com/v1'))
+
+    def test_defaults_to_chat_without_trimming_url(self):
+        self.assertEqual(runner.provider_settings({
+            'BITORI_BASE_URL': 'https://example.com/v1/responses',
+        }), ('openai-chat', 'https://example.com/v1/responses'))
+
+    def test_rejects_unknown_protocol(self):
+        with self.assertRaises(ValueError):
+            runner.provider_settings({'BITORI_PROTOCOL': 'unknown', 'BITORI_BASE_URL': 'https://example.com'})
 
 
 if __name__ == '__main__':
