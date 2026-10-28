@@ -23,11 +23,12 @@ def image_for(instance):
 
 
 def grade(dataset, instance_id, predictions, run_id):
+    from swebench.harness.constants import RUN_EVALUATION_LOG_DIR
     command([sys.executable, '-m', 'swebench.harness.run_evaluation',
              '--dataset_name', str(dataset), '--split', 'dev', '--instance_ids', instance_id,
              '--predictions_path', str(predictions), '--run_id', run_id,
              '--max_workers', '1', '--timeout', '900'])
-    reports = list(Path('logs/evaluation').glob(f'{run_id}/*/{instance_id}/report.json'))
+    reports = list(Path(RUN_EVALUATION_LOG_DIR).glob(f'{run_id}/*/{instance_id}/report.json'))
     if len(reports) != 1:
         raise RuntimeError(f'官方评分器未生成唯一报告: {run_id}/{instance_id}')
     return json.loads(reports[0].read_text())[instance_id]['resolved']
