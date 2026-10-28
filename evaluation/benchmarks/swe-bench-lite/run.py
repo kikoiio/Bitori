@@ -31,7 +31,12 @@ def grade(dataset, instance_id, predictions, run_id):
     reports = list(Path(RUN_EVALUATION_LOG_DIR).glob(f'{run_id}/*/{instance_id}/report.json'))
     if len(reports) != 1:
         raise RuntimeError(f'官方评分器未生成唯一报告: {run_id}/{instance_id}')
-    return json.loads(reports[0].read_text())[instance_id]
+    report = json.loads(reports[0].read_text())[instance_id]
+    if run_id == 'gold' and not report['resolved']:
+        logfile = reports[0].parent / 'run_instance.log'
+        if logfile.is_file():
+            report['log_tail'] = logfile.read_text(errors='replace')[-6000:].replace(os.environ.get('BITORI_API_KEY', ''), '[redacted]')
+    return report
 
 
 def main():
