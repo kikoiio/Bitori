@@ -1,8 +1,0 @@
-id: find-symbol
-title: 专用工具优先查找
-difficulty: easy
-skills: [prefer-dedicated-tools]
-maxIterations: 6
-forbiddenTools: [run_command, write_file, edit_file]
-expectReplyExact: 'src/b.ts'
-task: 找出 src 目录下哪个 .ts 文件定义了 targetMarker，只回答文件路径。

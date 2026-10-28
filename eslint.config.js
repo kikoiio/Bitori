@@ -3,12 +3,12 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  {ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'eslint.config.js', '.tmp/**', 'chrome-profile*/**', 'benchmarks/tasks/**/workspace/**']},
+  {ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'eslint.config.js', '.tmp/**', 'chrome-profile*/**']},
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
     ...tseslint.configs.disableTypeChecked,
-    files: ['src/desktop/**/*.cjs', 'src/desktop/renderer/**/*.js', 'tests/desktop/**/*.mjs', 'benchmarks/**/*.mjs'],
+    files: ['src/desktop/**/*.cjs', 'src/desktop/renderer/**/*.js', 'tests/desktop/**/*.mjs'],
     languageOptions: {
       globals: {
         Buffer: 'readonly', __dirname: 'readonly', module: 'readonly', require: 'readonly',

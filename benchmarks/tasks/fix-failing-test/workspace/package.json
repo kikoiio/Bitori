@@ -1,8 +1,0 @@
-{
-  "name": "bitori-benchmark-fix-test",
-  "private": true,
-  "scripts": {
-    "test": "node --test"
-  },
-  "type": "module"
-}

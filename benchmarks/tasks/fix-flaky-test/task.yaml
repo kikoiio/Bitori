@@ -1,6 +1,0 @@
-id: fix-flaky-test
-title: 消除非确定性测试
-difficulty: hard
-skills: [debug-determinism, read-before-edit]
-maxIterations: 12
-task: scheduler.test.js 中 nextDelayMs 尚未实现，且首个测试包含随机等待导致不稳定。请实现 scheduler.js 并把测试改成确定性的，保留原断言语义。

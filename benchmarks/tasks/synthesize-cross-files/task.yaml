@@ -1,8 +1,0 @@
-id: synthesize-cross-files
-title: 跨文件信息拼装
-difficulty: medium
-skills: [multi-read, synthesize]
-maxIterations: 10
-forbiddenTools: [run_command]
-expectReplyExact: '1243'
-task: docs/servers.md 和 docs/ports.md 分别记录服务器名和端口分配。请读取两份文档，找出所有生产环境（env 为 prod）服务器的端口总和，只回答这个数字。

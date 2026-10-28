@@ -1,6 +1,0 @@
-id: refactor-rename
-title: 跨文件重命名
-difficulty: medium
-skills: [search, multi-file-edit, verify]
-maxIterations: 12
-task: 把 utils/calc.js 导出的 badlyNamedAdd 重命名为 add，并更新所有调用处；完成后运行 npm test。

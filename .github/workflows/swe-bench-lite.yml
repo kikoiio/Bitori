@@ -1,0 +1,94 @@
+name: SWE-bench Lite development
+on:
+  workflow_dispatch:
+    inputs:
+      index:
+        description: 'Task index 0–22, or all'
+        type: string
+        default: 'all'
+      provider:
+        description: Model provider
+        type: choice
+        options: [openrouter, groq]
+        default: openrouter
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      indices: ${{ steps.plan.outputs.indices }}
+    steps:
+      - id: plan
+        env:
+          INPUT_INDEX: ${{ inputs.index }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          value = os.environ['INPUT_INDEX']
+          if value == 'all': indices = list(range(23))
+          elif value.isdecimal() and 0 <= int(value) < 23: indices = [int(value)]
+          else: raise SystemExit('index must be all or 0–22')
+          print('indices=' + json.dumps(indices, separators=(',', ':')))
+          PY
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        index: ${{ fromJSON(needs.plan.outputs.indices) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm ci && npm run build
+      - run: python -m pip install 'swebench==5.0.2'
+      - name: Run one task
+        env:
+          BITORI_PROVIDER: ${{ inputs.provider }}
+          BITORI_MODEL: ${{ inputs.provider == 'groq' && vars.GROQ_MODEL || vars.OPENROUTER_MODEL }}
+          BITORI_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
+          BITORI_API_KEY: ${{ inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY || secrets.OPENROUTER_LLM_API_KEY }}
+          TASK_INDEX: ${{ matrix.index }}
+        run: |
+          test -n "$BITORI_MODEL" && test -n "$BITORI_API_KEY"
+          export BITORI_NODE="$(command -v node)"
+          python evaluation/benchmarks/swe-bench-lite/run.py --index "$TASK_INDEX"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: swe-lite-dev-${{ matrix.index }}
+          path: evaluation-output/result.json
+          if-no-files-found: warn
+          retention-days: 7
+  aggregate:
+    if: always() && needs.plan.result == 'success'
+    needs: [plan, run]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: swe-lite-dev-*
+          path: evaluation-artifacts
+      - name: Summarize task outcomes
+        env:
+          INDICES: ${{ needs.plan.outputs.indices }}
+        run: python3 evaluation/rsi/aggregate.py evaluation-artifacts --indices "$INDICES" --output evaluation-report/summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: swe-lite-summary
+          path: evaluation-report/summary.json
+          if-no-files-found: warn
+          retention-days: 7

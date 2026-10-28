@@ -1,7 +1,0 @@
-id: edit-todo
-title: 读取后精确编辑
-difficulty: easy
-skills: [read-before-edit]
-maxIterations: 8
-forbiddenTools: [run_command]
-task: 把 notes/todo.md 里的「买牛奶」改成「买燕麦奶」。完成后用一句话确认。

@@ -1,5 +1,0 @@
-mode: bypass
-rules:
-  - tool: run_command
-    pattern: "*"
-    decision: deny
