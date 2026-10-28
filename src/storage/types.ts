@@ -23,7 +23,7 @@ export interface AgentRunRecord {
 /** streaming 是临时状态，其余三个是不可再改变的终态。 */
 export type MessageStatus = 'streaming' | 'completed' | 'cancelled' | 'failed';
 
-/** SQLite 中一行消息在 TypeScript 世界里的完整形状。 */
+/** SQLite 中一行消息的应用层表示。 */
 export interface StoredMessage {
   id: string;
   sessionId: string;
@@ -44,7 +44,7 @@ export interface StoredMessage {
 export interface FinalMessageUpdate {
   content: string;
   thinking: string;
-  // Exclude 从联合类型中去掉 streaming，编译期保证“finalize”只能写入终态。
+  // finalize 只能写入终态。
   status: Exclude<MessageStatus, 'streaming'>;
   error: ProviderError | null;
   usage: Usage | null;

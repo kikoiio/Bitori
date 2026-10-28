@@ -83,7 +83,6 @@ export interface Usage {
 /** 供应商各自的结束原因会在边界层被映射成这组统一值。 */
 export type FinishReason = 'stop' | 'length' | 'content_filter' | 'cancelled' | 'tool_calls' | 'unknown';
 
-// 判别联合：先检查 event.type，TS 就能自动知道其余字段是什么。
 export type StreamEvent =
   | {type: 'text_delta'; text: string}
   | {type: 'thinking_delta'; text: string}
@@ -95,11 +94,10 @@ export type StreamEvent =
   | {type: 'error'; error: ProviderError};
 
 export interface LLMClient {
-  // AsyncIterable 允许调用方用 for await...of 一边接收、一边刷新 UI。
   streamChat(request: ChatRequest, signal: AbortSignal): AsyncIterable<StreamEvent>;
 }
 
-/** 运行时类型守卫：从数据库 JSON 恢复后，确认对象确实像 ProviderState。 */
+/** 从数据库 JSON 恢复后校验 ProviderState 的结构。 */
 export function isProviderState(value: unknown): value is ProviderState {
   return typeof value === 'object' && value !== null
     && 'protocol' in value && value.protocol === 'openai-responses'

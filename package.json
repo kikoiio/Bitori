@@ -23,7 +23,7 @@
     "test:coverage": "vitest run --coverage",
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "desktop": "npm run build && electron .",
-    "desktop:package": "npm run build && electron-builder --linux AppImage deb"
+    "desktop:package": "npm run build && electron-builder --linux AppImage deb --publish never"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
@@ -71,7 +71,10 @@
         "AppImage",
         "deb"
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "icon": "src/desktop/icon.png"
     }
-  }
+  },
+  "author": "Aries <163719835+kikoiio@users.noreply.github.com>",
+  "homepage": "https://github.com/kikoiio/Bitori"
 }

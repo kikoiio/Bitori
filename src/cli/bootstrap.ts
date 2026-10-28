@@ -70,7 +70,7 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   setupLogging(config, options.logLevel);
   const selected = resolveProfileWithApiKey(config, options.profile);
   // 启动时固定捕获工作区；限制不来自配置或模型参数。
-  // SubAgent 的模型映射先复用当前 profile；自定义模型路由在配置系统扩展后接入。
+  // SubAgent 模型映射缺失时回退到已选 profile；未选择时使用首个 profile。
   const fallback = selected ?? config.profiles[0]!;
   const profileByName = new Map(config.profiles.map(profile => [profile.name, profile]));
   const clientCache = new Map<string, ReturnType<typeof createLLMClient>>();
@@ -110,7 +110,7 @@ export async function bootstrap(options: CliOptions): Promise<void> {
     try { activeController = await createController(selected); }
     catch (error) { toolSystem.close(); throw error; }
   }
-  // shutdown 内部会记忆第一次关闭 Promise，因此多个退出来源不会重复释放资源。
+  // 多个退出来源共享关闭流程，避免重复释放资源。
   const shutdown = createShutdownOnce(() => activeController, () => terminal, async () => { toolSystem.close(); await Promise.resolve(); });
   const instance = renderApp({
     profiles: config.profiles.map(toProfileSummary),
@@ -128,7 +128,7 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   terminal = new TerminalSession(instance);
 
   const fatalHandler = (error: unknown) => {
-    // void 表示有意不在同步事件处理器里 await；finally 仍保证错误输出发生在清理之后。
+    // 错误输出必须发生在清理之后。
     void shutdown('fatal_error').finally(() => {
       process.stderr.write(`Bitori 发生未处理错误：${error instanceof Error ? error.message : String(error)}\n`);
       process.exitCode = 1;

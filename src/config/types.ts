@@ -1,10 +1,8 @@
 /**
  * 配置层的纯类型与小型转换函数。
- * `as const` 会把数组元素保留为字符串字面量，而不是扩大成普通 string。
  */
 export const protocols = ['anthropic', 'openai-responses', 'openai-chat'] as const;
 
-// 从只读数组推导出联合类型：'anthropic' | 'openai-responses' | 'openai-chat'。
 export type Protocol = (typeof protocols)[number];
 
 /** YAML 中允许用户书写的原始 thinking 形状，字段名保持 snake_case。 */
@@ -13,7 +11,7 @@ export type ThinkingConfigSource =
   | {type: 'adaptive'}
   | {type: 'manual'; budget_tokens: number; max_tokens: number};
 
-/** 程序内部统一使用的 thinking 形状，字段名改为 TypeScript 常见的 camelCase。 */
+/** 程序内部统一使用的 thinking 形状，字段名为 camelCase。 */
 export type ThinkingConfig =
   | {type: 'disabled'}
   | {type: 'auto'}
@@ -54,7 +52,7 @@ export type McpServerConfigSource =
   | {transport: 'stdio'; command: string; args?: string[]; env?: Record<string, string>}
   | {transport: 'http'; url: string; headers?: Record<string, string>};
 
-// Pick 从完整类型中只取 UI 真正需要且可以安全展示的字段，避免 API Key 泄漏到界面层。
+// 界面只接收可安全展示的字段，避免 API Key 泄漏。
 export type ProfileSummary = Pick<ProviderProfile, 'name' | 'protocol' | 'model'>;
 
 export interface AppConfig {

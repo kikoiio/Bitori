@@ -3,7 +3,7 @@ import type {LogLevel} from '../shared/logger.js';
 
 const logLevels = ['debug', 'info', 'warn', 'error'] as const;
 
-/** 解析完成后的命令行选项；`?` 表示这个属性可以不存在。 */
+/** 解析完成后的命令行选项。 */
 export interface CliOptions {
   profile?: string;
   help: boolean;
@@ -225,6 +225,5 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
     };
   }
   if (exec) return {help: false, ...(profile === undefined ? {} : {profile}), ...(logLevelOption === undefined ? {} : {logLevel: logLevelOption}), exec};
-  // exactOptionalPropertyTypes 开启后，缺省属性应直接省略，而不是写成 profile: undefined。
   return {help, ...(profile === undefined ? {} : {profile}), ...(logLevelOption === undefined ? {} : {logLevel: logLevelOption})};
 }

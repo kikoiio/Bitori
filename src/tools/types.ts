@@ -30,7 +30,7 @@ export interface ToolCall {internalId: string; providerCallId: string; position:
 export interface InvalidToolCall extends ToolCallDraft {error: ToolError}
 export interface AssembledToolBatch {validCalls: ToolCall[]; invalidCalls: InvalidToolCall[]}
 export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'denied';
-/** 审批保留旧 approved 别名，并增加一次、会话和永久放行。 */
+/** 审批支持 approved 别名，以及一次、会话和永久放行。 */
 export type ApprovalDecision = 'approved' | 'approved_once' | 'approved_session' | 'approved_permanent' | 'denied';
 export type ToolExecutionStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'timed_out' | 'skipped' | 'interrupted';
 export interface ToolApprovalPrompt {callId: string; toolName: string; effect: ToolEffect; argumentSummary: string; riskMessage: string | null; reason?: string}

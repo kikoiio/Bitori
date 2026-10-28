@@ -118,7 +118,7 @@ export class HookEngine {
       if (hook.condition && !evaluateCondition(hook.condition, context)) continue;
       if (hook.once) this.#firedOnce.add(key);
       const promise = this.#execute(hook, context);
-      // async Hook 的失败此前完全静默，现在降级为 warn 日志。
+      // 异步 Hook 失败时记录警告，不阻断事件处理。
       if (hook.async) void promise.catch((error: unknown) => { logger.warn('异步 Hook 执行失败', {event, hook: key, error: errorMessage(error)}); });
       else results.push(await promise);
     }
@@ -147,7 +147,7 @@ export class HookEngine {
         const output = await response.text();
         return {output, success: response.ok, reject: hook.reject === true && !response.ok};
       }
-      return {output: 'Agent Hook 将在 SubAgent 阶段实现', success: true, reject: false};
+      return {output: 'Agent Hook 暂不支持', success: true, reject: false};
     } catch (error) {
       return {output: error instanceof Error ? error.message : String(error), success: false, reject: false};
     }

@@ -2,7 +2,6 @@
 export class BitoriError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    // new.target 指向实际被 new 的子类，因此 name 会是 ConfigurationError 等具体名称。
     this.name = new.target.name;
   }
 }

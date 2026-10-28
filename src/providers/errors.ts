@@ -25,7 +25,6 @@ interface ErrorShape {
   name?: unknown;
 }
 
-/** 把 unknown 安全缩小成一个“可能含常见错误字段”的对象。 */
 function shape(error: unknown): ErrorShape {
   return typeof error === 'object' && error !== null ? error : {};
 }

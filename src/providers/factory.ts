@@ -15,6 +15,5 @@ export function createLLMClient(profile: ProviderProfile): LLMClient {
 }
 
 function assertNever(value: never): never {
-  // 新增 Protocol 却忘记补 switch 分支时，TypeScript 会在这里产生编译错误。
   throw new Error(`不支持的协议：${String(value)}`);
 }

@@ -25,7 +25,7 @@ export type StorageOperation =
   | {type: 'close'};
 
 export interface StorageRequest {
-  // requestId 用于把异步返回值配对到发起请求的 Promise。
+  // requestId 用于将响应与发起的请求配对。
   requestId: string;
   operation: StorageOperation;
 }

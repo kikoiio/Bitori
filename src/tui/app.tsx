@@ -35,7 +35,7 @@ export function App({profiles, initialController, createController, onController
     {error ? <Text color="red">{error}</Text> : null}
     <ProfileSelectScreen profiles={profiles} onExit={onExit} onSelect={profile => {
       setLoading(true);
-      // 事件回调本身不能 await，因此用 void 明确启动异步链，并在 catch 中把失败显示到界面。
+      // 控制器创建失败时在界面显示错误。
       void createController(profile.name).then(value => {
         onController(value);
         setController(value);

@@ -6,7 +6,7 @@ const CHARS_PER_TOKEN = 3.5;
 
 export interface FileReadRecord {path: string; content: string; at: number}
 
-/** 压缩后无法从摘要还原的近期事实；当前覆盖文件，Skill 建立后再扩展。 */
+/** 压缩后无法从摘要还原的近期事实；目前覆盖文件。 */
 export class RecoveryState {
   readonly #files: FileReadRecord[] = [];
 

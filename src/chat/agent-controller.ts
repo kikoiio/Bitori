@@ -188,7 +188,7 @@ export class ChatController {
       // 回合自然停止后异步提取记忆；提取失败不影响本轮结果。
       if (this.#services && this.#profile && this.#memoryClient) {
         const dialogue = [...this.#state.messages].slice(-20).map(message => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`).join('\n');
-        // 记忆提取失败降级为日志，不再完全静默。
+        // 记忆提取失败记录日志，不影响当前回合。
         void this.#services.memoryExtractor(this.#memoryClient).extract(dialogue).catch((error: unknown) => { logger.warn('记忆提取失败', {error: errorMessage(error)}); });
       }
     } catch (error) { if (!signal.aborted) this.#publish({...this.#state, requestStatus: 'failed', activeRunId: null, visibleError: error instanceof Error ? error.message : String(error)}); }

@@ -179,7 +179,7 @@ function registerHandlers() {
 async function start() {
   core = await loadCore();
   registerHandlers();
-  window = new BrowserWindow({width: 1200, height: 800, minWidth: 720, minHeight: 520, show: false, title: 'Bitori', backgroundColor: '#f4f6fa', webPreferences: {preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false}});
+  window = new BrowserWindow({width: 1200, height: 800, minWidth: 720, minHeight: 520, show: false, title: 'Bitori', icon: join(__dirname, 'icon.png'), backgroundColor: '#f4f6fa', webPreferences: {preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false}});
   window.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
   window.webContents.on('will-navigate', event => event.preventDefault());
   window.on('close', event => {

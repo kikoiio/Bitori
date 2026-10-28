@@ -22,7 +22,6 @@ function stopReason(value: string | undefined): FinishReason {
 }
 
 export class AnthropicClient implements LLMClient {
-  // # 开头的是 JavaScript 真正的私有字段，类外在运行时也无法访问。
   readonly #profile: ProviderProfile;
   readonly #client: Anthropic;
 

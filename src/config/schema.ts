@@ -67,7 +67,7 @@ export const configSchema = z
     trace: traceSchema.optional(),
   })
   .superRefine((value, context) => {
-    // superRefine 适合做跨字段/跨数组项校验：单个字段的 schema 无法判断名称是否重复。
+    // 跨配置项校验名称唯一性。
     const names = new Set<string>();
     for (const [index, profile] of value.profiles.entries()) {
       if (names.has(profile.name)) {
@@ -92,7 +92,7 @@ export const configSchema = z
 export const projectConfigSchema = z.strictObject({mcp_servers: mcpServersSchema.optional()});
 
 export function parseConfig(value: unknown): ParsedConfig {
-  // 外部输入先视为 unknown；只有 Zod 校验成功后才进入有类型保证的应用代码。
+  // 外部配置必须通过 Zod 校验后才能进入应用。
   return configSchema.parse(value) as ParsedConfig;
 }
 

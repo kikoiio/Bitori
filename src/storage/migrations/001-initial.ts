@@ -38,5 +38,4 @@ export const initialMigration = {
     CREATE INDEX sessions_profile_updated ON sessions(profile_name, updated_at DESC);
     CREATE INDEX messages_session_created ON messages(session_id, created_at ASC);
   `,
-// as const 让 version 保持字面量 1，并把整个对象视为只读配置。
 } as const;

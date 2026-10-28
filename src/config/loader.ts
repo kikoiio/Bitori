@@ -150,7 +150,6 @@ export function resolveProfile(config: AppConfig, requestedName?: string): Provi
     return profile;
   }
   // 多 profile 且用户未指定时返回 null，表示应该进入 profile 选择界面。
-  // `!` 告诉 TS：长度已经确认是 1，所以第 0 项一定存在。
   return config.profiles.length === 1 ? config.profiles[0]! : null;
 }
 
