@@ -4,7 +4,7 @@
 
 手动运行 `.github/workflows/swe-bench-lite.yml`：`index=0` 至 `22` 为单题，`index=all` 为完整开发集；选择 openrouter 或 groq。每题独立 runner，单题串行，减少共享模型服务的限流。模型和 API key 来自对应仓库变量与 secret。runner 需要联网下载依赖、数据、镜像，并将公开任务内容发送给模型供应商。模型产生的命令可访问容器内的模型凭据和网络，应只使用限额、可撤销的专用密钥。请勿对不可信的工作流或数据集开放仓库密钥。
 
-每题上传 `result.json`，包含任务、数据集版本、模型、代码提交、结果、耗时及部分用量，不上传模型回复、补丁或运行轨迹。`resolved`、`unresolved`、`agent_error` 和 `infrastructure_error` 分开记录；若作业启动前失败或超时，可能没有结果文件。为检查完整性需确认 23 个独立任务都产生了结果。
+每题上传 `result.json`，包含任务、数据集版本、模型、代码提交、结果、耗时及部分用量，不上传模型回复、补丁或运行轨迹。`resolved`、`unresolved`、`agent_error`、`provider_error` 和 `infrastructure_error` 分开记录；若作业启动前失败或超时，可能没有结果文件。为检查完整性需确认 23 个独立任务都产生了结果。
 
 汇总作业将逐题结果写入 `swe-lite-summary` artifact；缺题、任务重复或运行错误会使汇总失败。旧版运行没有汇总作业时，可将各 artifact 下载到同一目录后运行 `python3 evaluation/rsi/aggregate.py <目录> --indices '[0,1]' --output <报告.json>`。
 
