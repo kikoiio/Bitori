@@ -1,4 +1,4 @@
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import {access, realpath} from 'node:fs/promises';
 import {getEventListeners} from 'node:events';
 import {join} from 'node:path';
@@ -19,7 +19,23 @@ describe('RunCommandTool', () => {
   it('非零退出返回 command_failed 和部分输出', async () => { const w = await TemporaryWorkspace.create(); items.push(w); const result = await new RunCommandTool().execute({command: beforeExit}, {workspaceRoot: w.root, signal: new AbortController().signal, limits: {timeoutMs: 5_000, maxResultBytes: 65_536, maxMatches: 500}}); expect(result).toMatchObject({status: 'error', error: {code: 'command_failed'}, partialOutput: {exitCode: 7}}); expect(result.status === 'error' && String(result.partialOutput?.stdout)).toContain('before'); });
   it('持续输出只保留固定上限并报告原始规模', async () => { const w = await TemporaryWorkspace.create(); items.push(w); const result = await new RunCommandTool().execute({command: IS_WINDOWS ? repeat : `printf 'x%.0s' $(seq 1 1000)`}, {workspaceRoot: w.root, signal: new AbortController().signal, limits: {timeoutMs: 5_000, maxResultBytes: 32, maxMatches: 500}}); expect(result).toMatchObject({status: 'success', truncation: {truncated: true, returnedUnits: 32}}); expect(result.status === 'success' && Buffer.byteLength(String(result.output.stdout))).toBeLessThanOrEqual(32); });
   it('多兆输出仍只保留固定上限并统计完整规模', async () => { const w = await TemporaryWorkspace.create(); items.push(w); const result = await new RunCommandTool().execute({command: largeOutput}, {workspaceRoot: w.root, signal: new AbortController().signal, limits: {timeoutMs: 10_000, maxResultBytes: 1024, maxMatches: 500}}); expect(result).toMatchObject({status: 'success'}); if (result.status !== 'success') return; expect(result.output.stdoutBytes).toBeGreaterThanOrEqual(2_000_000); expect(result.truncation?.originalUnits).toBe(result.output.stdoutBytes); }, 15_000);
-  it('取消后收敛为 interrupted', async () => { const w = await TemporaryWorkspace.create(); items.push(w); const abort = new AbortController(); const pending = new RunCommandTool().execute({command: sleep}, {workspaceRoot: w.root, signal: abort.signal, limits: {timeoutMs: 60_000, maxResultBytes: 100, maxMatches: 500}}); setTimeout(() => abort.abort(), 100); const result = await pending; if (result.status !== 'interrupted') throw new Error(`unexpected result: ${JSON.stringify(result)}`); expect(result).toMatchObject({status: 'interrupted', error: {code: 'interrupted'}}); }, 10_000);
+  it('取消后收敛为 interrupted', async () => { const w = await TemporaryWorkspace.create(); items.push(w); const abort = new AbortController(); const pending = new RunCommandTool().execute({command: sleep}, {workspaceRoot: w.root, signal: abort.signal, limits: {timeoutMs: 60_000, maxResultBytes: 100, maxMatches: 500}}); setTimeout(() => abort.abort(), 100); const result = await pending; expect(result, JSON.stringify(result)).toMatchObject({status: 'interrupted', error: {code: 'interrupted'}}); }, 10_000);
+  it('进程组信号短暂 EPERM 时重试并正常中断', async () => {
+    const workspace = await TemporaryWorkspace.create(); items.push(workspace);
+    const abort = new AbortController();
+    let denied = 0;
+    const realKill = process.kill.bind(process);
+    const spy = vi.spyOn(process, 'kill').mockImplementation((pid: number, signal?: string | number) => {
+      if (pid < 0 && denied === 0) { denied++; throw Object.assign(new Error('kill EPERM'), {code: 'EPERM'}); }
+      return realKill(pid, signal);
+    });
+    try {
+      const pending = new RunCommandTool().execute({command: sleep}, {workspaceRoot: workspace.root, signal: abort.signal, limits: {timeoutMs: 60_000, maxResultBytes: 100, maxMatches: 500}});
+      setTimeout(() => abort.abort(), 100);
+      await expect(pending).resolves.toMatchObject({status: 'interrupted', error: {code: 'interrupted'}});
+      expect(denied).toBe(1);
+    } finally { spy.mockRestore(); }
+  }, 10_000);
   it.each(['interrupted', 'timeout'])('%s 会终止持管道且忽略 SIGTERM 的整个进程树', async reason => {
     const workspace = await TemporaryWorkspace.create(); items.push(workspace);
     const abort = new AbortController();

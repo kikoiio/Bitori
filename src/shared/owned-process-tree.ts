@@ -38,11 +38,11 @@ export class OwnedProcessTree {
       if (pid !== undefined) {
         if (process.platform === 'win32') await this.#terminateWindowsTree(pid);
         else {
-          this.#signalGroup(pid, 'SIGTERM');
+          await this.#signalGroup(pid, 'SIGTERM');
           const deadline = Date.now() + 1_000;
           // close 只说明管道已关，不能证明整个进程组都退出；反之父进程退出也不撤销组归属。
           while (this.#groupExists(pid) && Date.now() < deadline) await delay(25);
-          this.#signalGroup(pid, 'SIGKILL');
+          await this.#signalGroup(pid, 'SIGKILL');
         }
       }
     } finally {
@@ -55,14 +55,27 @@ export class OwnedProcessTree {
     if (!closed) throw new Error('进程树终止后输出管道未在期限内关闭');
   }
 
-  #signalGroup(pid: number, signal: NodeJS.Signals): void {
-    try { process.kill(-pid, signal); }
-    catch (error) { if (!isMissingProcess(error)) throw error; }
+  async #signalGroup(pid: number, signal: NodeJS.Signals): Promise<void> {
+    for (let attempt = 0; attempt <= 10; attempt++) {
+      try { process.kill(-pid, signal); return; }
+      catch (error) {
+        if (isMissingProcess(error)) return;
+        // macOS 在进程退出/回收瞬间对进程组发送信号可能短暂返回 EPERM。
+        if (!isSignalDenied(error)) throw error;
+        if (attempt === 10) throw new Error(`向进程组发送 ${signal} 失败：${error instanceof Error ? error.message : String(error)}`, {cause: error});
+        await delay(50);
+      }
+    }
   }
 
   #groupExists(pid: number): boolean {
     try { process.kill(-pid, 0); return true; }
-    catch (error) { if (isMissingProcess(error)) return false; throw error; }
+    catch (error) {
+      if (isMissingProcess(error)) return false;
+      // 视图短暂不可判定时按仍存在处理，继续等待并最终由管道关闭期限兜底。
+      if (isSignalDenied(error)) return true;
+      throw error;
+    }
   }
 
   async #terminateWindowsTree(pid: number): Promise<void> {
@@ -113,4 +126,8 @@ export class OwnedProcessTree {
 
 function isMissingProcess(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ESRCH';
+}
+
+function isSignalDenied(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'EPERM';
 }
