@@ -65,8 +65,11 @@ function canonicalPath(path: string): string {
 }
 
 function comparablePath(path: string): string {
-  const canonical = canonicalPath(path);
-  return process.platform === 'win32' ? canonical.toLowerCase() : canonical;
+  let canonical = canonicalPath(path).replaceAll('\\', '/');
+  if (process.platform === 'win32') {
+    canonical = canonical.replace(/^\/?\/?\?\//, '').toLowerCase();
+  }
+  return canonical.replace(/\/+$/, '');
 }
 
 /** 不跟随任一目标目录链接，也不覆盖已有文件。 */
@@ -164,7 +167,9 @@ export function hasWorktreeChanges(worktreePath: string, headCommit: string | nu
 
 export function removeAgentWorktree(worktreePath: string, branch: string, gitRoot: string, force = false): void {
   const slug = branch.startsWith('worktree-') ? branch.slice('worktree-'.length) : '';
-  if (!isSafeSlug(slug) || comparablePath(worktreePath) !== comparablePath(join(gitRoot, '.bitori', 'worktrees', slug))) throw new Error('Worktree 路径越界');
+  const worktreeBase = comparablePath(join(gitRoot, '.bitori', 'worktrees'));
+  const requested = comparablePath(worktreePath);
+  if (!isSafeSlug(slug) || relative(worktreeBase, requested) !== slug) throw new Error('Worktree 路径越界');
   if (!force && hasWorktreeChanges(worktreePath, null, gitRoot)) throw new Error('Worktree 存在未提交文件或独有提交');
   git(gitRoot, ['worktree', 'remove', ...(force ? ['--force'] : []), worktreePath]);
   if (force && existsSync(worktreePath)) rmSync(worktreePath, {recursive: true, force: true, maxRetries: 5, retryDelay: 50});
