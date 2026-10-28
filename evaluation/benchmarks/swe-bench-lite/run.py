@@ -31,7 +31,7 @@ def grade(dataset, instance_id, predictions, run_id):
     reports = list(Path(RUN_EVALUATION_LOG_DIR).glob(f'{run_id}/*/{instance_id}/report.json'))
     if len(reports) != 1:
         raise RuntimeError(f'官方评分器未生成唯一报告: {run_id}/{instance_id}')
-    return json.loads(reports[0].read_text())[instance_id]['resolved']
+    return json.loads(reports[0].read_text())[instance_id]
 
 
 def main():
@@ -57,7 +57,9 @@ def main():
               'status': 'infrastructure_error', 'gold_verified': False}
     container = None
     try:
-        if not grade(dataset, iid, 'gold', 'gold'):
+        gold = grade(dataset, iid, 'gold', 'gold')
+        if not gold['resolved']:
+            result['gold_report'] = gold
             raise RuntimeError('官方答案未通过评分，不能信任此任务的环境')
         result['gold_verified'] = True
         mounts = []
@@ -100,7 +102,8 @@ def main():
             return
         predictions = out / 'prediction.json'
         predictions.write_text(json.dumps([{'instance_id': iid, 'model_name_or_path': 'bitori', 'model_patch': patch}]))
-        result['status'] = 'resolved' if grade(dataset, iid, predictions, 'candidate') else 'unresolved'
+        candidate = grade(dataset, iid, predictions, 'candidate')
+        result['status'] = 'resolved' if candidate['resolved'] else 'unresolved'
     except (OSError, subprocess.SubprocessError, RuntimeError, ValueError) as error:
         result['error'] = str(error)[:500]
     finally:
