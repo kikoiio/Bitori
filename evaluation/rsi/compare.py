@@ -25,6 +25,8 @@ def compare(baseline, candidate):
         a, b = baseline[instance_id], candidate[instance_id]
         if any(a.get(key) != b.get(key) or a.get(key) != first.get(key) for key in KEYS):
             raise ValueError(f'{instance_id} 的实验配置不匹配')
+        if a.get('environment_adjustments', []) != b.get('environment_adjustments', []):
+            raise ValueError(f'{instance_id} 的任务环境调整不匹配')
         if a['status'] not in ('resolved', 'unresolved') or b['status'] not in ('resolved', 'unresolved'):
             raise ValueError(f'{instance_id} 存在未完成或基础设施错误')
     changes = {iid: {'baseline': baseline[iid]['status'], 'candidate': candidate[iid]['status']}

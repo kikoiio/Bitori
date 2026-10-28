@@ -39,7 +39,7 @@ jobs:
     timeout-minutes: 75
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         index: ${{ fromJSON(needs.plan.outputs.indices) }}
     steps:
