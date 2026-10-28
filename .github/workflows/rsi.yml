@@ -1,0 +1,119 @@
+name: RSI smoke experiment
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_sha:
+        description: Full 40-character commit SHA used as the frozen harness baseline
+        required: true
+        type: string
+      confirm:
+        description: Type "bounded-spend-authorized" to confirm the displayed provider/budget/upload scope
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rsi-smoke-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm ci
+      - name: Python evaluation tests (no secrets)
+        run: python3 -m unittest discover -s evaluation/tests -v
+      - name: Trusted TypeScript checks (no secrets)
+        run: npx vitest run tests/unit/rsi tests/unit/trace tests/unit/config
+
+  experiment:
+    needs: offline-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate dispatch inputs against the trusted default branch
+        env:
+          BASELINE_SHA: ${{ inputs.baseline_sha }}
+          CONFIRMATION: ${{ inputs.confirm }}
+        run: |
+          [[ "$BASELINE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'baseline_sha must be a full lowercase commit SHA'; exit 1; }
+          git cat-file -e "${BASELINE_SHA}^{commit}"
+          git merge-base --is-ancestor "$BASELINE_SHA" HEAD
+          [[ "$CONFIRMATION" == 'bounded-spend-authorized' ]] || {
+            echo 'confirmation phrase mismatch; review provider, budget, and upload scope first'; exit 1; }
+      - run: npm ci
+      - run: python -m pip install 'swebench==5.0.2'
+      - run: docker info
+      - name: Show bounded experiment scope
+        env:
+          PROVIDER: xunfei
+          MODEL: ${{ vars.XUNFEI_MODEL }}
+        run: |
+          echo "provider=$PROVIDER model=$MODEL"
+          echo 'scope: task 0 only, one candidate, 30 agent iterations, 90 minute / 100 request / 2,000,000 token budget'
+          echo 'uploads: report, ledger, diagnosis, hypothesis, patch, checks, comparison, verification, trajectory'
+          echo 'never uploaded: gold instance data, raw thinking, credentials, worktrees, build outputs'
+      - name: Configure ephemeral commit identity
+        run: |
+          git config user.name 'RSI control plane'
+          git config user.email 'rsi@users.noreply.github.com'
+      - name: Run bounded RSI smoke
+        env:
+          BASELINE_SHA: ${{ inputs.baseline_sha }}
+          LLM_API_KEY: ${{ secrets.XUNFEI_LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.XUNFEI_OPENAI_RESPONSE_URL }}
+          LLM_MODEL: ${{ vars.XUNFEI_MODEL }}
+        run: |
+          test -n "$LLM_API_KEY" && test -n "$LLM_BASE_URL" && test -n "$LLM_MODEL"
+          python3 evaluation/RSI/loop.py \
+            --config evaluation/RSI/smoke.json \
+            --baseline-ref "$BASELINE_SHA" \
+            --output "$RUNNER_TEMP/rsi-experiment"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rsi-smoke-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/rsi-experiment/report.json
+            ${{ runner.temp }}/rsi-experiment/analysis.json
+            ${{ runner.temp }}/rsi-experiment/ledger.jsonl
+            ${{ runner.temp }}/rsi-experiment/state.json
+            ${{ runner.temp }}/rsi-experiment/gateway/ledger/*.jsonl
+            ${{ runner.temp }}/rsi-experiment/candidates/*/hypothesis.json
+            ${{ runner.temp }}/rsi-experiment/candidates/*/candidate.json
+            ${{ runner.temp }}/rsi-experiment/candidates/*/candidate.patch
+            ${{ runner.temp }}/rsi-experiment/candidates/*/checks.json
+            ${{ runner.temp }}/rsi-experiment/candidates/*/comparison.json
+            ${{ runner.temp }}/rsi-experiment/candidates/*/verification.json
+            ${{ runner.temp }}/rsi-experiment/attempts/**/result.json
+            ${{ runner.temp }}/rsi-experiment/attempts/**/trajectory.jsonl
+            ${{ runner.temp }}/rsi-experiment/attempts/**/diagnosis.json
+            ${{ runner.temp }}/rsi-experiment/attempts/**/solution.patch
+            ${{ runner.temp }}/rsi-experiment/attempts/**/artifacts.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -69,7 +69,12 @@ jobs:
         if: always()
         with:
           name: swe-lite-dev-${{ matrix.index }}
-          path: evaluation-output/result.json
+          path: |
+            evaluation-output/result.json
+            evaluation-output/trajectory.jsonl
+            evaluation-output/diagnosis.json
+            evaluation-output/solution.patch
+            evaluation-output/artifacts.json
           if-no-files-found: warn
           retention-days: 7
   aggregate:
@@ -85,7 +90,7 @@ jobs:
       - name: Summarize task outcomes
         env:
           INDICES: ${{ needs.plan.outputs.indices }}
-        run: python3 evaluation/rsi/aggregate.py evaluation-artifacts --indices "$INDICES" --output evaluation-report/summary.json
+        run: python3 evaluation/RSI/aggregate.py evaluation-artifacts --indices "$INDICES" --output evaluation-report/summary.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

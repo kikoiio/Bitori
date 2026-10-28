@@ -2,6 +2,7 @@ import {resolve, join} from 'node:path';
 import {createApplicationRuntime} from '../app/runtime.js';
 import type {ApplicationRuntime} from '../app/runtime.js';
 import type {AppConfig, ProviderProfile} from '../config/types.js';
+import type {TraceWriteStats} from '../trace/writer.js';
 
 export interface ExecOptions {
   task: string;
@@ -12,6 +13,9 @@ export interface ExecOptions {
 
 export interface ExecResult {
   task: string;
+  sessionId: string | null;
+  runId: string | null;
+  trace: TraceWriteStats | null;
   status: string;
   stopReason: string | null;
   iterations: number;
@@ -29,18 +33,24 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
   const workspace = resolve(options.workspace ?? process.cwd());
   let runtime: ApplicationRuntime | undefined;
   let exitCode = 0;
+  let runId: string | null = null;
   try {
     runtime = await createApplicationRuntime({config, profileName: profile.name, workspace, databasePath: join(workspace, '.bitori', 'bitori.db'), ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
     const {controller} = runtime;
     controller.subscribe(state => {
+      if (state.activeRunId) runId = state.activeRunId;
       if (state.approvalPrompt) controller.resolveToolApproval('denied');
     });
     for (const warning of runtime.warnings) process.stderr.write(`${warning}\n`);
     await controller.sendMessage(options.task);
     const state = controller.getState();
+    await runtime.close();
     const failed = [...state.messages].findLast(message => message.role === 'assistant' && message.status === 'failed');
     const result: ExecResult = {
       task: options.task,
+      sessionId: state.session?.id ?? null,
+      runId,
+      trace: controller.traceStats(),
       status: state.requestStatus,
       stopReason: state.stopReason,
       iterations: state.iteration,
@@ -58,7 +68,7 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
   } catch (error) {
     exitCode = 1;
     const message = error instanceof Error ? error.message : String(error);
-    if (options.json) process.stdout.write(`${JSON.stringify({task: options.task, status: 'failed', stopReason: null, iterations: 0, toolCalls: [], inputTokens: 0, outputTokens: 0, reply: '', errorCode: null, errorMessage: message, error: message})}\n`);
+    if (options.json) process.stdout.write(`${JSON.stringify({task: options.task, sessionId: runtime?.controller.getState().session?.id ?? null, runId, trace: null, status: 'failed', stopReason: null, iterations: 0, toolCalls: [], inputTokens: 0, outputTokens: 0, reply: '', errorCode: null, errorMessage: message, error: message})}\n`);
     else process.stderr.write(`Bitori exec 失败：${message}\n`);
   } finally {
     try { await runtime?.close(); }

@@ -1,10 +1,10 @@
-# 复制到 ~/.bitori/config.yaml，替换 model 为供应商提供的实际模型 ID。
+# 复制到 ~/.bitori/config.yaml，在同目录 .env 中配置三个 LLM 连接参数。
 profiles:
   - name: claude-main
     protocol: anthropic
-    model: claude-model-id
-    base_url: https://api.anthropic.com
-    api_key: ${ANTHROPIC_API_KEY}
+    model: ${LLM_MODEL}
+    base_url: ${LLM_BASE_URL}
+    api_key: ${LLM_API_KEY}
     thinking: true
     # 可选；缺省 anthropic=200000，openai*=128000。
     context_window: 200000

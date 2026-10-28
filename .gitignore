@@ -10,8 +10,11 @@ coverage/
 .test-tmp/
 *.log
 .codex/
+.qoder/
 .tmp/
 .audit/
 .zcode/
 release/
 desktop-test-output/
+__pycache__/
+*.pyc

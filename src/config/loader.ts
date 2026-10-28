@@ -61,6 +61,17 @@ function expand(value: string, environment: NodeJS.ProcessEnv, location: string)
   });
 }
 
+function expandHttpUrl(value: string, environment: NodeJS.ProcessEnv, location: string): string {
+  const url = expand(value, environment, location).trim();
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('scheme');
+  } catch {
+    throw new ConfigurationError(`${location} 必须是展开后的有效 HTTP(S) URL`);
+  }
+  return url;
+}
+
 function resolveMcpServer(name: string, source: McpServerConfigSource, environment: NodeJS.ProcessEnv): McpServerConfig {
   if (source.transport === 'stdio') {
     const command = expand(source.command, environment, `MCP Server ${name}.command`);
@@ -72,13 +83,7 @@ function resolveMcpServer(name: string, source: McpServerConfigSource, environme
       env: Object.fromEntries(Object.entries(source.env ?? {}).map(([key, value]) => [key, expand(value, environment, `MCP Server ${name}.env.${key}`)])),
     };
   }
-  const url = expand(source.url, environment, `MCP Server ${name}.url`);
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('scheme');
-  } catch {
-    throw new ConfigurationError(`MCP Server ${name}.url 必须是展开后的有效 HTTP(S) URL`);
-  }
+  const url = expandHttpUrl(source.url, environment, `MCP Server ${name}.url`);
   return {
     transport: 'http',
     url,
@@ -90,7 +95,7 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
   const paths = configPaths(homeDirectory);
   const yamlText = readRequired(paths.config, '配置文件');
   const environmentText = readRequired(paths.environment, '密钥文件');
-  // 实际进程环境优先于 .env，便于 CI/终端临时覆盖 MCP 凭据。
+  // 实际进程环境优先于 .env，便于 CI/终端临时覆盖配置值。
   const environment: NodeJS.ProcessEnv = {...parseEnv(environmentText), ...runtimeEnvironment};
 
   try {
@@ -101,6 +106,9 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     const sameConfig = resolve(projectPath) === resolve(paths.config) || (existsSync(projectPath) && realpathSync(projectPath) === realpathSync(paths.config));
     const project = sameConfig ? {} : readProjectConfig(projectPath);
     const profiles: ProviderProfile[] = parsed.profiles.map(source => {
+      const model = expand(source.model, environment, `profile ${source.name}.model`).trim();
+      if (model.length === 0) throw new ConfigurationError(`profile ${source.name}.model 展开后不能为空`);
+      const baseUrl = expandHttpUrl(source.base_url, environment, `profile ${source.name}.base_url`);
       // `${NAME}` 去掉前后两个字符，得到 .env 中真正的变量名 NAME。
       const variable = source.api_key.slice(2, -1);
       const apiKey = environment[variable];
@@ -108,8 +116,8 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
       return {
         name: source.name,
         protocol: source.protocol,
-        model: source.model,
-        baseUrl: source.base_url,
+        model,
+        baseUrl,
         apiKey: apiKey === undefined ? '' : apiKey,
         thinking: normalizeThinking(source.thinking),
         contextWindow: effectiveContextWindow(source.protocol, source.context_window),

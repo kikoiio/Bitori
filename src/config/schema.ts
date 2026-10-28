@@ -24,7 +24,7 @@ const profileSchema = z.object({
   name: z.string().trim().min(1, 'name 不能为空'),
   protocol: z.enum(['anthropic', 'openai-responses', 'openai-chat']),
   model: z.string().trim().min(1, 'model 不能为空'),
-  base_url: z.url().refine(value => /^https?:\/\//i.test(value), 'base_url 必须使用 HTTP(S)'),
+  base_url: z.string().trim().min(1, 'base_url 不能为空'),
   api_key: z.string().regex(environmentReference, 'api_key 必须完整使用 ${ENV_NAME} 引用'),
   thinking: thinkingSchema.optional(),
   context_window: z.number().int().positive().optional(),

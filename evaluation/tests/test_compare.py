@@ -6,10 +6,10 @@ import sys
 import tempfile
 import unittest
 
-spec = importlib.util.spec_from_file_location('compare', Path(__file__).parents[1] / 'rsi' / 'compare.py')
+spec = importlib.util.spec_from_file_location('compare', Path(__file__).parents[1] / 'RSI' / 'compare.py')
 compare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(compare)
-aggregate_spec = importlib.util.spec_from_file_location('aggregate', Path(__file__).parents[1] / 'rsi' / 'aggregate.py')
+aggregate_spec = importlib.util.spec_from_file_location('aggregate', Path(__file__).parents[1] / 'RSI' / 'aggregate.py')
 aggregate = importlib.util.module_from_spec(aggregate_spec)
 aggregate_spec.loader.exec_module(aggregate)
 runner_spec = importlib.util.spec_from_file_location('runner', Path(__file__).parents[1] / 'benchmarks' / 'swe-bench-lite' / 'run.py')
@@ -42,6 +42,35 @@ class ComparisonTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             compare.compare({'a': row('resolved')}, {'a': changed})
 
+    def test_refuses_mismatched_comparison_fingerprints(self):
+        with_fingerprint = {**row('resolved'), 'comparison_config': {'image': 'a'}}
+        with self.assertRaises(ValueError):
+            compare.compare({'a': with_fingerprint},
+                            {'a': {**row('resolved'), 'comparison_config': {'image': 'b'}}})
+        with self.assertRaises(ValueError):
+            compare.compare({'a': with_fingerprint}, {'a': row('resolved')})
+        legacy = compare.compare({'a': row('resolved')}, {'a': row('resolved')})
+        self.assertEqual(legacy['tasks'], 1)
+
+    def test_reliability_comparison_preserves_agent_errors(self):
+        a = {**row('agent_error'), 'gold_verified': True, 'comparison_config': {'image': 'sha'}}
+        b = {**row('unresolved'), 'gold_verified': True, 'comparison_config': {'image': 'sha'}}
+        result = compare.compare_reliability({'a': a}, {'a': b})
+        self.assertEqual(result['improvements'], ['a'])
+        self.assertEqual(result['candidate_resolved'], 0)
+        self.assertFalse(result['score_comparison_complete'])
+        b['status'] = 'provider_error'
+        with self.assertRaises(ValueError):
+            compare.compare_reliability({'a': a}, {'a': b})
+
+    def test_reliability_requires_matching_fingerprints(self):
+        a = {**row('agent_error'), 'gold_verified': True, 'comparison_config': {'image': 'a'}}
+        b = {**row('unresolved'), 'gold_verified': True, 'comparison_config': {'image': 'b'}}
+        with self.assertRaises(ValueError):
+            compare.compare_reliability({'a': a}, {'a': b})
+        with self.assertRaises(ValueError):
+            compare.compare_reliability({}, {})
+
     def test_experiment_records_commits_and_changes(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -50,7 +79,7 @@ class ComparisonTests(unittest.TestCase):
                 directory.mkdir()
                 (directory / 'result.json').write_text(json.dumps({**row(status), 'instance_id': 'a', 'commit': commit}))
             output = root / 'report.json'
-            subprocess.run([sys.executable, str(Path(__file__).parents[1] / 'rsi' / 'experiment.py'),
+            subprocess.run([sys.executable, str(Path(__file__).parents[1] / 'RSI' / 'experiment.py'),
                             '--hypothesis', 'test hypothesis', '--baseline', str(root / 'base'),
                             '--candidate', str(root / 'candidate'), '--output', str(output)], check=True, capture_output=True)
             result = json.loads(output.read_text())

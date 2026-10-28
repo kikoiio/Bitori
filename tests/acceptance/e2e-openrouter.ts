@@ -107,15 +107,22 @@ writeFileSync(join(configDirectory, '.bitori', 'config.yaml'), [
   'profiles:',
   '  - name: openrouter-e2e',
   '    protocol: openai-chat',
-  `    model: "${model}"`,
-  `    base_url: "${baseUrl}"`,
+  '    model: "${LLM_MODEL}"',
+  '    base_url: "${LLM_BASE_URL}"',
   '    api_key: "${LLM_API_KEY}"',
   '    context_window: 262144',
   '',
 ].join('\n'), 'utf8');
-writeFileSync(join(configDirectory, '.bitori', '.env'), `LLM_API_KEY=${process.env.LLM_API_KEY ?? ''}\n`, 'utf8');
+writeFileSync(join(configDirectory, '.bitori', '.env'), [
+  `LLM_API_KEY=${process.env.LLM_API_KEY ?? ''}`,
+  `LLM_BASE_URL=${baseUrl}`,
+  `LLM_MODEL=${model}`,
+  '',
+].join('\n'), 'utf8');
 
-const profile = loadConfig(configDirectory, root).profiles[0]!;
+const profile = loadConfig(configDirectory, root, {}).profiles[0]!;
+assert(profile.model === model && profile.baseUrl === baseUrl, 'model 和 base URL 必须从 .env 加载');
+assert(profile.apiKey === (process.env.LLM_API_KEY ?? ''), 'API key 必须从 .env 加载');
 console.log(`profile：${profile.name}（${profile.protocol}，${profile.model}）`);
 await run(profile, root);
 console.log('真实端点 E2E 全部通过');

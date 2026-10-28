@@ -7,3 +7,4 @@
 | 配置参考 | 持续维护 | 2026-10-28 | [配置、扩展与权限](reference/configuration.md) |
 | 开发参考 | 持续维护 | 2026-10-28 | [开发与测试](reference/development.md) |
 | 评测与 RSI | 开发中 | 2026-10-28 | [评测说明](../evaluation/README.md) |
+| 后续计划 | 实施中；仅保留未完成事项 | 2026-10-28 | [最新计划](PLAN.md) |

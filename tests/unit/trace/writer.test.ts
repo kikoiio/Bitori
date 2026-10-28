@@ -1,4 +1,4 @@
-import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
+import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
@@ -47,5 +47,17 @@ describe('TraceWriter', () => {
     const lines = readFileSync(join(directory, 's1.jsonl'), 'utf8').trim().split('\n');
     expect(lines.length).toBeLessThan(50);
     expect(lines.length).toBeGreaterThan(0);
+    expect(writer.statsFor('s1')).toEqual({written: lines.length, dropped: 50 - lines.length, writeErrors: 0, serializationErrors: 0});
+  });
+
+  it('写入失败可查询且不影响其他会话统计', async () => {
+    const {directory} = makeWriter();
+    const blocked = join(directory, 'blocked');
+    writeFileSync(blocked, 'not a directory');
+    const writer = new TraceWriter(blocked);
+    writer.append({...baseEvent('s1'), type: 'domain_fact', fact: 'a'});
+    await writer.flush();
+    expect(writer.statsFor('s1')).toEqual({written: 0, dropped: 0, writeErrors: 1, serializationErrors: 0});
+    expect(writer.statsFor('s2')).toEqual({written: 0, dropped: 0, writeErrors: 0, serializationErrors: 0});
   });
 });
