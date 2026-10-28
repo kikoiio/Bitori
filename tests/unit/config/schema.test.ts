@@ -26,8 +26,10 @@ describe('config schema', () => {
     expect(() => parseConfig({profiles: [{...base, thinking: {type: 'manual', budget_tokens: 1000, max_tokens: 999}}]})).toThrow();
   });
 
-  it('拒绝非法 URL 和密钥字面量', () => {
-    expect(() => parseConfig({profiles: [{...base, base_url: 'file:///x'}]})).toThrow();
+  it('接受待展开的模型和 URL，拒绝空值和密钥字面量', () => {
+    const parsed = parseConfig({profiles: [{...base, model: '${LLM_MODEL}', base_url: '${LLM_BASE_URL}'}]});
+    expect(parsed.profiles[0]).toMatchObject({model: '${LLM_MODEL}', base_url: '${LLM_BASE_URL}'});
+    expect(() => parseConfig({profiles: [{...base, base_url: ''}]})).toThrow(/base_url/);
     expect(() => parseConfig({profiles: [{...base, api_key: 'secret'}]})).toThrow();
   });
 

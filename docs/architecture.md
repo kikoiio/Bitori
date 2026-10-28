@@ -27,6 +27,12 @@ Provider 请求提供 `items` 时始终使用该有序上下文，即使它为�
 
 测试分布在 `tests/unit/`、`tests/integration/`、`tests/tui/` 和 `tests/acceptance/`；公开基准接入和 RSI 实验工具在 `evaluation/`。从一次调用追踪时可依次查看 `src/chat/agent-controller.ts`、`src/agent/runner.ts`、`src/tools/executor.ts` 和对应 provider、存储或 trace 测试。
 
+## 评测与 RSI 控制面
+
+`evaluation/RSI/` 是独立于运行时 harness 的 Python 控制面：runner 从固定基准 SHA 构建被测版本并记录安全证据，`analyze.py` 做保守的规则诊断，`loop.py` 在预算内编排基线、候选分支、可信检查、配对评测和 verifier 决策。候选代码只在临时容器中构建和执行；真实模型密钥仅注入可信转发器 `model_gateway.ts`，执行容器只持有实验级短期令牌并连接内部网络。`verifier.py` 是纯决策函数，只接受绑定 experiment/base/head/verifier SHA 的可信执行回执，从不写 Git 或授权合并；`report.json` 的 `merge_authorized` 恒为 false，合并仍由人工审查和仓库规则决定。
+
+该控制面的离线测试和既有评测均有记录；真实 Docker 隔离、受控云端 smoke、GitHub 必需检查与分支保护的验收状态见 [PLAN](PLAN.md)。trace 与评测证据仍可能包含工作区内容，只在明确白名单和脱敏后上传。
+
 ## 桌面进程边界
 
 Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Worker，代价是更大的打包体积和运行时资源占用。业务控制器、配置、存储和工具执行留在主进程；渲染进程开启沙箱和上下文隔离，通过 preload 的受限 IPC 操作界面，模型与工具内容按文本渲染。切换工作区前要求确认信任，再重建工作区服务。桌面验收范围见下方状态映射。

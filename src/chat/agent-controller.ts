@@ -100,6 +100,9 @@ export class ChatController {
     this.#maxIterations = options.maxIterations ?? 20;
   }
   getState(): AppState { return this.#state; }
+  traceStats(): ReturnType<TraceWriter['statsFor']> | null {
+    return this.#state.session && this.#traceWriter ? this.#traceWriter.statsFor(this.#state.session.id) : null;
+  }
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
   async initialize(profile: ProviderProfile): Promise<void> {
     if (this.#profile) return; this.#profile = profile; await this.#repository.initialize();

@@ -106,6 +106,40 @@ mcp_servers:
     expect(resolveProfile(loadConfig(root))?.name).toBe('one');
   });
 
+  it('从 .env 展开模型、URL 和密钥，并允许进程环境覆盖', () => {
+    const root = home(`profiles:
+  - name: one
+    protocol: openai-chat
+    model: \${LLM_MODEL}
+    base_url: \${LLM_BASE_URL}
+    api_key: \${LLM_API_KEY}
+`, 'LLM_API_KEY=file-secret\nLLM_BASE_URL=https://file.example.com/v1\nLLM_MODEL=file-model\n');
+    expect(loadConfig(root, root, {}).profiles[0]).toMatchObject({
+      model: 'file-model', baseUrl: 'https://file.example.com/v1', apiKey: 'file-secret',
+    });
+    expect(loadConfig(root, root, {
+      LLM_API_KEY: 'runtime-secret', LLM_BASE_URL: 'https://runtime.example.com/v1', LLM_MODEL: 'runtime-model',
+    }).profiles[0]).toMatchObject({
+      model: 'runtime-model', baseUrl: 'https://runtime.example.com/v1', apiKey: 'runtime-secret',
+    });
+  });
+
+  it('在变量展开后校验模型和 base URL', () => {
+    const root = home(`profiles:
+  - name: one
+    protocol: openai-chat
+    model: \${LLM_MODEL}
+    base_url: \${LLM_BASE_URL}
+    api_key: \${LLM_API_KEY}
+`, 'LLM_API_KEY=test-secret\n');
+    expect(() => loadConfig(root, root, {})).toThrow(/model.*LLM_MODEL/);
+    expect(() => loadConfig(root, root, {LLM_MODEL: 'model'})).toThrow(/base_url.*LLM_BASE_URL/);
+    expect(() => loadConfig(root, root, {LLM_MODEL: '', LLM_BASE_URL: 'https://example.com'})).toThrow(/model 展开后不能为空/);
+    for (const baseUrl of ['file:///x', 'bad host']) {
+      expect(() => loadConfig(root, root, {LLM_MODEL: 'model', LLM_BASE_URL: baseUrl})).toThrow(/base_url.*HTTP/);
+    }
+  });
+
   it('缺失文件、变量和未知 profile 给出安全错误', () => {
     expect(() => loadConfig(join(tmpdir(), 'does-not-exist'))).toThrow(/config\.yaml/);
     const root = home(`profiles:

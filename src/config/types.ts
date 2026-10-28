@@ -18,7 +18,7 @@ export type ThinkingConfig =
   | {type: 'adaptive'}
   | {type: 'manual'; budgetTokens: number; maxTokens: number};
 
-/** 配置文件刚解析完成、API Key 仍是环境变量引用时的 profile。 */
+/** 配置文件刚解析完成、环境变量引用仍待展开时的 profile。 */
 export interface ProviderProfileSource {
   name: string;
   protocol: Protocol;

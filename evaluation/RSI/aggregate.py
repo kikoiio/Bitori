@@ -19,9 +19,23 @@ def aggregate(root, expected):
         if iid in seen:
             duplicate.append(iid)
         seen.add(iid)
-        records.append(row)
+        diagnosis = None
+        diagnosis_path = path.with_name('diagnosis.json')
+        if diagnosis_path.is_file():
+            try:
+                value = json.loads(diagnosis_path.read_text())
+                if isinstance(value, dict):
+                    diagnosis = {'category': value.get('category'),
+                                 'eligible_for_candidate': value.get('eligible_for_candidate'),
+                                 'codes': [finding.get('code') for finding in value.get('findings', [])
+                                           if isinstance(finding, dict)][:20]}
+            except (OSError, ValueError):
+                diagnosis = {'error': 'invalid diagnosis'}
+        records.append({**row, 'diagnosis': diagnosis} if diagnosis else row)
     return {'expected': len(expected), 'recorded': len(records), 'missing_indices': missing,
             'duplicate_instances': duplicate, 'counts': dict(Counter(r['status'] for r in records)),
+            'diagnosis_categories': dict(Counter(r['diagnosis']['category'] for r in records
+                                                 if r.get('diagnosis') and r['diagnosis'].get('category'))),
             'results': records}
 
 

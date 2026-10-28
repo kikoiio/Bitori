@@ -47,6 +47,7 @@ node dist/bin/bitori.js --help
 | [Check](../../.github/workflows/check.yml) | push 到 `master` 或 `desktop/**`、所有 PR、手动；三平台执行 `npm run check` | 未声明模型 secrets 或显式写权限。 |
 | [Linux desktop](../../.github/workflows/desktop.yml) | push 到 `desktop/**`、所有 PR、手动；模拟服务冒烟、打包及包启动 | 未调用真实模型；上传 Linux 打包产物和截图 artifact。 |
 | [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选择供应商和模型，`__list__` 只列模型 | 使用所选 `OPENROUTER_LLM_API_KEY` 或 `GROQ_LLM_API_KEY`，模型来自输入或对应 `OPENROUTER_MODEL` / `GROQ_MODEL` vars；会向供应商发送请求。 |
-| [SWE-bench Lite development](../../.github/workflows/swe-bench-lite.yml) | 手动运行单题或 23 题开发集；见 [评测说明](../../evaluation/README.md) | 使用所选模型供应商的 secret 和 model var；向供应商发送公开任务内容，上传逐题结果和汇总 artifact。 |
+| [SWE-bench Lite development](../../.github/workflows/swe-bench-lite.yml) | 手动运行单题或 23 题开发集；见 [评测说明](../../evaluation/README.md) | 使用所选模型供应商的 secret 和 model var；向供应商发送公开任务内容，上传安全证据白名单和汇总 artifact。 |
+| [RSI smoke](../../.github/workflows/rsi.yml) | 手动运行受控单题 RSI smoke；默认分支代码、完整基线 SHA 和确认短语 | 使用 `XUNFEI_LLM_API_KEY`、`XUNFEI_OPENAI_RESPONSE_URL` 和 `XUNFEI_MODEL`；向讯飞发送第 0 题内容，上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，不上传 gold、凭据、worktree 或构建产物。 |
 
 模型发送的数据取决于实际测试任务和脚本，不能仅凭此表认定没有敏感内容。工作流、配置或行为变更应同步审查文档和示例，并在 PR 中记录未验证项。

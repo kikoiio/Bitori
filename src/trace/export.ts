@@ -1,5 +1,6 @@
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {dirname} from 'node:path';
+import {getGlobalRedactor} from '../shared/redact.js';
 import type {TraceEvent} from './types.js';
 
 export interface TraceExportOptions {
@@ -13,7 +14,7 @@ export interface TraceExportOptions {
  * 返回写入的事件数；写出失败抛给 CLI 层报告。
  */
 export function exportTrace(events: readonly TraceEvent[], outputPath: string, options: TraceExportOptions = {}): number {
-  const redactor = options.redactor ?? (text => text);
+  const redactor = options.redactor ?? getGlobalRedactor();
   const lines = events.map(event => options.raw === true ? JSON.stringify(event) : redactor(JSON.stringify(event)));
   mkdirSync(dirname(outputPath), {recursive: true});
   writeFileSync(outputPath, `${lines.join('\n')}\n`, 'utf8');

@@ -10,6 +10,8 @@ import {TRACE_VERSION, type TraceEvent} from './types.js';
 const logger = getLogger('trace');
 const DEFAULT_QUEUE_LIMIT = 256;
 
+export interface TraceWriteStats {written: number; dropped: number; writeErrors: number; serializationErrors: number}
+
 /**
  * 会话级 JSONL trace 写入器：有界队列串行追加，失败只丢弃并告警。
  * 每个会话一个 `<sessionId>.jsonl` 文件；恢复会话时续写同一文件。
@@ -20,6 +22,7 @@ export class TraceWriter {
   readonly #queueLimit: number;
   readonly #chains = new Map<string, Promise<void>>();
   readonly #pending = new Map<string, number>();
+  readonly #stats = new Map<string, TraceWriteStats>();
   #dropped = 0;
   #mkdirDone = false;
 
@@ -32,8 +35,11 @@ export class TraceWriter {
   /** 火后不理；调用方绝不等待写入，也不因写入失败受阻。 */
   append(event: TraceEvent): void {
     const sessionId = event.sessionId;
+    const stats = this.#stats.get(sessionId) ?? {written: 0, dropped: 0, writeErrors: 0, serializationErrors: 0};
+    this.#stats.set(sessionId, stats);
     const pending = (this.#pending.get(sessionId) ?? 0) + 1;
     if (pending > this.#queueLimit) {
+      stats.dropped += 1;
       this.#dropped += 1;
       if (this.#dropped % 50 === 1) logger.warn('trace 队列已满，事件被丢弃', {sessionId, dropped: this.#dropped});
       return;
@@ -45,11 +51,14 @@ export class TraceWriter {
       try {
         serialized = JSON.stringify({...event, at: event.at || now(), v: TRACE_VERSION});
       } catch {
+        stats.serializationErrors += 1;
         serialized = JSON.stringify({v: TRACE_VERSION, at: now(), sessionId, type: 'domain_fact', fact: 'trace_event_serialize_failed'});
       }
       this.#ensureDirectory();
-      return appendFile(join(this.#directory, `${sessionId}.jsonl`), `${this.#redactor(serialized)}\n`, 'utf8').catch((error: unknown) => {
-        // 观察绝不干扰被观察者：磁盘故障只降级记录一次代表性错误。
+      return appendFile(join(this.#directory, `${sessionId}.jsonl`), `${this.#redactor(serialized)}\n`, 'utf8').then(() => {
+        stats.written += 1;
+      }).catch((error: unknown) => {
+        stats.writeErrors += 1;
         logger.warn('trace 写入失败', {sessionId, error: error instanceof Error ? error.message : String(error)});
       });
     };
@@ -70,6 +79,10 @@ export class TraceWriter {
   }
 
   pathFor(sessionId: string): string { return join(this.#directory, `${sessionId}.jsonl`); }
+
+  statsFor(sessionId: string): TraceWriteStats {
+    return {...(this.#stats.get(sessionId) ?? {written: 0, dropped: 0, writeErrors: 0, serializationErrors: 0})};
+  }
 
   #ensureDirectory(): void {
     if (this.#mkdirDone) return;
