@@ -88,6 +88,9 @@ def main():
         result['agent'] = {key: summary.get(key) for key in ('status', 'stopReason', 'iterations', 'inputTokens', 'outputTokens')}
         if run.returncode != 0:
             result['status'] = 'agent_error'
+            result['agent']['errorCode'] = summary.get('errorCode')
+            message = str(summary.get('errorMessage') or summary.get('error') or '')
+            result['agent']['errorMessage'] = message.replace(os.environ['BITORI_API_KEY'], '[redacted]')[:500]
             raise RuntimeError('Bitori 执行失败；请检查模型和任务运行状态')
         # Include new files in the patch but never include Bitori's own workspace data.
         command(['docker', 'exec', '-w', '/testbed', container, 'git', 'add', '-N', '--', '.', ':(exclude).bitori'])
