@@ -164,7 +164,7 @@ describe('trusted RSI model gateway', () => {
     expect(ledger).not.toContain(runToken);
     expect(ledger).not.toContain('你好');
     expect(ledger).not.toContain('read_file');
-    expect((await stat(config.ledgerPath)).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') expect((await stat(config.ledgerPath)).mode & 0o777).toBe(0o600);
     expect(reservationLine(ledger).reservedTokens).toBeGreaterThan(Buffer.byteLength(JSON.stringify(body(protocol))) + 100);
   });
 
@@ -574,7 +574,8 @@ describe('trusted RSI model gateway', () => {
       const result = await fetch(url + paths['openai-chat'], {method: 'POST', headers: {authorization: `Bearer ${runToken}`, 'content-type': 'application/json'}, body: JSON.stringify(body('openai-chat'))});
       expect(await result.text()).toBe(stream('openai-chat'));
       child.kill('SIGTERM');
-      expect((await exited)[0]).toBe(0);
+      const [code] = await exited;
+      if (process.platform !== 'win32') expect(code).toBe(0);
       expect(stdout + stderr).not.toContain(apiKey);
       expect(stdout + stderr).not.toContain(runToken);
       expect(stderr).toBe('');
