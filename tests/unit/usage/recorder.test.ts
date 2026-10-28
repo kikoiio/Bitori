@@ -25,7 +25,7 @@ describe('UsageRecorder', () => {
   });
 
   it('路径不可写时静默降级不抛错', async () => {
-    // [s15] 用 chmod 只读目录构造确定性失败；/proc 等特殊路径的 mkdir 会挂死，不可用作测试。
+    // 用 chmod 只读目录构造确定性失败；/proc 等特殊路径的 mkdir 会挂死，不可用作测试。
     const directory = mkdtempSync(join(tmpdir(), 'bitori-usage-ro-'));
     directories.push(directory);
     chmodSync(directory, 0o555);

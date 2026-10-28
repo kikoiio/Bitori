@@ -2,7 +2,7 @@ import type {TruncationInfo} from './types.js';
 export interface LimitedText {text: string; truncation: TruncationInfo}
 export interface LimitedMatches<T> {matches: T[]; truncation: TruncationInfo}
 
-/** [s02] 在 Unicode 码点边界截断，保证返回值仍是有效 UTF-8。 */
+/** 在 Unicode 码点边界截断，保证返回值仍是有效 UTF-8。 */
 export function truncateUtf8(value: string, maximumBytes: number): LimitedText {
   const originalUnits = Buffer.byteLength(value);
   if (maximumBytes < 0) throw new RangeError('maximumBytes 不能为负数');

@@ -1,7 +1,7 @@
-# Bitori s04 人工定性评估场景集
+# Bitori 系统提示人工定性评估场景集
 
-> 对应 spec.md F15：在 s04 逐一走查以下场景，记录实际行为，并与 s03（无系统提示）的对应行为作对照，形成定性结论。
-> 走查方法：Windows Terminal 的 PowerShell 中运行 `npm run dev`，使用真实端点按步骤操作，把观察结果记录在「实际结果（s04）」一栏。
+> 对应 spec.md F15：逐一走查以下场景，记录实际行为，并与无系统提示时的对应行为作对照，形成定性结论。
+> 走查方法：Windows Terminal 的 PowerShell 中运行 `npm run dev`，使用真实端点按步骤操作，把观察结果记录在「实际结果」一栏。
 
 ## 场景一：读取后编辑
 
@@ -14,9 +14,9 @@
   - 模型是否在 edit_file 之前先调用 read_file 读取该文件；
   - 是否出现未读取就直接编辑、或要求用户提供文件内容的行为；
   - 工具调用顺序与最终修改结果是否正确。
-- **s03 预期（基线）：** 无系统提示约束，模型可能直接 edit_file，可能先读，也可能要求用户贴出文件内容，行为不稳定。
-- **s04 预期：** 稳定地先 read_file、再 edit_file，且 edit_file 的 oldText 来自真实读取结果。
-- **实际结果（s04）：** ✅ 通过（2026-08-24，deepseek-v4-flash，DeepSeek Anthropic 兼容端点）。工具调用序列为 find_files → search_text → read_file → edit_file：模型先查证路径、再搜索定位、编辑前读取，三条规则全部体现；文件被正确修改为「买燕麦奶」。
+- **基线预期：** 无系统提示约束，模型可能直接 edit_file，可能先读，也可能要求用户贴出文件内容，行为不稳定。
+- **系统提示预期：** 稳定地先 read_file、再 edit_file，且 edit_file 的 oldText 来自真实读取结果。
+- **实际结果：** ✅ 通过（2026-08-24，deepseek-v4-flash，DeepSeek Anthropic 兼容端点）。工具调用序列为 find_files → search_text → read_file → edit_file：模型先查证路径、再搜索定位、编辑前读取，三条规则全部体现；文件被正确修改为「买燕麦奶」。
 
 ## 场景二：专用工具优先
 
@@ -28,9 +28,9 @@
 - **观察点：**
   - 是否使用 find_files / search_text 而不是 run_command 调 `dir`、`findstr` 等 shell 命令；
   - run_command 是否仅用于专用工具无法完成的操作（如构建、测试）。
-- **s03 预期（基线）：** 无约束，模型经常用 run_command 执行 `dir /s`、`findstr` 完成查找。
-- **s04 预期：** 查找与搜索稳定走 find_files / search_text；run_command 只出现在确有必要时。
-- **实际结果（s04）：** ✅ 通过（2026-08-24，deepseek-v4-flash）。工具调用序列为 find_files → search_text，未使用 run_command；回答正确（`src/a.ts` 第 1 行）。
+- **基线预期：** 无约束，模型经常用 run_command 执行 `dir /s`、`findstr` 完成查找。
+- **系统提示预期：** 查找与搜索稳定走 find_files / search_text；run_command 只出现在确有必要时。
+- **实际结果：** ✅ 通过（2026-08-24，deepseek-v4-flash）。工具调用序列为 find_files → search_text，未使用 run_command；回答正确（`src/a.ts` 第 1 行）。
 
 ## 场景三：Plan 模式只读约束与提醒节奏
 
@@ -45,9 +45,9 @@
   - 第 1、4 轮请求末尾是否带完整 `<system-reminder>` 指令，第 2、3 轮是否为一行精简提醒；
   - 提醒是否不出现在界面消息列表中；
   - `/do` 后请求不再携带提醒，且能使用全部六个工具。
-- **s03 预期（基线）：** Plan 模式只靠工具过滤硬拦，模型不知道处于规划模式，可能反复尝试写入工具并报错；无任何提醒。
-- **s04 预期：** 模型明确知道只读约束，直接以只读工具探索并产出计划；提醒节奏符合规则；界面与历史中无提醒残留。
-- **实际结果（s04）：** ✅ 通过（2026-08-24，deepseek-v4-flash）。Plan 第 1 轮请求末尾为完整提醒，第 2 轮为精简提醒；两个阶段模型只用了 find_files 和 read_file，没有尝试任何写入或命令工具；界面消息中无 `<system-reminder>`；`/do` 请求不携带提醒且开放全部六个工具，模型按 read_file → edit_file → read_file（验证）完成计划，README 被正确加上徽章。
+- **基线预期：** Plan 模式只靠工具过滤硬拦，模型不知道处于规划模式，可能反复尝试写入工具并报错；无任何提醒。
+- **系统提示预期：** 模型明确知道只读约束，直接以只读工具探索并产出计划；提醒节奏符合规则；界面与历史中无提醒残留。
+- **实际结果：** ✅ 通过（2026-08-24，deepseek-v4-flash）。Plan 第 1 轮请求末尾为完整提醒，第 2 轮为精简提醒；两个阶段模型只用了 find_files 和 read_file，没有尝试任何写入或命令工具；界面消息中无 `<system-reminder>`；`/do` 请求不携带提醒且开放全部六个工具，模型按 read_file → edit_file → read_file（验证）完成计划，README 被正确加上徽章。
 
 ## 场景四：输出风格
 
@@ -60,22 +60,22 @@
   - 是否为简洁、直接的中文；是否有不必要的客套与复述；
   - 是否使用 Markdown 排版、代码块是否标注语言；
   - 是否结论先行。
-- **s03 预期（基线）：** 无约束，风格随模型默认习惯，可能冗长、英文混杂、格式随意。
-- **s04 预期：** 简洁中文、Markdown 规范、代码块带语言标记、结论先行。
-- **实际结果（s04）：** ✅ 通过（2026-08-24，deepseek-v4-flash）。回复为简洁中文，Markdown 标题/表格结构规范，三个代码块均标注 `ts`，开头直接给出一句话结论（「`any` 是"随便用"，`unknown` 是"得先确认再能用"」），无客套话与表情符号。
+- **基线预期：** 无约束，风格随模型默认习惯，可能冗长、英文混杂、格式随意。
+- **系统提示预期：** 简洁中文、Markdown 规范、代码块带语言标记、结论先行。
+- **实际结果：** ✅ 通过（2026-08-24，deepseek-v4-flash）。回复为简洁中文，Markdown 标题/表格结构规范，三个代码块均标注 `ts`，开头直接给出一句话结论（「`any` 是"随便用"，`unknown` 是"得先确认再能用"」），无客套话与表情符号。
 
 ## 走查结论
 
-2026-08-24 使用 deepseek-v4-flash profile（DeepSeek Anthropic 兼容端点 `https://api.deepseek.com/anthropic`）通过 `tests/acceptance/s04-real-endpoint.ts` 驱动真实端点完成四个场景走查，全部符合 s04 预期：
+2026-08-24 使用 deepseek-v4-flash profile（DeepSeek Anthropic 兼容端点 `https://api.deepseek.com/anthropic`）通过当时的验收脚本驱动真实端点完成四个场景走查，全部符合系统提示预期：
 
 1. **三条关键规则（优先专用工具、编辑前必读取、路径先查证）在真实模型上稳定生效**，且不需要模型为此付出额外的试探性调用。
 2. **Plan 模式从「硬拦」变为「模型知情配合」**：模型只发起只读调用并直接产出计划，提醒按节奏注入且不污染界面与历史。
 3. **输出风格符合语气与文本输出模块要求**：简洁中文、规范 Markdown、结论先行。
 4. 缓存副作用为正面：各场景请求普遍命中 1408 token 的稳定前缀，随对话增长的工具结果部分也持续命中。
 
-说明：s03 基线行为是根据 s03 架构（无系统提示、Plan 仅靠工具过滤）作出的推断，本次未重新运行 s03 对照组；s04 的全部结果均为真实端点实测记录。
+说明：基线行为是根据无系统提示、Plan 仅靠工具过滤的架构作出的推断，本次未重新运行基线对照组；系统提示下的全部结果均为真实端点实测记录。
 
-# Bitori s06 MCP 人工验收场景
+# Bitori MCP 人工验收场景
 
 > 在 Windows Terminal、Node.js 24 下执行；分别准备一个 stdio MCP Server 和一个 Streamable HTTP MCP Server。
 

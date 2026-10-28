@@ -18,7 +18,7 @@ function normalizeList(value: string | undefined): string[] {
   return (value ?? '').split(',').map(item => item.trim()).filter(Boolean);
 }
 
-/** [s10] 只信任显式 fork/fork-context；未知值回退 inline/none，避免手写错误破坏执行。 */
+/** 只信任显式 fork/fork-context；未知值回退 inline/none，避免手写错误破坏执行。 */
 export function parseSkillText(text: string): ParsedSkill {
   const {values, body} = splitFrontmatter(text);
   const name = values.get('name');

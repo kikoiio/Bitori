@@ -27,7 +27,7 @@ export interface ExecResult {
   error: string | null;
 }
 
-/** [s12] 无头单任务执行入口：复用完整 AgentRunner 链路，为 benchmark harness 提供可脚本化退出码。 */
+/** 无头单任务执行入口：复用完整 AgentRunner 链路，为 benchmark harness 提供可脚本化退出码。 */
 export async function runExec(config: AppConfig, profile: ProviderProfile, options: ExecOptions): Promise<number> {
   const workspace = resolve(options.workspace ?? process.cwd());
   // 控制器内部的部分能力（自定义命令、上下文管理）读取 process.cwd，统一切到目标工作区。
@@ -46,7 +46,7 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
   };
   const tools = createToolSystem(workspace, config.mcpServers, {clientFor, memoryClient: client});
   const repository = new SessionRepository(`${workspace}/.bitori/bitori.db`);
-  // [s15] exec 一次性任务同样开启观测面，trace 可被 benchmarks 消费。
+  // exec 一次性任务同样开启观测面，trace 可被 benchmarks 消费。
   const observability = {traceDirectory: configPaths().traces, usagePath: join(configPaths().usage, 'skills.jsonl')};
   const controller = new ChatController(client, repository, tools, undefined, {observability, ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
   // 无头环境没有审批 UI；未通过权限规则放行的副作用工具一律自动拒绝。

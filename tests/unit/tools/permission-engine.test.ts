@@ -52,7 +52,7 @@ describe('PermissionEngine', () => {
     expect(() => new PermissionEngine({workspaceRoot: root, userRulesPath: bad, projectRulesPath: join(root, 'missing-project'), localRulesPath: join(root, 'missing-local')})).toThrow(new RegExp(`${bad.replaceAll('\\', '\\\\')}.*工具名无效`));
   });
 
-  // [s06] 远端工具沿用权限引擎，生成的精确规则不能把参数中的 * 当作 glob。
+  // 远端工具沿用权限引擎，生成的精确规则不能把参数中的 * 当作 glob。
   it('MCP 工具默认询问并支持参数精确的会话放行', async () => {
     const root = mkdtempSync('bitori-permission-'); roots.push(root);
     const permissions = engine(root);

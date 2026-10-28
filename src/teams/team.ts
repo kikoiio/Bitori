@@ -14,7 +14,7 @@ export interface TeamRecord {name: string; description: string; lead: string; st
 
 function sanitize(name: string): string { return name.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64); }
 
-/** [s14] 团队配置按名称持久化；邮箱与任务共享同一团队目录。 */
+/** 团队配置按名称持久化；邮箱与任务共享同一团队目录。 */
 export class TeamManager {
   readonly #homeDirectory: string;
 

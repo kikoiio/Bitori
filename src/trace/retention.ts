@@ -4,7 +4,7 @@ import {getLogger} from '../shared/logger.js';
 
 const logger = getLogger('trace');
 
-/** [s15] 按文件修改时间清理超期 trace；只删除 `<uuid>.jsonl` 命名的文件。 */
+/** 按文件修改时间清理超期 trace；只删除 `<uuid>.jsonl` 命名的文件。 */
 export function cleanupExpiredTraces(directory: string, retentionDays: number): number {
   if (retentionDays <= 0) return 0;
   const cutoff = Date.now() - retentionDays * 86_400_000;

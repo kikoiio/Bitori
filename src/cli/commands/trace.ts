@@ -9,7 +9,7 @@ import {renderTokenTrend, renderTraceShow} from '../../trace/render.js';
 import {tailJsonlFile} from './tail-file.js';
 import type {CliOptions} from '../args.js';
 
-/** [s15] `bitori trace …` 只读命令入口；返回进程退出码。 */
+/** `bitori trace …` 只读命令入口；返回进程退出码。 */
 export function runTraceCommand(options: NonNullable<CliOptions['trace']>): number {
   const directory = configPaths().traces;
   if (options.action === 'show') {

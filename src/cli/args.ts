@@ -3,14 +3,14 @@ import type {LogLevel} from '../shared/logger.js';
 
 const logLevels = ['debug', 'info', 'warn', 'error'] as const;
 
-/** [s01] 解析完成后的命令行选项；`?` 表示这个属性可以不存在。 */
+/** 解析完成后的命令行选项；`?` 表示这个属性可以不存在。 */
 export interface CliOptions {
   profile?: string;
   help: boolean;
-  /** [s15] 全局日志级别，优先于 config.yaml 的 logging.level。 */
+  /** 全局日志级别，优先于 config.yaml 的 logging.level。 */
   logLevel?: LogLevel;
   exec?: {task: string; workspace?: string; maxIterations?: number; json: boolean};
-  /** [s15] 只读观察子命令；与 exec/TUI 互斥。 */
+  /** 只读观察子命令；与 exec/TUI 互斥。 */
   trace?: {action: 'show' | 'tail' | 'export' | 'replay'; sessionId?: string; file?: string; iteration?: number; out?: string; json?: boolean; raw?: boolean};
   usage?: {action: 'stats' | 'tail'; sessionId?: string; kind?: 'skill' | 'command'; json?: boolean};
   sessions?: {action: 'list' | 'show'; sessionId?: string; json?: boolean};
@@ -59,7 +59,7 @@ function positiveInteger(value: string, option: string): number {
   return parsed;
 }
 
-/** [s15] 校验并归一化 --log-level 取值。 */
+/** 校验并归一化 --log-level 取值。 */
 function logLevel(value: string): LogLevel {
   if (!(logLevels as readonly string[]).includes(value)) throw new UsageError(`--log-level 必须是 debug|info|warn|error，收到：${value}`);
   return value as LogLevel;
@@ -71,7 +71,7 @@ interface SubcommandParseContext {
   profile: string | undefined;
 }
 
-/** [s15] 解析 trace/usage/sessions 子命令；返回是否消费了当前子命令。 */
+/** 解析 trace/usage/sessions 子命令；返回是否消费了当前子命令。 */
 function parseSubcommand(name: 'trace' | 'usage' | 'sessions', context: SubcommandParseContext): {trace?: CliOptions['trace']; usage?: CliOptions['usage']; sessions?: CliOptions['sessions']} {
   const {argv, start} = context;
   const positionals: string[] = [];
@@ -94,7 +94,7 @@ function parseSubcommand(name: 'trace' | 'usage' | 'sessions', context: Subcomma
       positionals.push(token);
     }
   }
-  // [s15] 子命令内也接受 --profile（sessions 需要）；与全局 profile 冲突时报错。
+  // 子命令内也接受 --profile（sessions 需要）；与全局 profile 冲突时报错。
   const profileFlag = flags.get('--profile');
   if (typeof profileFlag === 'string') {
     if (context.profile !== undefined && context.profile !== profileFlag) throw new UsageError('--profile 不能重复');
@@ -181,7 +181,7 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
       break;
     }
     if (argument === 'trace' || argument === 'usage' || argument === 'sessions') {
-      // [s15] 子命令允许出现在全局 flag 之后（如 --profile claude sessions list）；裸 token 原本就是非法参数，因此放宽位置是安全的。
+      // 子命令允许出现在全局 flag 之后（如 --profile claude sessions list）；裸 token 原本就是非法参数，因此放宽位置是安全的。
       const subcommandContext = {argv, start: index, profile};
       subcommand = parseSubcommand(argument, subcommandContext);
       profile = subcommandContext.profile;
@@ -197,7 +197,7 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith('--')) throw new UsageError('--profile 缺少名称');
       profile = value;
-      // [s01] profile 名称已经被本次循环消费，跳过它，下一轮从后一个参数继续。
+      // profile 名称已经被本次循环消费，跳过它，下一轮从后一个参数继续。
       index += 1;
       continue;
     }
@@ -225,6 +225,6 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
     };
   }
   if (exec) return {help: false, ...(profile === undefined ? {} : {profile}), ...(logLevelOption === undefined ? {} : {logLevel: logLevelOption}), exec};
-  // [s01] exactOptionalPropertyTypes 开启后，缺省属性应直接省略，而不是写成 profile: undefined。
+  // exactOptionalPropertyTypes 开启后，缺省属性应直接省略，而不是写成 profile: undefined。
   return {help, ...(profile === undefined ? {} : {profile}), ...(logLevelOption === undefined ? {} : {logLevel: logLevelOption})};
 }

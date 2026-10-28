@@ -1,7 +1,7 @@
 import type {FinalMessageUpdate, ToolCallRecord} from './types.js';
 import type {AgentMode, AgentRunResult} from '../agent/types.js';
 
-/** [s01] 主线程允许发给存储 Worker 的全部命令，是一个以 type 区分的联合类型。 */
+/** 主线程允许发给存储 Worker 的全部命令，是一个以 type 区分的联合类型。 */
 export type StorageOperation =
   | {type: 'initialize'}
   | {type: 'find_latest_session'; profileName: string}
@@ -25,12 +25,12 @@ export type StorageOperation =
   | {type: 'close'};
 
 export interface StorageRequest {
-  // [s01] requestId 用于把异步返回值配对到发起请求的 Promise。
+  // requestId 用于把异步返回值配对到发起请求的 Promise。
   requestId: string;
   operation: StorageOperation;
 }
 
-/** [s01] Error 对象不能依赖原型跨线程传递，因此只序列化安全且需要的字段。 */
+/** Error 对象不能依赖原型跨线程传递，因此只序列化安全且需要的字段。 */
 export interface SerializedStorageError {
   name: string;
   message: string;

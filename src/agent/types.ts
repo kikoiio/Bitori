@@ -15,12 +15,12 @@ export interface AgentRunInput {
   mode: AgentMode;
   instruction: string;
   context: ModelContextItem[];
-  /** [s04] 控制器在会话激活时冻结的系统提示；缺省时行为与 s03 一致。 */
+  /** 控制器在会话激活时冻结的系统提示；缺省时不发送系统提示。 */
   system?: PromptBlock[];
-  /** [s04] 本回合注入的提醒文本（已含标签），由控制器按模式与轮次生成。 */
+  /** 本回合注入的提醒文本（已含标签），由控制器按模式与轮次生成。 */
   reminders?: string[];
-  limits?: {maxIterations: number; maxUnknownToolIterations: number; /** [s15] 重试基础退避毫秒数；测试可注入较小值。 */ retryBaseDelayMs?: number};
-  /** [s07] 上下文窗口与工作目录；缺省时工具结果预算仍生效，全量摘要禁用。 */
+  limits?: {maxIterations: number; maxUnknownToolIterations: number; /** 重试基础退避毫秒数；测试可注入较小值。 */ retryBaseDelayMs?: number};
+  /** 上下文窗口与工作目录；缺省时工具结果预算仍生效，全量摘要禁用。 */
   contextManagement?: {windowTokens: number; workspaceRoot: string};
 }
 
@@ -60,7 +60,7 @@ export type AgentEvent =
   | (AgentEventBase & {type: 'tool_result'; iterationId: string; callId: string; result: ToolExecutionResult})
   | (AgentEventBase & {type: 'progress'; iteration: number; maxIterations: number; phase: AgentPhase; completedTools: number; totalTools: number})
   | (AgentEventBase & {type: 'iteration_finished'; iterationId: string; iteration: number; response: CollectedIteration})
-  // [s15] 请求级可观察性：完整请求载荷、重试序列与压缩事实只在此处可见。
+  // 请求级可观察性：完整请求载荷、重试序列与压缩事实只在此处可见。
   | (AgentEventBase & {type: 'request_prepared'; iterationId: string; iteration: number; items: ModelContextItem[]; system: PromptBlock[]; toolDefinitions: ToolDefinition[]; toolDefinitionDigest: string})
   | (AgentEventBase & {type: 'request_retry'; iterationId: string; iteration: number; attempt: number; delayMs: number; error: ProviderError})
   | (AgentEventBase & {type: 'context_compacted'; beforeTokens: number; afterTokens: number; keepIndex: number; reason: 'auto' | 'manual'})

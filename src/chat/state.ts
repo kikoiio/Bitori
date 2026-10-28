@@ -6,11 +6,11 @@ import type {ToolApprovalPrompt} from '../tools/types.js';
 import type {AgentMode, AgentPhase, AgentStopReason} from '../agent/types.js';
 import type {PermissionTier} from '../tools/permission-engine.js';
 
-/** [s01] 当前要显示的顶层页面，以及一次请求在 UI 中可能出现的状态。 */
+/** 当前要显示的顶层页面，以及一次请求在 UI 中可能出现的状态。 */
 export type Screen = 'profile_select' | 'chat' | 'session_list' | 'terminal_too_small';
 export type RequestStatus = 'idle' | 'thinking' | 'streaming' | 'approving' | 'executing_tools' | 'cancelling' | 'failed';
 
-/** [s01]
+/**
  * TUI 的单一状态快照。控制器每次都创建新对象发布，React 据此判断是否重渲染。
  */
 export interface AppState {
@@ -33,7 +33,7 @@ export interface AppState {
   runUsage: Usage;
   stopReason: AgentStopReason | null;
   permissionTier: PermissionTier;
-  /** [s15] 调试面板开关；面板内容实时从控制器 tap 读取。 */
+  /** 调试面板开关；面板内容实时从控制器 tap 读取。 */
   debugOpen: boolean;
 }
 
@@ -57,6 +57,6 @@ export function initialAppState(profile: ProfileSummary | null = null): AppState
 }
 
 export function replaceMessage(state: AppState, message: StoredMessage): AppState {
-  // [s01] 不原地修改数组：map 生成新数组，只有 id 匹配的那一项被替换。
+  // 不原地修改数组：map 生成新数组，只有 id 匹配的那一项被替换。
   return {...state, messages: state.messages.map(item => item.id === message.id ? message : item)};
 }

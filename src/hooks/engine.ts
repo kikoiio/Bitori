@@ -21,7 +21,7 @@ function contextValue(context: HookContext, token: string): string {
   return normalized.replace(/^["']|["']$/g, '');
 }
 
-/** [s11] 解析 ==/!=/=~/~= 与 &&/||；and/or 不可混用。 */
+/** 解析 ==/!=/=~/~= 与 &&/||；and/or 不可混用。 */
 export function parseCondition(expression: string): ConditionGroup | null {
   const separator = expression.includes('&&') && expression.includes('||') ? null : expression.includes('&&') ? '&&' : expression.includes('||') ? '||' : null;
   if (separator === null && expression.includes('&&') && expression.includes('||')) return null;
@@ -64,7 +64,7 @@ function expand(text: string, context: HookContext): string {
     });
 }
 
-/** [s11] 事件、动作必填、拦截事件与 async 约束在构造前统一校验。 */
+/** 事件、动作必填、拦截事件与 async 约束在构造前统一校验。 */
 export function validateHooks(hooks: readonly HookConfig[]): Error | null {
   for (const [index, hook] of hooks.entries()) {
     if (!hookEvents.includes(hook.event)) return new Error(`Hook ${index} 事件无效：${String(hook.event)}`);
@@ -90,7 +90,7 @@ function run(command: string, context: HookContext, timeoutMs: number): Promise<
   });
 }
 
-/** [s11] Hook 引擎：条件过滤、once、async、通知队列与 pre_tool_use 拦截。 */
+/** Hook 引擎：条件过滤、once、async、通知队列与 pre_tool_use 拦截。 */
 export class HookEngine {
   readonly #hooks: HookConfig[];
   readonly #firedOnce = new Set<string>();
@@ -118,7 +118,7 @@ export class HookEngine {
       if (hook.condition && !evaluateCondition(hook.condition, context)) continue;
       if (hook.once) this.#firedOnce.add(key);
       const promise = this.#execute(hook, context);
-      // [s15] async Hook 的失败此前完全静默，现在降级为 warn 日志。
+      // async Hook 的失败此前完全静默，现在降级为 warn 日志。
       if (hook.async) void promise.catch((error: unknown) => { logger.warn('异步 Hook 执行失败', {event, hook: key, error: errorMessage(error)}); });
       else results.push(await promise);
     }

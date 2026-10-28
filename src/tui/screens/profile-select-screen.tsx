@@ -10,7 +10,7 @@ export interface ProfileSelectScreenProps {
 
 export function ProfileSelectScreen({profiles, onSelect, onExit}: ProfileSelectScreenProps) {
   const [selected, setSelected] = useState(0);
-  // [s01] ref 会即时更新且不等待 React 下一次渲染，快速连续按键时可避免读到旧 selected。
+  // ref 会即时更新且不等待 React 下一次渲染，快速连续按键时可避免读到旧 selected。
   const selectedRef = useRef(0);
   useInput((input, key) => {
     if (input === 'c' && key.ctrl) onExit();

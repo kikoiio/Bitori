@@ -9,7 +9,7 @@ export interface UsageFilter {
   kind?: UsageKind;
 }
 
-/** [s15] 读取使用统计 JSONL；坏行跳过并计数。 */
+/** 读取使用统计 JSONL；坏行跳过并计数。 */
 export function readUsageRecords(path: string, filter: UsageFilter = {}): {records: UsageRecord[]; corruptLines: number} {
   if (!existsSync(path)) return {records: [], corruptLines: 0};
   const records: UsageRecord[] = [];
@@ -38,7 +38,7 @@ export interface UsageAggregate {
   sessions: number;
 }
 
-/** [s15] 按 kind+name 聚合；最近使用时间倒序，sessions 为去重会话数。 */
+/** 按 kind+name 聚合；最近使用时间倒序，sessions 为去重会话数。 */
 export function aggregateUsage(records: readonly UsageRecord[]): UsageAggregate[] {
   interface Accumulator {kind: UsageKind; name: string; count: number; lastUsedAt: string; sessionIds: Set<string>}
   const map = new Map<string, Accumulator>();

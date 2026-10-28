@@ -13,7 +13,7 @@ export interface PermissionCheck {decision: PermissionDecision; source: Permissi
 export interface PermissionEngineOptions {workspaceRoot: string; userRulesPath?: string; projectRulesPath?: string; localRulesPath?: string}
 
 const toolNames = new Set(['read_file', 'write_file', 'edit_file', 'find_files', 'search_text', 'run_command']);
-// [s06] MCP 工具名由适配层生成；允许它们进入同一规则与人在回路系统。
+// MCP 工具名由适配层生成；允许它们进入同一规则与人在回路系统。
 function isToolName(value: string): boolean { return toolNames.has(value) || /^mcp__[A-Za-z0-9_-]+__[A-Za-z0-9_-]+$/.test(value); }
 const decisions = new Set(['allow', 'ask', 'deny']);
 const tiers = new Set<PermissionTier>(['strict', 'default', 'bypass']);
@@ -70,7 +70,7 @@ function callValue(call: ToolCall): string | null {
   return null;
 }
 
-/** [s05] 五层权限判定核心：危险命令、真实路径、规则、档位与人在回路。 */
+/** 五层权限判定核心：危险命令、真实路径、规则、档位与人在回路。 */
 export class PermissionEngine {
   readonly workspaceRoot: string; readonly userRulesPath: string; readonly projectRulesPath: string; readonly localRulesPath: string;
   #tier: PermissionTier; #rules: PermissionRule[]; #localRules: PermissionRule[]; readonly #sessionRules: PermissionRule[] = []; #paths: WorkspacePaths | null = null;

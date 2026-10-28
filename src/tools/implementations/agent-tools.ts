@@ -11,7 +11,7 @@ const schema = z.object({
   context: z.string().optional(),
 }).strict();
 
-/** [s12] 把 SubAgent 派发暴露为模型可用工具；内置角色和用户自定义角色共用同一入口。 */
+/** 把 SubAgent 派发暴露为模型可用工具；内置角色和用户自定义角色共用同一入口。 */
 export class AgentTool implements Tool<z.infer<typeof schema>> {
   readonly name = 'agent';
   readonly description = '派出一个子 Agent 处理独立子任务并返回最终文本；适合研究、探索和规划，不适合直接询问当前用户';

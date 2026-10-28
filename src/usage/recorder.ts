@@ -19,7 +19,7 @@ export interface UsageRecordInput {
 }
 
 export interface UsageRecord extends UsageRecordInput {
-  /** [s15] ISO 时间戳，对齐 skill-tracker 的记录格式。 */
+  /** ISO 时间戳，对齐 skill-tracker 的记录格式。 */
   ts: string;
   cwd: string;
   agent: 'bitori';
@@ -27,7 +27,7 @@ export interface UsageRecord extends UsageRecordInput {
 }
 
 /**
- * [s15] 使用统计记录器：JSONL 追加行，与 trace 分离。
+ * 使用统计记录器：JSONL 追加行，与 trace 分离。
  * 统计是可丢弃数据：写入失败只记日志，绝不影响对话主链路。
  */
 export class UsageRecorder {

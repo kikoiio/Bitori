@@ -1,4 +1,4 @@
-/** [s01] 快捷键名称的集中说明；as const 保留每个值的字符串字面量类型。 */
+/** 快捷键名称的集中说明；as const 保留每个值的字符串字面量类型。 */
 export const keys = {
   send: 'enter',
   cancelOrExit: 'ctrl+c',
@@ -8,6 +8,6 @@ export const keys = {
   pageUp: 'pageup',
   pageDown: 'pagedown',
   close: 'escape',
-  /** [s15] 调试面板开关。 */
+  /** 调试面板开关。 */
   debugPanel: 'ctrl+t',
 } as const;

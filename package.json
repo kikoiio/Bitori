@@ -2,7 +2,7 @@
   "name": "bitori",
   "version": "0.1.0",
   "private": true,
-  "description": "Windows-first full-screen AI chat client",
+  "description": "AI assistant for desktop and terminal",
   "type": "module",
   "engines": {
     "node": ">=24 <25"
@@ -21,7 +21,9 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run typecheck && npm run lint && npm test && npm run build"
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "desktop": "npm run build && electron .",
+    "desktop:package": "npm run build && electron-builder --linux AppImage deb"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
@@ -37,9 +39,12 @@
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@vitest/coverage-v8": "^4.1.10",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
     "eslint": "^10.8.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "ink-testing-library": "^4.0.0",
+    "playwright-core": "^1.64.1",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",
@@ -47,5 +52,26 @@
   },
   "allowScripts": {
     "esbuild@0.28.2": true
+  },
+  "main": "src/desktop/main.cjs",
+  "build": {
+    "appId": "io.github.kikoiio.bitori",
+    "productName": "Bitori",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/desktop/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    }
   }
 }

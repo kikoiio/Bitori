@@ -27,7 +27,7 @@ export function parseFrontmatter(text: string): Frontmatter {
   };
 }
 
-/** [s08] 用户级与项目级记忆分目录存储；索引只保存可扫描的轻量摘要。 */
+/** 用户级与项目级记忆分目录存储；索引只保存可扫描的轻量摘要。 */
 export class MemoryManager {
   readonly #workDir: string;
   readonly #userDir: string;

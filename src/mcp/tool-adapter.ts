@@ -12,7 +12,7 @@ function remoteError(result: {content: unknown[]; structuredContent?: JsonObject
   return {status: 'error', error: {code: 'mcp_error', message: '远端 MCP 工具返回错误', retryable: false, details: {content: result.content, ...(result.structuredContent ? {structuredContent: result.structuredContent} : {})}}};
 }
 
-/** [s06] 外部工具统一视为有副作用，继续经过 s05 人在回路与串行屏障。 */
+/** 外部工具统一视为有副作用，继续经过人在回路与串行屏障。 */
 export class McpToolAdapter implements Tool {
   readonly effect = 'command' as const;
   readonly strict = false;
@@ -43,7 +43,7 @@ export class McpToolAdapter implements Tool {
   }
 }
 
-/** [s06] Provider 工具名只保留通用安全字符，并限制为常见的 64 字符上限。 */
+/** Provider 工具名只保留通用安全字符，并限制为常见的 64 字符上限。 */
 export function mcpPublicToolName(serverName: string, toolName: string): string {
   const clean = (value: string) => value.replace(/[^A-Za-z0-9_-]/g, '_');
   const prefix = `mcp__${clean(serverName)}__`;

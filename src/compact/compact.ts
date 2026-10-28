@@ -65,7 +65,7 @@ async function summarize(input: ManageContextInput, items: readonly ModelContext
   return parseSummary(text);
 }
 
-/** [s07] 自动与手动共用摘要路径；自动路径受阈值与熔断约束，手动路径只要求有可压缩消息。 */
+/** 自动与手动共用摘要路径；自动路径受阈值与熔断约束，手动路径只要求有可压缩消息。 */
 export async function manageContext(input: ManageContextInput, options: {force?: boolean; safetyMargin?: number} = {}): Promise<CompactResult> {
   const before = estimateContextTokens(input.items, input.anchor);
   const margin = options.safetyMargin ?? AUTO_COMPACT_SAFETY_MARGIN;

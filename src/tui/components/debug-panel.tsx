@@ -9,7 +9,7 @@ function usageLine(label: string, usage: {inputTokens: number; outputTokens: num
   return `${label} ${usage.inputTokens}↓ ${usage.outputTokens}↑${cache}`;
 }
 
-/** [s15] Ctrl+T 调试面板：实时事件流、当前迭代与阶段、用量与已激活技能。 */
+/** Ctrl+T 调试面板：实时事件流、当前迭代与阶段、用量与已激活技能。 */
 export function DebugPanel({state, controller, height}: DebugPanelProps) {
   const entries = controller.debugEntries(Math.max(4, height - 6));
   const lines: string[] = [];

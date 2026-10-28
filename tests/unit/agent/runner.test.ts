@@ -45,7 +45,7 @@ describe('AgentRunner', () => {
     const value = await run([[{type: 'text_delta', text: '部分'}]]); expect(value.client.requests).toHaveLength(1); expect(value.result.stopReason).toBe('stream_error');
   });
 
-  // [s04] 系统提示透传、提醒注入与缓存用量累计。
+  // 系统提示透传、提醒注入与缓存用量累计。
   it('每次模型请求携带同一份系统提示', async () => {
     const system: PromptBlock[] = [{text: '稳定模块', cacheable: true}, {text: '环境信息', cacheable: false}];
     const value = await run([toolCall('read_file', '{"path":"note.txt"}'), [{type: 'completed', finishReason: 'stop'}]], undefined, {system});

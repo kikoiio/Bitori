@@ -40,7 +40,7 @@ function resolveRef(gitDir: string, ref: string): string {
   return '';
 }
 
-/** [s13] 优先读文件系统，避免恢复已有 Worktree 时额外调用 git。 */
+/** 优先读文件系统，避免恢复已有 Worktree 时额外调用 git。 */
 export function readWorktreeHeadSha(worktreePath: string): string {
   try {
     const pointer = readFileSync(join(worktreePath, '.git'), 'utf8').trim();
@@ -60,7 +60,7 @@ export function readWorktreeHeadSha(worktreePath: string): string {
 function copySettings(repoRoot: string, worktreePath: string): void {
   const source = join(repoRoot, '.bitori');
   if (!existsSync(source)) return;
-  // [s13] worktrees 位于 .bitori 内，不能把父目录复制进自身；只复制配置与记忆文件。
+  // worktrees 位于 .bitori 内，不能把父目录复制进自身；只复制配置与记忆文件。
   for (const entry of readdirSync(source).filter(name => name !== 'worktrees')) {
     cpSync(join(source, entry), join(worktreePath, '.bitori', entry), {recursive: true});
   }
@@ -70,7 +70,7 @@ function linkDependencies(repoRoot: string, worktreePath: string): void {
   const source = join(repoRoot, 'node_modules');
   const target = join(worktreePath, 'node_modules');
   if (!existsSync(source) || existsSync(target)) return;
-  // [s13] Windows 对目录符号链接有权限要求；junction 指向目录且不需要开发者模式。
+  // Windows 对目录符号链接有权限要求；junction 指向目录且不需要开发者模式。
   symlinkSync(source, target, process.platform === 'win32' ? 'junction' : 'dir');
 }
 
@@ -92,7 +92,7 @@ function postCreate(repoRoot: string, worktreePath: string): void {
   copyIncludedFiles(repoRoot, worktreePath);
 }
 
-/** [s13] slug 严格白名单；目录已存在时快速恢复，不重复执行 git worktree add。 */
+/** slug 严格白名单；目录已存在时快速恢复，不重复执行 git worktree add。 */
 export function createAgentWorktree(slug: string, workspaceRoot = process.cwd()): WorktreeResult {
   if (!isSafeSlug(slug)) throw new Error(`非法 Worktree 名称：${slug}`);
   const gitRoot = resolveGitRoot(workspaceRoot);

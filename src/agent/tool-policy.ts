@@ -7,7 +7,7 @@ function failure(code: 'unknown_tool' | 'invalid_arguments' | 'tool_unavailable_
   return {status: 'error', error: {code, message, retryable: false, ...(details === undefined ? {} : {details})}};
 }
 
-/** [s03] 模式过滤和调用分类共享完整注册中心。 */
+/** 模式过滤和调用分类共享完整注册中心。 */
 export class ToolPolicy {
   constructor(readonly registry: ToolRegistry, readonly mode: AgentMode) {}
 

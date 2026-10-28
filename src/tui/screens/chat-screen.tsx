@@ -13,17 +13,17 @@ import {ToolApprovalPanel} from '../components/tool-approval-panel.js';
 
 export interface ChatScreenProps {state: AppState; controller: ChatController; height: number; onExit: () => void}
 
-/** [s01] 聊天页负责把键盘/粘贴事件翻译成 controller 操作，并组合各展示组件。 */
+/** 聊天页负责把键盘/粘贴事件翻译成 controller 操作，并组合各展示组件。 */
 export function ChatScreen({state, controller, height, onExit}: ChatScreenProps) {
   const [draft, setDraft] = useState('');
   const [focus, setFocus] = useState<'input' | 'messages'>('input');
   const [offset, setOffset] = useState(0);
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [sessionIndex, setSessionIndex] = useState(0);
-  // [s01] failed 已经是一次请求的终态，不阻止用户继续发送；下面三种状态才算 busy。
+  // failed 已经是一次请求的终态，不阻止用户继续发送；下面三种状态才算 busy。
   const busy = state.requestStatus !== 'idle' && state.requestStatus !== 'failed';
 
-  // [s01] 粘贴可能一次带来多行 Unicode 文本，单独使用 usePaste 避免被逐键逻辑破坏。
+  // 粘贴可能一次带来多行 Unicode 文本，单独使用 usePaste 避免被逐键逻辑破坏。
   usePaste(text => setDraft(value => value + text), {isActive: focus === 'input' && sessions === null});
   useInput((input, key) => {
     if (input === 'c' && key.ctrl) {
@@ -38,7 +38,7 @@ export function ChatScreen({state, controller, height, onExit}: ChatScreenProps)
       return;
     }
     if (sessions !== null) {
-      // [s01] 历史会话浮层打开时优先截获按键，下面的聊天快捷键不会同时触发。
+      // 历史会话浮层打开时优先截获按键，下面的聊天快捷键不会同时触发。
       if (key.escape) setSessions(null);
       else if (key.upArrow) setSessionIndex(value => Math.max(0, value - 1));
       else if (key.downArrow) setSessionIndex(value => Math.min(sessions.length - 1, value + 1));
@@ -53,9 +53,9 @@ export function ChatScreen({state, controller, height, onExit}: ChatScreenProps)
       return;
     }
     if (key.tab) { setFocus(value => value === 'input' ? 'messages' : 'input'); return; }
-    // [s15] Ctrl+T 切换调试面板；面板内容随每次状态发布刷新。
+    // Ctrl+T 切换调试面板；面板内容随每次状态发布刷新。
     if (input === 't' && key.ctrl) { controller.toggleDebugPanel(); return; }
-    // [s01] offset=0 表示视图贴近最新消息；PageUp 增大 offset，相当于向历史移动。
+    // offset=0 表示视图贴近最新消息；PageUp 增大 offset，相当于向历史移动。
     if (key.pageUp) { setOffset(value => Math.min(state.messages.length - 1, value + 1)); return; }
     if (key.pageDown) { setOffset(value => Math.max(0, value - 1)); return; }
     if (focus === 'messages') {
@@ -72,14 +72,14 @@ export function ChatScreen({state, controller, height, onExit}: ChatScreenProps)
         void controller.sendMessage(message);
       }
     } else if (key.backspace || key.delete) {
-      // [s01] Array.from 按 Unicode 码点拆分，比字符串 slice 更不容易切坏 emoji/中文扩展字符。
+      // Array.from 按 Unicode 码点拆分，比字符串 slice 更不容易切坏 emoji/中文扩展字符。
       setDraft(value => Array.from(value).slice(0, -1).join(''));
     } else if (!key.ctrl && !key.meta && input.length > 0) {
       setDraft(value => value + input);
     }
   });
 
-  // [s01] 为状态栏、错误框和输入框预留高度，其余空间交给消息区，且至少保留 5 行。
+  // 为状态栏、错误框和输入框预留高度，其余空间交给消息区，且至少保留 5 行。
   const debugHeight = state.debugOpen ? Math.max(8, Math.floor(height / 3)) : 0;
   const messageHeight = Math.max(5, height - 7 - (state.visibleError === null ? 0 : 3) - debugHeight);
   return <Box flexDirection="column" height={height}>

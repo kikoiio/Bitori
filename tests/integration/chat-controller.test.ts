@@ -31,8 +31,7 @@ describe('ChatController', () => {
     await controller.sendMessage('第二问');
     expect(snapshots).toContain('你');
     expect(controller.getState().messages.at(-1)).toMatchObject({content: '你好', status: 'completed'});
-    /* [s01 旧断言，s03 替换] Provider 请求使用 messages 平铺历史。 */
-    // [s04] ModelContextItem 新增 reminder 类型后，过滤条件改为显式列举含 content 的项类型。
+    // ModelContextItem 新增 reminder 类型后，过滤条件改为显式列举含 content 的项类型。
     expect(client.requests[1]?.items?.filter(item => item.type === 'message' || item.type === 'assistant_iteration').map(item => item.content)).toEqual(['第一问', '你好', '第二问']);
     expect(controller.getState().latestUsage).toEqual({inputTokens: 2, outputTokens: 1});
     await controller.shutdown();

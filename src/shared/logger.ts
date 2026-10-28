@@ -12,7 +12,7 @@ export interface LoggingOptions {
   level?: LogLevel;
   directory?: string;
   retentionDays?: number;
-  /** [s15] 每行落盘前对序列化文本做密钥替换；由组合根注入。 */
+  /** 每行落盘前对序列化文本做密钥替换；由组合根注入。 */
   redactor?: (text: string) => string;
 }
 
@@ -31,7 +31,7 @@ interface LogLine {
 
 const dayFormat = (date: Date): string => date.toISOString().slice(0, 10);
 
-/** [s15] 日志文件按天滚动为 `bitori-YYYY-MM-DD.log`；清理只删除匹配本命名且超期的文件。 */
+/** 日志文件按天滚动为 `bitori-YYYY-MM-DD.log`；清理只删除匹配本命名且超期的文件。 */
 function fileForDay(directory: string, date: Date): string {
   return join(directory, `bitori-${dayFormat(date)}.log`);
 }
@@ -55,7 +55,7 @@ function cleanupExpired(directory: string, retentionDays: number): void {
 }
 
 /**
- * [s15] 全局日志汇：异步串行追加写文件，失败只丢弃并计数，绝不抛错。
+ * 全局日志汇：异步串行追加写文件，失败只丢弃并计数，绝不抛错。
  * TUI 模式下 stdout 由 Ink 独占，日志唯一出口是文件；未显式配置时按默认路径惰性启用。
  */
 class LogSink {
@@ -107,7 +107,7 @@ class LogSink {
       try { mkdirSync(directory, {recursive: true}); this.#mkdirDone = true; }
       catch { this.#dropped += 1; return; }
     }
-    // [s15] 串行链保证行序；任何失败只计数不抛错，观察不干扰被观察者。
+    // 串行链保证行序；任何失败只计数不抛错，观察不干扰被观察者。
     this.#chain = this.#chain
       .then(() => appendFile(fileForDay(directory, date), `${this.#redactor(serialized)}\n`, 'utf8'))
       .catch(() => { this.#dropped += 1; });
@@ -133,12 +133,12 @@ export function configureLogging(options: LoggingOptions): void {
   globalSink.configure(options);
 }
 
-/** [s15] 等待全部排队中的日志行落盘；测试与关停路径使用。 */
+/** 等待全部排队中的日志行落盘；测试与关停路径使用。 */
 export function flushLogging(): Promise<void> {
   return globalSink.flush();
 }
 
-/** [s15] 模块级 Logger：调用方只声明模块名，级别与输出由全局汇统一控制。 */
+/** 模块级 Logger：调用方只声明模块名，级别与输出由全局汇统一控制。 */
 export interface Logger {
   readonly module: string;
   debug(msg: string, data?: LogFields): void;

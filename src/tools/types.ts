@@ -1,4 +1,4 @@
-/** [s02] 工具域只交换可安全序列化的 JSON 对象。 */
+/** 工具域只交换可安全序列化的 JSON 对象。 */
 export type JsonObject = Record<string, unknown>;
 export type ToolEffect = 'read' | 'write' | 'command';
 
@@ -30,12 +30,12 @@ export interface ToolCall {internalId: string; providerCallId: string; position:
 export interface InvalidToolCall extends ToolCallDraft {error: ToolError}
 export interface AssembledToolBatch {validCalls: ToolCall[]; invalidCalls: InvalidToolCall[]}
 export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'denied';
-/** [s05] 审批保留旧 approved 别名，并增加一次、会话和永久放行。 */
+/** 审批保留旧 approved 别名，并增加一次、会话和永久放行。 */
 export type ApprovalDecision = 'approved' | 'approved_once' | 'approved_session' | 'approved_permanent' | 'denied';
 export type ToolExecutionStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'timed_out' | 'skipped' | 'interrupted';
 export interface ToolApprovalPrompt {callId: string; toolName: string; effect: ToolEffect; argumentSummary: string; riskMessage: string | null; reason?: string}
 
-/** [s03] 完整调用只有 available 分支可进入执行器。 */
+/** 完整调用只有 available 分支可进入执行器。 */
 export type ToolAvailability = 'available' | 'unknown' | 'invalid' | 'unavailable_in_mode';
 export type PreparedToolCall =
   | {availability: 'available'; call: ToolCall; argumentsText: string}

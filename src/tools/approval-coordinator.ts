@@ -2,7 +2,7 @@ import type {ApprovalDecision, ToolApprovalPrompt, ToolCall} from './types.js';
 
 interface Pending {prompt: ToolApprovalPrompt; resolve: (decision: ApprovalDecision) => void}
 
-/** [s02] 同一时刻只发布一个副作用审批；取消会拒绝所有尚未决定的调用。 */
+/** 同一时刻只发布一个副作用审批；取消会拒绝所有尚未决定的调用。 */
 export class ApprovalCoordinator {
   #pending: Pending | undefined;
   readonly #listeners = new Set<(prompt: ToolApprovalPrompt | null) => void>();

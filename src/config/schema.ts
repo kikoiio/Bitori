@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import type {ParsedConfig, ProviderProfileSource, ThinkingConfig} from './types.js';
 
-// [s01] API Key 必须写成完整的 ${ENV_NAME}，不能把真实密钥直接放入 YAML。
+// API Key 必须写成完整的 ${ENV_NAME}，不能把真实密钥直接放入 YAML。
 const environmentReference = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 
 const manualThinkingSchema = z
@@ -39,7 +39,7 @@ const stdioMcpServerSchema = z.strictObject({
 });
 const httpMcpServerSchema = z.strictObject({
   transport: z.literal('http'),
-  // [s06] URL 在 loader 展开 ${VAR} 后再做 HTTP(S) 校验。
+  // URL 在 loader 展开 ${VAR} 后再做 HTTP(S) 校验。
   url: z.string().trim().min(1, 'MCP url 不能为空'),
   headers: stringMapSchema.optional(),
 });
@@ -49,7 +49,7 @@ const mcpServersSchema = z.record(
 );
 const modelAliasesSchema = z.record(z.string().trim().min(1), z.string().trim().min(1));
 
-/** [s15] 可观察性配置：日志级别/保留期与 trace 保留期，均可缺省。 */
+/** 可观察性配置：日志级别/保留期与 trace 保留期，均可缺省。 */
 const loggingSchema = z.strictObject({
   level: z.enum(['debug', 'info', 'warn', 'error']).optional(),
   retention_days: z.number().int().positive().max(365).optional(),
@@ -67,7 +67,7 @@ export const configSchema = z
     trace: traceSchema.optional(),
   })
   .superRefine((value, context) => {
-    // [s01] superRefine 适合做跨字段/跨数组项校验：单个字段的 schema 无法判断名称是否重复。
+    // superRefine 适合做跨字段/跨数组项校验：单个字段的 schema 无法判断名称是否重复。
     const names = new Set<string>();
     for (const [index, profile] of value.profiles.entries()) {
       if (names.has(profile.name)) {
@@ -88,11 +88,11 @@ export const configSchema = z
     }
   });
 
-/** [s06] 项目级配置只承载 MCP Server，避免项目覆盖用户的供应商密钥配置。 */
+/** 项目级配置只承载 MCP Server，避免项目覆盖用户的供应商密钥配置。 */
 export const projectConfigSchema = z.strictObject({mcp_servers: mcpServersSchema.optional()});
 
 export function parseConfig(value: unknown): ParsedConfig {
-  // [s01] 外部输入先视为 unknown；只有 Zod 校验成功后才进入有类型保证的应用代码。
+  // 外部输入先视为 unknown；只有 Zod 校验成功后才进入有类型保证的应用代码。
   return configSchema.parse(value) as ParsedConfig;
 }
 
@@ -100,7 +100,7 @@ export function parseProjectConfig(value: unknown): Pick<ParsedConfig, 'mcp_serv
   return projectConfigSchema.parse(value ?? {}) as Pick<ParsedConfig, 'mcp_servers'>;
 }
 
-/** [s01] 把面向 YAML 的多种简写归一化成 Provider 只需处理的判别联合。 */
+/** 把面向 YAML 的多种简写归一化成 Provider 只需处理的判别联合。 */
 export function normalizeThinking(source: ProviderProfileSource['thinking']): ThinkingConfig {
   if (source === true) return {type: 'auto'};
   if (source === false || source === undefined) return {type: 'disabled'};

@@ -25,7 +25,7 @@ export interface AgentServices {
   close: () => void;
 }
 
-/** [s14] 把 s08-s14 各子系统接入同一个组合根，供工具与控制器共享。 */
+/** 把各子系统接入同一个组合根，供工具与控制器共享。 */
 export function createAgentServices(options: {workDir?: string; hooks?: readonly HookConfig[]} = {}): AgentServices {
   const workDir = options.workDir ?? process.cwd();
   const home = homedir();

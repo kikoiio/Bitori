@@ -43,7 +43,7 @@ describe('AnthropicClient', () => {
     expect(events.at(-1)).toMatchObject({type: 'error', error: {code: 'authentication'}});
   });
 
-  // [s04] 结构化系统提示与缓存断点映射。
+  // 结构化系统提示与缓存断点映射。
   it('system 映射为块数组，仅可缓存块携带 cache_control', async () => {
     const stream = vi.fn().mockReturnValue(successful());
     const sdk = {messages: {stream}} as unknown as Anthropic;

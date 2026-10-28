@@ -1,0 +1,41 @@
+name: Linux desktop
+
+on:
+  push:
+    branches: ["desktop/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Exercise desktop chat and approvals
+        run: xvfb-run -a node tests/desktop/smoke.mjs
+      - name: Package Linux applications
+        run: npm run desktop:package
+      - name: Exercise packaged desktop startup
+        run: xvfb-run -a node tests/desktop/smoke.mjs
+        env:
+          BITORI_PACKAGED: '1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bitori-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-screenshots
+          path: desktop-test-output/*.png
+          if-no-files-found: ignore

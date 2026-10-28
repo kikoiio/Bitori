@@ -10,7 +10,7 @@ export interface CompositionInput {
   toolDefinitions: readonly ToolDefinition[];
 }
 
-/** [s15] 逐桶估算一次请求的上下文组成；估算与真实 input tokens 的差值由调用方附加。 */
+/** 逐桶估算一次请求的上下文组成；估算与真实 input tokens 的差值由调用方附加。 */
 export function composeBuckets(input: CompositionInput): ContextCompositionBuckets {
   const buckets = emptyCompositionBuckets();
   for (const block of input.system) {

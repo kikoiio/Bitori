@@ -6,7 +6,7 @@ function invalid(draft: ToolCallDraft, message: string): InvalidToolCall {
   const error: ToolError = {code: 'invalid_arguments', message, retryable: false}; return {...draft, error};
 }
 
-/** [s02] 参数分片以内部调用 ID 隔离，结束后才解析和校验不可信 JSON。 */
+/** 参数分片以内部调用 ID 隔离，结束后才解析和校验不可信 JSON。 */
 export class ToolCallAssembler {
   readonly #drafts = new Map<string, ToolCallDraft & {ended: boolean; issue?: string}>();
   constructor(readonly registry: ToolRegistry) {}

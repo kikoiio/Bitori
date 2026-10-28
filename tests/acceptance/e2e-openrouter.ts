@@ -9,7 +9,7 @@ import {ChatController} from '../../src/chat/agent-controller.js';
 import {SessionRepository} from '../../src/storage/repository.js';
 import {createToolSystem} from '../../src/tools/create-tool-system.js';
 
-/** [s12] OpenAI 兼容真实端点 E2E：走完整 AgentRunner 链路，验证流式、工具调用与结果回传。 */
+/** OpenAI 兼容真实端点 E2E：走完整 AgentRunner 链路，验证流式、工具调用与结果回传。 */
 
 const retryDelayMs = 20_000;
 const baseUrl = process.env.LLM_BASE_URL ?? 'https://openrouter.ai/api/v1';

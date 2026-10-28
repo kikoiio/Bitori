@@ -11,7 +11,7 @@ import type {TraceWriter} from './writer.js';
 const logger = getLogger('trace');
 const DEBUG_RING_LIMIT = 120;
 
-/** [s15] TUI 调试面板的单条摘要。 */
+/** TUI 调试面板的单条摘要。 */
 export interface DebugEntry {at: number; text: string}
 
 export interface AgentTraceTapOptions {
@@ -19,7 +19,7 @@ export interface AgentTraceTapOptions {
   model: string;
   protocol: string;
   workspaceRoot: string;
-  /** [s15] 使用统计联动：load_skill 成功时回调（含技能名与会话）。 */
+  /** 使用统计联动：load_skill 成功时回调（含技能名与会话）。 */
   onSkillActivated?: (name: string, sessionId: string) => void;
 }
 
@@ -39,7 +39,7 @@ function callOf(event: Extract<AgentEvent, {type: 'tool_call_ready'}>): {interna
 }
 
 /**
- * [s15] AgentEvent 的第二订阅者：把内存事件流投影为持久 trace 与 TUI 调试摘要。
+ * AgentEvent 的第二订阅者：把内存事件流投影为持久 trace 与 TUI 调试摘要。
  * 所有方法火后不理，绝不加入控制器的持久化屏障。
  */
 export class AgentTraceTap {

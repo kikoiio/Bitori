@@ -1,4 +1,4 @@
-/** [s02] 工具调用独立持久化，恢复时可精确区分审批与执行终态。 */
+/** 工具调用独立持久化，恢复时可精确区分审批与执行终态。 */
 export const toolCallsMigration = {version: 2, sql: `
   CREATE TABLE tool_calls (
     id TEXT PRIMARY KEY,

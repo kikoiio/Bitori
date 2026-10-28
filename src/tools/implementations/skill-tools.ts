@@ -5,7 +5,7 @@ import type {JsonObject, Tool, ToolExecutionResult} from '../types.js';
 
 const schema = z.object({name: z.string().trim().min(1)}).strict();
 
-/** [s10] 两阶段加载的第二阶段：模型按需读取 Skill 正文并激活到环境上下文。 */
+/** 两阶段加载的第二阶段：模型按需读取 Skill 正文并激活到环境上下文。 */
 export class LoadSkillTool implements Tool<{name: string}> {
   readonly name = 'load_skill';
   readonly description = '加载一个已注册 Skill 的完整 SOP；输入 Skill 名称，成功后该技能将在后续对话中保持激活';

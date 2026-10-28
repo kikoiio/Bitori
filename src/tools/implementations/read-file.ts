@@ -7,7 +7,7 @@ import type {Tool, ToolContext, ToolExecutionResult} from '../types.js';
 
 const schema = z.object({path: z.string().min(1)}).strict();
 export class ReadFileTool implements Tool<{path: string}> {
-  // [s04] 与系统提示双重强化「编辑前必先读取」规则。
+  // 与系统提示双重强化「编辑前必先读取」规则。
   readonly name = 'read_file'; readonly description = '读取工作区内的 UTF-8 文本文件；编辑任何文件前必须先用本工具读取该文件'; readonly effect = 'read' as const;
   readonly inputSchema = {type: 'object', properties: {path: {type: 'string'}}, required: ['path'], additionalProperties: false};
   parseArguments(input: unknown): {path: string} { return schema.parse(input); }

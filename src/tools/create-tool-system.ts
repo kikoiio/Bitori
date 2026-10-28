@@ -24,7 +24,7 @@ export const fixedToolLimits = {
   command: {timeoutMs: 60_000, maxResultBytes: 65_536, maxMatches: 500},
 } as const;
 
-/** [s02] 组合根只需调用一次，三个 Provider 共享同一注册集合。 */
+/** 组合根只需调用一次，三个 Provider 共享同一注册集合。 */
 export function createToolSystem(workspaceRoot: string, mcpServers: Record<string, McpServerConfig> = {}, options: {services?: AgentServices; clientFor?: (model: string | null) => LLMClient; memoryClient?: LLMClient} = {}) {
   const permissions = new PermissionEngine({workspaceRoot});
   const services = options.services ?? createAgentServices({workDir: workspaceRoot});

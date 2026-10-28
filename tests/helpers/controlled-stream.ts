@@ -2,7 +2,7 @@ import type {StreamEvent} from '../../src/providers/types.js';
 
 type Pending = {resolve: (value: IteratorResult<StreamEvent>) => void; reject: (reason: unknown) => void};
 
-/** [s03] 测试专用的手动推进模型流。 */
+/** 测试专用的手动推进模型流。 */
 export class ControlledStream implements AsyncIterable<StreamEvent> {
   readonly #queue: StreamEvent[] = [];
   readonly #waiters: Pending[] = [];

@@ -17,12 +17,12 @@ function frontmatter(text: string): {meta: UserCommandFrontmatter; body: string}
   };
 }
 
-/** [s09] $ARGUMENTS 支持内联替换；无占位时参数追加到末尾。 */
+/** $ARGUMENTS 支持内联替换；无占位时参数追加到末尾。 */
 export function renderBody(body: string, args: string): string {
   return body.includes('$ARGUMENTS') ? body.replaceAll('$ARGUMENTS', args) : args ? `${body}\n\n${args}` : body;
 }
 
-/** [s09] 扫描用户级与项目级 commands 目录；子目录形成 namespace。 */
+/** 扫描用户级与项目级 commands 目录；子目录形成 namespace。 */
 export function loadUserCommands(workDir: string, homeDirectory = process.env.HOME ?? '', registry = new CommandRegistry()): CommandRegistry {
   const roots = [join(homeDirectory, '.bitori', 'commands'), join(workDir, '.bitori', 'commands')];
   for (const root of roots) {

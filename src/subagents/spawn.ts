@@ -12,7 +12,7 @@ export interface SpawnSubAgentInput {
   onEvent?: AgentEventSink;
 }
 
-/** [s12] 子 Agent 非交互跑到底：不执行工具调用，只收集最终文本；工具执行接入调度器后复用此循环。 */
+/** 子 Agent 非交互跑到底：不执行工具调用，只收集最终文本；工具执行接入调度器后复用此循环。 */
 export async function spawnSubAgent(input: SpawnSubAgentInput): Promise<string> {
   const system = input.definition.systemPromptOverride ?? input.definition.initialPrompt;
   const content = [system, input.prompt].filter(Boolean).join('\n\n');

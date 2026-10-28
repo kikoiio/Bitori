@@ -8,7 +8,7 @@ import type {Tool, ToolContext, ToolExecutionResult} from '../types.js';
 
 const schema = z.object({pattern: z.string().min(1)}).strict();
 export class FindFilesTool implements Tool<{pattern: string}> {
-  // [s04] 与系统提示双重强化「路径先查证」规则。
+  // 与系统提示双重强化「路径先查证」规则。
   readonly name = 'find_files'; readonly description = '使用 glob 模式查找工作区内的普通文件；确定文件路径前先用本工具查证，不要猜测'; readonly effect = 'read' as const;
   readonly inputSchema = {type: 'object', properties: {pattern: {type: 'string'}}, required: ['pattern'], additionalProperties: false};
   parseArguments(input: unknown) { return schema.parse(input); }

@@ -34,7 +34,7 @@ describe('OpenAIChatClient', () => {
     expect(events.at(-1)).toEqual({type: 'completed', finishReason: 'tool_calls'});
   });
 
-  // [s04] 系统提示与提醒注入映射。
+  // 系统提示与提醒注入映射。
   it('system 映射为首条 system 消息，reminder 渲染为用户消息', async () => {
     const create = vi.fn().mockResolvedValue(chunks());
     const sdk = {chat: {completions: {create}}} as unknown as OpenAI;

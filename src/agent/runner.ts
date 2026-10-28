@@ -23,12 +23,12 @@ function providerCallId(call: PreparedToolCall): string | null { return call.ava
 function callName(call: PreparedToolCall): string { return call.availability === 'available' ? call.call.name : call.draft.name; }
 function limitResult(): ToolExecutionResult { return {status: 'error', error: {code: 'agent_loop_limit', message: '已达到 20 次模型迭代上限，新的工具调用未执行', retryable: false}}; }
 
-/** [s15] 工具定义指纹：内容变化才随 request_prepared 携带完整定义，其余轮次只带摘要。 */
+/** 工具定义指纹：内容变化才随 request_prepared 携带完整定义，其余轮次只带摘要。 */
 function definitionsDigest(definitions: readonly ToolDefinition[]): string {
   return createHash('sha256').update(JSON.stringify(definitions)).digest('hex').slice(0, 16);
 }
 
-/** [s04] 累计用量；缓存字段只在 Anthropic 协议出现，双方都缺省时不带入结果。 */
+/** 累计用量；缓存字段只在 Anthropic 协议出现，双方都缺省时不带入结果。 */
 function addUsage(a: Usage, b: Usage): Usage {
   return {
     inputTokens: a.inputTokens + b.inputTokens,
@@ -38,7 +38,7 @@ function addUsage(a: Usage, b: Usage): Usage {
   };
 }
 
-/** [s03] 唯一的自主 Agent 循环入口，不依赖存储或界面。 */
+/** 唯一的自主 Agent 循环入口，不依赖存储或界面。 */
 export class AgentRunner {
   constructor(readonly client: LLMClient, readonly registry: ToolRegistry, readonly collector: StreamCollector, readonly scheduler: SafetyBatchScheduler, readonly hooks: HookEngine | null = null) {}
 
@@ -49,7 +49,7 @@ export class AgentRunner {
       ? input.context.map((item, index) => index === input.context.length - 1 && item.type === 'message' && item.role === 'user' ? {...item, content: input.instruction} : item)
       : input.context;
     const context = new AgentContext(requestContext);
-    // [s04] 提醒注入位于最后一条用户消息之后，随后续每次迭代请求一起发送。
+    // 提醒注入位于最后一条用户消息之后，随后续每次迭代请求一起发送。
     for (const text of input.reminders ?? []) context.appendReminder({type: 'reminder', text});
     const policy = new ToolPolicy(this.registry, input.mode);
     let total: Usage = {inputTokens: 0, outputTokens: 0}; let unknownIterations = 0; let finalIterationId: string | null = null;
@@ -70,7 +70,7 @@ export class AgentRunner {
       const iterationId = createId(); finalIterationId = iterationId;
       yield {...base(), type: 'iteration_started', iterationId, iteration};
       yield {...base(), type: 'progress', iteration, maxIterations, phase: 'streaming', completedTools: 0, totalTools: 0};
-      /* [s07] 每次请求前先做全量摘要兜底，再做工具结果轻量预算；替换决策冻结以保护缓存前缀。 */
+      /* 每次请求前先做全量摘要兜底，再做工具结果轻量预算；替换决策冻结以保护缓存前缀。 */
       let requestItems = [...context.items()];
       if (input.contextManagement?.windowTokens) {
         const compact = await manageContext({items: requestItems, client: this.client, contextWindow: input.contextManagement.windowTokens, tracking, recovery, tools: policy.definitions(), anchor: usageAnchor, signal});
@@ -86,7 +86,7 @@ export class AgentRunner {
       }
       requestItems = input.contextManagement ? applyToolResultBudget(requestItems, input.contextManagement.workspaceRoot, replacementState) : requestItems;
       await this.hooks?.fire('pre_send', {event: 'pre_send', message: input.instruction});
-      // [s15] 每次迭代发出请求级事件；工具定义内容变化才携带完整定义。
+      // 每次迭代发出请求级事件；工具定义内容变化才携带完整定义。
       const definitions = policy.definitions();
       const toolDefinitionDigest = definitionsDigest(definitions);
       const definitionsChanged = toolDefinitionDigest !== lastToolDefinitionDigest;
@@ -103,7 +103,7 @@ export class AgentRunner {
           if (event.type === 'usage_updated') yield {...event, totalUsage: addUsage(total, event.iterationUsage)};
           else yield event;
         }
-        // [s12] 429/网络/5xx 属于瞬时故障：指数退避后重发同一迭代，而不是终止整个任务。
+        // 429/网络/5xx 属于瞬时故障：指数退避后重发同一迭代，而不是终止整个任务。
         if (!response.error?.retryable || signal.aborted || retriesLeft === 0) { retryDelayMs = retryBaseDelayMs; retriesLeft = 3; break; }
         await this.hooks?.fire('error', {event: 'error', error: `第 ${iteration} 轮请求失败（${response.error.code}），${retryDelayMs / 1000} 秒后重试`});
         yield {...base(), type: 'request_retry', iterationId, iteration, attempt, delayMs: retryDelayMs, error: response.error};

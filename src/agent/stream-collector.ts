@@ -6,7 +6,7 @@ import type {ToolPolicy} from './tool-policy.js';
 
 export interface StreamCollectorInput {runId: string; sessionId: string; iterationId: string; iteration: number; stream: AsyncIterable<StreamEvent>; toolPolicy: ToolPolicy; signal: AbortSignal}
 
-/** [s03] 单次消费 Provider 流，同时实时转发并返回完整迭代。 */
+/** 单次消费 Provider 流，同时实时转发并返回完整迭代。 */
 export class StreamCollector {
   async *collect(input: StreamCollectorInput): AsyncGenerator<AgentEvent, CollectedIteration, void> {
     let text = ''; let thinking = ''; let finishReason: CollectedIteration['finishReason'] = null;
@@ -20,7 +20,7 @@ export class StreamCollector {
         if (event.type === 'text_delta') { text += event.text; yield {...base, type: 'text_delta', delta: event.text}; }
         else if (event.type === 'thinking_delta') { thinking += event.text; yield {...base, type: 'thinking_delta', delta: event.text}; }
         else if (event.type === 'usage') {
-          // [s04] 缓存字段沿用「有值才覆盖」的保留语义：Anthropic 只在 message_start 上报，后续 usage 事件不清空已收到的值。
+          // 缓存字段沿用「有值才覆盖」的保留语义：Anthropic 只在 message_start 上报，后续 usage 事件不清空已收到的值。
           usage = {
             inputTokens: event.usage.inputTokens || usage.inputTokens,
             outputTokens: event.usage.outputTokens || usage.outputTokens,

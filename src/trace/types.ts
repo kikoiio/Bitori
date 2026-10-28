@@ -4,7 +4,7 @@ import type {PromptBlock} from '../prompt/builder.js';
 import type {FinishReason} from '../providers/types.js';
 import type {ToolDefinition} from '../tools/types.js';
 
-/** [s15] trace 事件格式版本；结构变化时递增并配套迁移读取逻辑。 */
+/** trace 事件格式版本；结构变化时递增并配套迁移读取逻辑。 */
 export const TRACE_VERSION = 1;
 
 interface TraceEventBase {
@@ -13,7 +13,7 @@ interface TraceEventBase {
   sessionId: string;
 }
 
-/** [s15] 工具定义按内容变化才整体记录，其余轮次仅携带摘要。 */
+/** 工具定义按内容变化才整体记录，其余轮次仅携带摘要。 */
 export interface TraceToolCallSummary {callId: string; providerCallId: string | null; name: string; argumentsText: string}
 
 export type TraceEvent =
@@ -26,7 +26,7 @@ export type TraceEvent =
   | (TraceEventBase & {type: 'agent_event'; event: AgentEvent})
   | (TraceEventBase & {type: 'domain_fact'; fact: string; data?: Record<string, unknown>});
 
-/** [s15] 上下文组成桶；数值均为估算 token 数。 */
+/** 上下文组成桶；数值均为估算 token 数。 */
 export interface ContextCompositionBuckets {
   fixed_system: number;
   environment: number;

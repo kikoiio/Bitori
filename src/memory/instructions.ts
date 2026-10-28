@@ -34,7 +34,7 @@ function candidates(workDir: string, home: string): string[] {
   ];
 }
 
-/** [s08] 用户级 → 项目 .bitori → 项目根；项目内容靠后覆盖通用说明。 */
+/** 用户级 → 项目 .bitori → 项目根；项目内容靠后覆盖通用说明。 */
 export function discoverInstructions(workDir: string, homeDirectory = process.env.HOME ?? ''): InstructionSource[] {
   const sources: InstructionSource[] = [];
   for (const path of candidates(resolve(workDir), resolve(homeDirectory))) {

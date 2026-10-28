@@ -2,7 +2,7 @@ import {Box, Text} from 'ink';
 
 export interface ThinkingBlockProps {content: string; expanded: boolean; streaming: boolean}
 
-/** [s01] thinking 为空时完全不占空间；否则显示标题，并按 expanded 决定是否显示正文。 */
+/** thinking 为空时完全不占空间；否则显示标题，并按 expanded 决定是否显示正文。 */
 export function ThinkingBlock({content, expanded, streaming}: ThinkingBlockProps) {
   if (content.length === 0) return null;
   return <Box flexDirection="column" marginLeft={2}>

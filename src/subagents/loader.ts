@@ -37,7 +37,7 @@ function loadDirectory(directory: string, definitions: AgentDefinition[]): void 
   }
 }
 
-/** [s12] 内置 → 用户级 → 项目级；项目级同名完整覆盖。 */
+/** 内置 → 用户级 → 项目级；项目级同名完整覆盖。 */
 export function loadAgentDefinitions(workDir: string, homeDirectory = homedir()): AgentDefinition[] {
   const definitions = [...BUILTIN_AGENTS];
   loadDirectory(join(homeDirectory, '.bitori', 'agents'), definitions);

@@ -18,7 +18,7 @@ export function parseCommand(input: string): ParsedCommand | null {
   return space === -1 ? {name: trimmed, args: ''} : {name: trimmed.slice(0, space), args: trimmed.slice(space + 1).trim()};
 }
 
-/** [s09] 内置与用户命令统一注册；名称和别名都不可冲突。 */
+/** 内置与用户命令统一注册；名称和别名都不可冲突。 */
 export class CommandRegistry {
   readonly #commands = new Map<string, Command>();
   readonly #aliases = new Map<string, string>();

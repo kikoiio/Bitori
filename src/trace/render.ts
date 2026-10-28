@@ -38,7 +38,7 @@ function renderIteration(iteration: TraceIteration): string[] {
   return lines;
 }
 
-/** [s15] 渲染 trace show 的文本输出；iteration 指定时只渲染该轮。 */
+/** 渲染 trace show 的文本输出；iteration 指定时只渲染该轮。 */
 export function renderTraceShow(events: readonly TraceEvent[], options: {iteration?: number} = {}): string {
   const lines: string[] = [];
   const header = events.find((event): event is Extract<TraceEvent, {type: 'run_header'}> => event.type === 'run_header');
@@ -51,7 +51,7 @@ export function renderTraceShow(events: readonly TraceEvent[], options: {iterati
   return lines.join('\n');
 }
 
-/** [s15] 渲染逐轮 token 曲线（文本表格）。 */
+/** 渲染逐轮 token 曲线（文本表格）。 */
 export function renderTokenTrend(events: readonly TraceEvent[]): string {
   const lines: string[] = ['轮次  估算  真实  差值  输出↑'];
   for (const iteration of groupByIteration(events)) {

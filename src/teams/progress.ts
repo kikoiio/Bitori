@@ -19,7 +19,7 @@ function describe(toolName: string, input: Record<string, unknown>): string {
   return toolName;
 }
 
-/** [s14] 只保留最近 5 条活动，供终端 spinner 与团队状态栏展示。 */
+/** 只保留最近 5 条活动，供终端 spinner 与团队状态栏展示。 */
 export function recordToolUse(progress: AgentProgress, toolName: string, input: Record<string, unknown>): void {
   const activity: ToolActivity = {toolName, input, activityDescription: describe(toolName, input)};
   progress.toolUseCount++;

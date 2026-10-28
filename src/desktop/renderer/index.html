@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Bitori 聊天</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="会话侧栏">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">B</span><span>Bitori</span></div>
+      <div class="workspace">
+        <div class="section-heading">工作区</div>
+        <div id="workspace-path" data-testid="workspace" class="workspace-path" title="当前工作区">未选择工作区</div>
+        <button id="choose-workspace" data-testid="choose-workspace" class="button subtle" type="button">选择工作区</button>
+      </div>
+      <div class="profile-field">
+        <label class="section-heading" for="profile">配置</label>
+        <select id="profile" data-testid="profile-select" aria-label="选择配置"><option value="">加载中…</option></select>
+      </div>
+      <div class="sessions-heading"><h2>会话</h2><button id="new-session" data-testid="new-session" class="button new-session" type="button">＋ 新建</button></div>
+      <nav id="sessions" data-testid="session-list" class="sessions" aria-label="会话列表"></nav>
+    </aside>
+    <main class="main">
+      <header class="chat-header">
+        <div class="header-copy"><h1 id="chat-title">聊天</h1><p id="profile-detail">请选择配置</p></div>
+        <div id="request-status" data-testid="request-status" class="status" role="status" aria-live="polite">正在连接</div>
+      </header>
+      <div id="error" data-testid="error" class="error" role="alert" hidden></div>
+      <div id="messages" class="messages" aria-label="聊天消息" tabindex="0">
+        <div id="message-list" data-testid="message-list" class="message-list"></div>
+      </div>
+      <div class="bottom-area">
+        <section id="approval" data-testid="approval" class="approval" aria-labelledby="approval-title" hidden>
+          <div class="approval-heading"><h2 id="approval-title">需要你的批准</h2><span id="approval-effect" class="effect"></span></div>
+          <p id="approval-tool" class="approval-tool"></p>
+          <pre id="approval-arguments"></pre>
+          <p id="approval-risk" class="approval-risk" hidden></p>
+          <div class="approval-actions"><button id="deny" data-testid="deny" class="button" type="button">拒绝</button><button id="allow" data-testid="approve" class="button primary" type="button">允许</button></div>
+        </section>
+        <form id="composer" data-testid="composer" class="composer">
+          <label class="visually-hidden" for="input">输入消息</label>
+          <textarea id="input" data-testid="message-input" rows="2" placeholder="输入消息…" aria-describedby="composer-help"></textarea>
+          <div class="composer-footer"><span id="composer-help">Enter 发送，Shift + Enter 换行</span><div class="composer-actions"><button id="cancel" data-testid="cancel" class="button" type="button" hidden>停止生成</button><button id="send" data-testid="send" class="button primary" type="submit">发送</button></div></div>
+        </form>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

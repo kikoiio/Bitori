@@ -10,7 +10,7 @@ export interface Migration {
 
 export const migrations: readonly Migration[] = [initialMigration, toolCallsMigration, agentLoopMigration];
 
-/** [s01] 只描述迁移器需要的最小数据库能力，避免它绑定到具体 SQLite 类。 */
+/** 只描述迁移器需要的最小数据库能力，避免它绑定到具体 SQLite 类。 */
 export interface MigrationDatabase {
   exec: (sql: string) => unknown;
   prepare: (sql: string) => {
@@ -20,7 +20,7 @@ export interface MigrationDatabase {
 }
 
 export function runMigrations(database: MigrationDatabase): void {
-  // [s01] 先确保版本表存在；首次数据库和旧数据库都能执行这一步。
+  // 先确保版本表存在；首次数据库和旧数据库都能执行这一步。
   database.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
     applied_at INTEGER NOT NULL
@@ -29,7 +29,7 @@ export function runMigrations(database: MigrationDatabase): void {
   const versions = new Set(applied.map(row => row.version));
   for (const migration of migrations) {
     if (versions.has(migration.version)) continue;
-    // [s01] 每个迁移和其版本记录在同一事务中：要么全部成功，要么全部回滚。
+    // 每个迁移和其版本记录在同一事务中：要么全部成功，要么全部回滚。
     database.exec('BEGIN IMMEDIATE');
     try {
       database.exec(migration.sql);

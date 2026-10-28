@@ -7,7 +7,7 @@ const exitSchema = z.object({slug: z.string().trim().min(1), force: z.boolean().
 
 interface WorktreeSession {slug: string; path: string; branch: string; gitRoot: string}
 
-/** [s13] Worktree 状态由工具实例持有；后续命令工具接入时以该状态为执行根。 */
+/** Worktree 状态由工具实例持有；后续命令工具接入时以该状态为执行根。 */
 export class EnterWorktreeTool implements Tool<{slug: string}> {
   readonly name = 'enter_worktree';
   readonly description = '创建或恢复一个隔离 Git Worktree，后续文件与命令操作应显式使用返回的绝对路径';
@@ -31,7 +31,7 @@ export class EnterWorktreeTool implements Tool<{slug: string}> {
   session(slug: string): WorktreeSession | null { return this.#sessions.get(slug) ?? null; }
 }
 
-/** [s13] 退出前默认保护未提交变更，force 才允许清理。 */
+/** 退出前默认保护未提交变更，force 才允许清理。 */
 export class ExitWorktreeTool implements Tool<{slug: string; force: boolean}> {
   readonly name = 'exit_worktree';
   readonly description = '退出并清理 Worktree；存在未提交变更时默认拒绝，force=true 才会强制清理';

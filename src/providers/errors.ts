@@ -25,7 +25,7 @@ interface ErrorShape {
   name?: unknown;
 }
 
-/** [s01] 把 unknown 安全缩小成一个“可能含常见错误字段”的对象。 */
+/** 把 unknown 安全缩小成一个“可能含常见错误字段”的对象。 */
 function shape(error: unknown): ErrorShape {
   return typeof error === 'object' && error !== null ? error : {};
 }
@@ -35,7 +35,7 @@ export function isAbortError(error: unknown, signal?: AbortSignal): boolean {
   return signal?.aborted === true || candidate.name === 'AbortError' || candidate.code === 'ABORT_ERR';
 }
 
-/** [s01]
+/**
  * 把 SDK、HTTP 和网络层形态各异的错误归一化，供控制器和 UI 统一处理。
  * 错误文本在返回前还会脱敏，避免供应商把请求中的 API Key 回显出来。
  */
@@ -55,14 +55,14 @@ export function normalizeProviderError(error: unknown, profile: ProviderProfile)
   else if (statusCode !== undefined && statusCode >= 500) code = 'provider_error';
   else if (/(fetch|network|socket|connect|econn|timeout|dns)/i.test(lower)) code = 'network';
 
-  // [s01] 认证/参数/上下文错误需要用户修改输入或配置；限流、网络、5xx 才适合直接重试。
+  // 认证/参数/上下文错误需要用户修改输入或配置；限流、网络、5xx 才适合直接重试。
   const retryable = code === 'rate_limit' || code === 'network' || code === 'provider_error';
   const base = {code, message, retryable};
   return statusCode === undefined ? base : {...base, statusCode};
 }
 
 export function isAdaptiveThinkingUnsupported(error: unknown): boolean {
-  // [s01] 自动回退必须非常保守：仅明确的 HTTP 400 + adaptive 不支持才匹配。
+  // 自动回退必须非常保守：仅明确的 HTTP 400 + adaptive 不支持才匹配。
   const candidate = shape(error);
   const statusValue = candidate.status ?? candidate.statusCode;
   const message = typeof candidate.message === 'string' ? candidate.message : '';

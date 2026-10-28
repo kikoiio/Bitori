@@ -54,7 +54,7 @@ describe('Worktree', () => {
 
   it('变更保护、列表与删除', () => {
     const worktree = createAgentWorktree('cleanup', root);
-    // [s13] 创建后设置会写入 .bitori 与 .env.local，先确认不含对 HEAD 的实际改动。
+    // 创建后设置会写入 .bitori 与 .env.local，先确认不含对 HEAD 的实际改动。
     execFileSync('git', ['checkout', '--', '.'], {cwd: worktree.path});
     expect(gitStatus(worktree.path).split('\n').filter(line => !line.includes('.bitori/') && !line.includes('.env.local') && !line.includes('node_modules'))).toEqual([]);
     writeFileSync(join(worktree.path, 'README.md'), 'changed\n');

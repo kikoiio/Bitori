@@ -16,7 +16,7 @@ function messageId(value: unknown): JsonRpcId | null {
   return typeof value === 'string' || typeof value === 'number' ? value : null;
 }
 
-/** [s06] JSON-RPC Peer 只按 id 配对响应；乱序响应不会串到其他请求。 */
+/** JSON-RPC Peer 只按 id 配对响应；乱序响应不会串到其他请求。 */
 export class JsonRpcPeer {
   readonly #pending = new Map<JsonRpcId, PendingRequest>();
   #nextId = 1;
@@ -86,7 +86,7 @@ export class JsonRpcPeer {
       } else pending.resolve(value.result);
       return;
     }
-    // [s06] 本阶段不实现 sampling/resources 等反向能力；明确回复 method not found，避免 Server 悬挂。
+    // 不支持 sampling/resources 等反向能力；明确回复 method not found，避免 Server 悬挂。
     if (id !== null && typeof value.method === 'string') {
       await this.transport.send({jsonrpc: '2.0', id, error: {code: -32601, message: `Bitori 不支持 Server 请求：${value.method}`}});
     }

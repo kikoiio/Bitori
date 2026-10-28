@@ -1,6 +1,6 @@
 import type {PromptSection} from './builder.js';
 
-/** [s04]
+/**
  * 七个固定模块的中文正文，按优先级从前往后拼装。
  * 正文在同一会话内必须逐字节稳定：不得包含时间戳、随机值或逐轮变化的数据。
  * 优先级数字与 builder.ts 的 SECTION_PRIORITY 保持一致（此处写字面量以避免运行时循环导入）。

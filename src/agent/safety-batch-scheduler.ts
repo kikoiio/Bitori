@@ -14,7 +14,7 @@ export interface SchedulerInput {runId: string; sessionId: string; iterationId: 
 function interrupted(): ToolExecutionResult { return {status: 'interrupted', error: {code: 'interrupted', message: '工具执行已取消', retryable: false}}; }
 function status(result: ToolExecutionResult) { return result.status === 'success' ? 'succeeded' as const : result.status === 'timeout' ? 'timed_out' as const : result.status === 'interrupted' ? 'interrupted' as const : result.status === 'denied' ? 'skipped' as const : 'failed' as const; }
 
-/** [s03] 连续读取并发；每个副作用形成审批与执行屏障。 */
+/** 连续读取并发；每个副作用形成审批与执行屏障。 */
 export class SafetyBatchScheduler {
   readonly permissions: PermissionEngine | undefined;
   readonly #hooks: HookEngine | null;

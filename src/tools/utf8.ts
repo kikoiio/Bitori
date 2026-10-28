@@ -5,7 +5,7 @@ import type {ToolErrorCode} from './types.js';
 export class TextFileError extends Error {
   constructor(readonly code: Extract<ToolErrorCode, 'binary_file' | 'invalid_utf8'>, message: string) { super(message); }
 }
-/** [s02] fatal 解码拒绝替换字符；NUL 是本阶段明确的二进制信号。 */
+/** fatal 解码拒绝替换字符；NUL 是二进制信号。 */
 export function assertUtf8Text(data: Uint8Array): string {
   if (data.includes(0)) throw new TextFileError('binary_file', '文件包含 NUL 字节，不能作为文本读取');
   try { return new TextDecoder('utf-8', {fatal: true}).decode(data); }

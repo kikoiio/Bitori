@@ -5,7 +5,7 @@ profiles:
     base_url: https://api.anthropic.com
     api_key: ${ANTHROPIC_API_KEY}
     thinking: true
-    # [s07] 可选；缺省 anthropic=200000，openai*=128000。
+    # 可选；缺省 anthropic=200000，openai*=128000。
     context_window: 200000
 
   - name: claude-manual
@@ -30,7 +30,7 @@ profiles:
     base_url: https://example.com/v1
     api_key: ${COMPATIBLE_API_KEY}
 
-# [s06] 用户级 Server；项目可在 .bitori/config.yaml 用同名项完整覆盖。
+# 用户级 Server；项目可在 .bitori/config.yaml 用同名项完整覆盖。
 mcp_servers:
   local-files:
     transport: stdio

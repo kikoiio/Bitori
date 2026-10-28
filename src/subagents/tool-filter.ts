@@ -8,7 +8,7 @@ function normalize(names: readonly string[] | undefined): Set<string> {
   return new Set((names ?? []).map(name => name.toLowerCase()));
 }
 
-/** [s12] 全局禁用 → 角色黑名单 → 后台白名单 → 角色白名单，逐层收窄。 */
+/** 全局禁用 → 角色黑名单 → 后台白名单 → 角色白名单，逐层收窄。 */
 export function filterToolsForAgent(tools: readonly ToolDefinition[], definition: AgentDefinition, options: {background?: boolean} = {}): ToolDefinition[] {
   const disallowed = normalize(definition.disallowedTools);
   const allowed = normalize(definition.tools);

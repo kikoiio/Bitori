@@ -14,7 +14,7 @@ function asTool(value: unknown): McpToolDefinition {
   return {name: value.name, ...(typeof value.description === 'string' ? {description: value.description} : {}), inputSchema: value.inputSchema};
 }
 
-/** [s06] 单 Server 会话严格执行 initialize → initialized → tools/list → tools/call。 */
+/** 单 Server 会话严格执行 initialize → initialized → tools/list → tools/call。 */
 export class McpClient {
   readonly #peer: JsonRpcPeer;
   #initialized = false;

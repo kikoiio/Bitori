@@ -3,7 +3,7 @@ import {UsageError} from '../../shared/errors.js';
 import {SessionRepository} from '../../storage/repository.js';
 import type {CliOptions} from '../args.js';
 
-/** [s15] `bitori sessions …` 只读命令入口；返回进程退出码。 */
+/** `bitori sessions …` 只读命令入口；返回进程退出码。 */
 export async function runSessionsCommand(options: NonNullable<CliOptions['sessions']>, profileOption?: string): Promise<number> {
   const config = loadConfig();
   const profile = resolveProfile(config, profileOption);

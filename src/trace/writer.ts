@@ -11,7 +11,7 @@ const logger = getLogger('trace');
 const DEFAULT_QUEUE_LIMIT = 256;
 
 /**
- * [s15] 会话级 JSONL trace 写入器：有界队列串行追加，失败只丢弃并告警。
+ * 会话级 JSONL trace 写入器：有界队列串行追加，失败只丢弃并告警。
  * 每个会话一个 `<sessionId>.jsonl` 文件；恢复会话时续写同一文件。
  */
 export class TraceWriter {
@@ -29,7 +29,7 @@ export class TraceWriter {
     this.#queueLimit = queueLimit;
   }
 
-  /** [s15] 火后不理；调用方绝不等待写入，也不因写入失败受阻。 */
+  /** 火后不理；调用方绝不等待写入，也不因写入失败受阻。 */
   append(event: TraceEvent): void {
     const sessionId = event.sessionId;
     const pending = (this.#pending.get(sessionId) ?? 0) + 1;
@@ -49,7 +49,7 @@ export class TraceWriter {
       }
       this.#ensureDirectory();
       return appendFile(join(this.#directory, `${sessionId}.jsonl`), `${this.#redactor(serialized)}\n`, 'utf8').catch((error: unknown) => {
-        // [s15] 观察绝不干扰被观察者：磁盘故障只降级记录一次代表性错误。
+        // 观察绝不干扰被观察者：磁盘故障只降级记录一次代表性错误。
         logger.warn('trace 写入失败', {sessionId, error: error instanceof Error ? error.message : String(error)});
       });
     };
@@ -58,7 +58,7 @@ export class TraceWriter {
     this.#chains.set(sessionId, next);
   }
 
-  /** [s15] 等待指定会话（或全部）排队中的事件落盘；测试与关停使用。 */
+  /** 等待指定会话（或全部）排队中的事件落盘；测试与关停使用。 */
   async flush(sessionId?: string): Promise<void> {
     const targets = sessionId === undefined ? [...this.#chains.values()] : this.#chains.has(sessionId) ? [this.#chains.get(sessionId)!] : [];
     await Promise.all(targets);

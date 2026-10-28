@@ -11,7 +11,7 @@ import type {AgentRunRecord, BeginTurnResult, FinalMessageUpdate, Session, Store
 
 const logger = getLogger('storage');
 
-// [s01] Worker 入口收到数据库路径；下面两个 Row 接口保留 SQLite 的 snake_case 列名。
+// Worker 入口收到数据库路径；下面两个 Row 接口保留 SQLite 的 snake_case 列名。
 interface WorkerData {databasePath: string}
 interface SessionRow {id: string; profile_name: string; title: string; created_at: number; updated_at: number; agent_mode: Session['agentMode']; latest_plan_message_id: string | null}
 interface MessageRow {
@@ -27,14 +27,14 @@ if (parentPort === null) throw new Error('Storage Worker 必须在线程中运�
 const port = parentPort;
 const data = workerData as WorkerData;
 const database = new DatabaseSync(data.databasePath);
-// [s01] WAL 提升读写并发；外键保证关联；FULL 提升落盘可靠性；busy_timeout 避免短暂锁冲突立即失败。
+// WAL 提升读写并发；外键保证关联；FULL 提升落盘可靠性；busy_timeout 避免短暂锁冲突立即失败。
 database.exec('PRAGMA journal_mode = WAL');
 database.exec('PRAGMA foreign_keys = ON');
 database.exec('PRAGMA synchronous = FULL');
 database.exec('PRAGMA busy_timeout = 5000');
 let closed = false;
 
-/** [s01] 执行同步事务，并保证回调抛错时回滚。SQLite 被隔离在线程中，所以同步 API 不会卡住 TUI 主线程。 */
+/** 执行同步事务，并保证回调抛错时回滚。SQLite 被隔离在线程中，所以同步 API 不会卡住 TUI 主线程。 */
 function transaction<T>(callback: () => T): T {
   database.exec('BEGIN IMMEDIATE');
   try {
@@ -47,7 +47,7 @@ function transaction<T>(callback: () => T): T {
   }
 }
 
-/** [s01] 把数据库行的 snake_case 字段转换成应用层 camelCase 对象。 */
+/** 把数据库行的 snake_case 字段转换成应用层 camelCase 对象。 */
 function session(row: SessionRow): Session {
   return {id: row.id, profileName: row.profile_name, title: row.title, createdAt: row.created_at, updatedAt: row.updated_at, agentMode: row.agent_mode, latestPlanMessageId: row.latest_plan_message_id};
 }
@@ -61,8 +61,8 @@ function message(row: MessageRow): StoredMessage {
       const parsed: unknown = JSON.parse(row.provider_state);
       if (isProviderState(parsed)) providerState = parsed;
     } catch (error) {
-      // [s01] 损坏的可重放状态安全降级为普通文本。
-      // [s15] 降级发生时记录日志，便于发现持久化数据异常。
+      // 损坏的可重放状态安全降级为普通文本。
+      // 降级发生时记录日志，便于发现持久化数据异常。
       logger.debug('provider_state 反序列化失败，已降级为普通文本', {error: error instanceof Error ? error.message : String(error)});
     }
   }
@@ -122,7 +122,7 @@ function execute(operation: StorageOperation): unknown {
     case 'finalize_assistant_with_tool_batch': transaction(() => { finalizeMessage(operation.messageId, operation.update); insertToolBatch(operation.records); }); return null;
     case 'update_tool_call': { const record = operation.record; database.prepare(`UPDATE tool_calls SET approval_status=?, execution_status=?, result_json=?, updated_at=? WHERE id=?`).run(record.approvalStatus, record.executionStatus, record.result === null ? null : JSON.stringify(record.result), record.updatedAt, record.id); return null; }
     case 'begin_turn': {
-      // [s01] user 消息和空的 assistant 草稿必须原子创建，不能留下“半个对话轮次”。
+      // user 消息和空的 assistant 草稿必须原子创建，不能留下“半个对话轮次”。
       const begin = (): BeginTurnResult => transaction(() => {
         const timestamp = now();
         const userId = createId();
@@ -133,10 +133,10 @@ function execute(operation: StorageOperation): unknown {
           input_tokens, output_tokens, provider_state, created_at, updated_at
         ) VALUES (?, ?, ?, ?, '', ?, NULL, NULL, NULL, NULL, NULL, ?, ?)`);
         insert.run(userId, operation.sessionId, 'user', operation.text, 'completed', timestamp, timestamp);
-        // [s01] +1 保证同一毫秒创建的 assistant 在 user 之后排序。
+        // +1 保证同一毫秒创建的 assistant 在 user 之后排序。
         insert.run(assistantId, operation.sessionId, 'assistant', '', 'streaming', timestamp + 1, timestamp + 1);
         const title = operation.text.trim().replace(/\s+/g, ' ').slice(0, 60) || '新会话';
-        // [s01] 只有会话首轮用用户输入生成标题，以后发送消息只更新时间。
+        // 只有会话首轮用用户输入生成标题，以后发送消息只更新时间。
         database.prepare(`UPDATE sessions SET updated_at = ?, title = CASE WHEN ? = 0 THEN ? ELSE title END WHERE id = ?`)
           .run(timestamp, count, title, operation.sessionId);
         const userRow = database.prepare('SELECT * FROM messages WHERE id = ?').get(userId) as unknown as MessageRow;
@@ -153,7 +153,7 @@ function execute(operation: StorageOperation): unknown {
       return message(database.prepare('SELECT * FROM messages WHERE id = ?').get(id) as unknown as MessageRow);
     }
     case 'checkpoint_assistant':
-      // [s01] 流式过程中只更新仍处于 streaming 的草稿，终态消息不会被迟到的 checkpoint 覆盖。
+      // 流式过程中只更新仍处于 streaming 的草稿，终态消息不会被迟到的 checkpoint 覆盖。
       database.prepare(`UPDATE messages SET content = ?, thinking = ?, updated_at = ? WHERE id = ? AND status = 'streaming'`)
         .run(operation.content, operation.thinking, now(), operation.messageId);
       return null;
@@ -201,7 +201,7 @@ function execute(operation: StorageOperation): unknown {
 
 function assertNever(value: never): never { throw new Error(`未知存储操作：${JSON.stringify(value)}`); }
 
-// [s01] Worker 是一个小型 RPC 服务：接收命令，执行同步 SQLite 操作，再按 requestId 回传结果。
+// Worker 是一个小型 RPC 服务：接收命令，执行同步 SQLite 操作，再按 requestId 回传结果。
 port.on('message', (request: StorageRequest) => {
   let response: StorageResponse;
   try {
@@ -210,6 +210,6 @@ port.on('message', (request: StorageRequest) => {
     response = {requestId: request.requestId, error: serializeWorkerError(error)};
   }
   port.postMessage(response);
-  // [s01] close 响应先发回主线程，再关闭 MessagePort，让客户端的 close Promise 能正常完成。
+  // close 响应先发回主线程，再关闭 MessagePort，让客户端的 close Promise 能正常完成。
   if (request.operation.type === 'close') port.close();
 });

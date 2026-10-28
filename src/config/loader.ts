@@ -13,7 +13,7 @@ export interface ConfigPaths {
   config: string;
   environment: string;
   database: string;
-  /** [s15] 可观察性数据的固定落点：日志、请求级 trace 与使用统计。 */
+  /** 可观察性数据的固定落点：日志、请求级 trace 与使用统计。 */
   logs: string;
   traces: string;
   usage: string;
@@ -21,7 +21,7 @@ export interface ConfigPaths {
 
 const environmentInterpolation = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
-/** [s01] 所有配置路径都固定在用户主目录的 `.bitori` 中，不受当前工作目录影响。 */
+/** 所有配置路径都固定在用户主目录的 `.bitori` 中，不受当前工作目录影响。 */
 export function configPaths(homeDirectory = homedir()): ConfigPaths {
   const directory = join(homeDirectory, '.bitori');
   return {
@@ -52,7 +52,7 @@ function readProjectConfig(path: string): ReturnType<typeof parseProjectConfig> 
   }
 }
 
-/** [s06] 对 MCP 的 env/header 做可嵌入式 ${VAR} 展开，缺失变量必须在启动时显错。 */
+/** 对 MCP 的 env/header 做可嵌入式 ${VAR} 展开，缺失变量必须在启动时显错。 */
 function expand(value: string, environment: NodeJS.ProcessEnv, location: string): string {
   return value.replace(environmentInterpolation, (_whole, name: string) => {
     const resolved = environment[name];
@@ -90,16 +90,16 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
   const paths = configPaths(homeDirectory);
   const yamlText = readRequired(paths.config, '配置文件');
   const environmentText = readRequired(paths.environment, '密钥文件');
-  // [s06] 实际进程环境优先于 .env，便于 CI/终端临时覆盖 MCP 凭据。
+  // 实际进程环境优先于 .env，便于 CI/终端临时覆盖 MCP 凭据。
   const environment: NodeJS.ProcessEnv = {...parseEnv(environmentText), ...runtimeEnvironment};
 
   try {
-    // [s01] YAML 解析只负责“语法”，parseConfig 再负责“结构和业务规则”。
+    // YAML 解析只负责“语法”，parseConfig 再负责“结构和业务规则”。
     const parsed = parseConfig(parseYaml(yamlText));
     const projectPath = join(workspaceRoot, '.bitori', 'config.yaml');
     const project = readProjectConfig(projectPath);
     const profiles: ProviderProfile[] = parsed.profiles.map(source => {
-      // [s01] `${NAME}` 去掉前后两个字符，得到 .env 中真正的变量名 NAME。
+      // `${NAME}` 去掉前后两个字符，得到 .env 中真正的变量名 NAME。
       const variable = source.api_key.slice(2, -1);
       const apiKey = environment[variable];
       // 缺失的 key 先置空；真正使用该 profile 时 resolveProfileWithApiKey 会显错。
@@ -113,12 +113,12 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
         contextWindow: effectiveContextWindow(source.protocol, source.context_window),
       };
     });
-    // [s06] map 按 user → project 浅合并；同名 Server 由项目级完整覆盖。
+    // map 按 user → project 浅合并；同名 Server 由项目级完整覆盖。
     const sources = {...(parsed.mcp_servers ?? {}), ...(project.mcp_servers ?? {})};
     const mcpServers = Object.fromEntries(Object.entries(sources).map(([name, source]) => [name, resolveMcpServer(name, source, environment)]));
     return {profiles, mcpServers, models: parsed.models ?? {}, logging: parsed.logging ?? {}, trace: parsed.trace ?? {}};
   } catch (error) {
-    // [s01] 已经是面向用户的配置错误就原样保留；Zod 错误则合并所有校验消息。
+    // 已经是面向用户的配置错误就原样保留；Zod 错误则合并所有校验消息。
     if (error instanceof ConfigurationError) throw error;
     if (error instanceof ZodError) {
       throw new ConfigurationError(`配置无效：${error.issues.map(issue => issue.message).join('；')}`);
@@ -127,7 +127,7 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
   }
 }
 
-/** [s15] 读取 `.env` 的全部键值作为脱敏字典来源；只用于替换，不回显。 */
+/** 读取 `.env` 的全部键值作为脱敏字典来源；只用于替换，不回显。 */
 export function readEnvironmentSecrets(homeDirectory = homedir()): string[] {
   try {
     const text = readFileSync(configPaths(homeDirectory).environment, 'utf8');
@@ -137,7 +137,7 @@ export function readEnvironmentSecrets(homeDirectory = homedir()): string[] {
   }
 }
 
-/** [s15] 在解析 profile 的同时收集全部已解析密钥值，供 Redactor 与 trace 使用。 */
+/** 在解析 profile 的同时收集全部已解析密钥值，供 Redactor 与 trace 使用。 */
 export function collectSecretValues(config: AppConfig, homeDirectory = homedir()): string[] {
   return [...readEnvironmentSecrets(homeDirectory), ...config.profiles.map(profile => profile.apiKey).filter(key => key.length > 0)];
 }
@@ -148,8 +148,8 @@ export function resolveProfile(config: AppConfig, requestedName?: string): Provi
     if (profile === undefined) throw new ConfigurationError(`找不到 profile：${requestedName}`);
     return profile;
   }
-  // [s01] 多 profile 且用户未指定时返回 null，表示应该进入 profile 选择界面。
-  // [s01] `!` 告诉 TS：长度已经确认是 1，所以第 0 项一定存在。
+  // 多 profile 且用户未指定时返回 null，表示应该进入 profile 选择界面。
+  // `!` 告诉 TS：长度已经确认是 1，所以第 0 项一定存在。
   return config.profiles.length === 1 ? config.profiles[0]! : null;
 }
 

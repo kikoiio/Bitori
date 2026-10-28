@@ -4,7 +4,7 @@ import {aggregateUsage, readUsageRecords} from '../../usage/stats.js';
 import {tailJsonlFile} from './tail-file.js';
 import type {CliOptions} from '../args.js';
 
-/** [s15] `bitori usage …` 只读命令入口；返回进程退出码。 */
+/** `bitori usage …` 只读命令入口；返回进程退出码。 */
 export function runUsageCommand(options: NonNullable<CliOptions['usage']>): number {
   const path = join(configPaths().usage, 'skills.jsonl');
   if (options.action === 'stats') {

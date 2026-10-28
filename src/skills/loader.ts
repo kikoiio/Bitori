@@ -6,7 +6,7 @@ import type {Skill, SkillCatalogEntry} from './types.js';
 
 const logger = getLogger('skills');
 
-/** [s10] 启动期只保留轻量目录；get 时重读磁盘实现热更新，失败回退缓存。 */
+/** 启动期只保留轻量目录；get 时重读磁盘实现热更新，失败回退缓存。 */
 export class SkillLoader {
   readonly #workDir: string;
   readonly #homeDir: string;
@@ -26,8 +26,8 @@ export class SkillLoader {
           const parsed = parseSkillFile(path);
           this.#skills.set(parsed.meta.name, {meta: parsed.meta, body: parsed.body, sourcePath: path, source});
         } catch (error) {
-          // [s10] 单个坏 Skill 不阻断目录扫描。
-          // [s15] 坏文件以 debug 日志留痕，便于发现失效技能。
+          // 单个坏 Skill 不阻断目录扫描。
+          // 坏文件以 debug 日志留痕，便于发现失效技能。
           logger.debug('Skill 文件解析失败，已跳过', {path, error: error instanceof Error ? error.message : String(error)});
         }
       }
@@ -56,7 +56,7 @@ export class SkillLoader {
       const parsed = parseSkillFile(cached.sourcePath);
       return {...cached, meta: parsed.meta, body: parsed.body};
     } catch (error) {
-      // [s15] 热更新重读失败保留旧缓存，同时留痕。
+      // 热更新重读失败保留旧缓存，同时留痕。
       logger.debug('Skill 热更新重读失败，回退缓存', {path: cached.sourcePath, error: error instanceof Error ? error.message : String(error)});
       return cached;
     }

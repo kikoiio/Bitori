@@ -7,7 +7,7 @@ const createSchema = z.object({name: z.string().trim().min(1), description: z.st
 const sendSchema = z.object({team: z.string(), from: z.string(), to: z.string(), text: z.string().min(1)}).strict();
 const receiveSchema = z.object({team: z.string(), member: z.string()}).strict();
 
-/** [s14] 团队工具走持久化文件邮箱，任何成员实例都能用游标恢复读取。 */
+/** 团队工具走持久化文件邮箱，任何成员实例都能用游标恢复读取。 */
 export class TeamTools implements Tool<Record<string, never>> {
   readonly name = 'team';
   readonly description = '团队协作工具：创建团队、发送消息、读取成员邮箱';

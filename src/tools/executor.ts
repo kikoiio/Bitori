@@ -5,13 +5,13 @@ import type {PermissionEngine} from './permission-engine.js';
 
 export interface ToolExecutorOptions {workspaceRoot: string; limits: Record<'read' | 'write' | 'command', ToolLimits>; permissions?: PermissionEngine}
 
-/** [s02] 每次执行都注入固定限制并将所有路径收敛成一个结构化终态。 */
+/** 每次执行都注入固定限制并将所有路径收敛成一个结构化终态。 */
 export class ToolExecutor {
   constructor(readonly registry: ToolRegistry, readonly options: ToolExecutorOptions) {}
   async execute(call: ToolCall, signal: AbortSignal): Promise<ToolExecutionResult> {
     const tool = this.registry.get(call.name);
     if (!tool) return {status: 'error', error: {code: 'unknown_tool', message: `未知工具：${call.name}`, retryable: false}};
-    // [s05] 直接调用执行器也必须经过黑名单与路径沙箱，不能仅依赖 Agent 调度器。
+    // 直接调用执行器也必须经过黑名单与路径沙箱，不能仅依赖 Agent 调度器。
     if (this.options.permissions) {
       try {
         const check = await this.options.permissions.evaluate(call);

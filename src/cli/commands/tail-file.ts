@@ -3,7 +3,7 @@ import {getLogger} from '../../shared/logger.js';
 
 const logger = getLogger('cli-tail');
 
-/** [s15] JSONL 追随输出：每秒轮询增量、只打印完整行；Ctrl+C 退出。 */
+/** JSONL 追随输出：每秒轮询增量、只打印完整行；Ctrl+C 退出。 */
 export function tailJsonlFile(path: string): void {
   if (!existsSync(path)) process.stdout.write(`（尚无文件，等待写入：${path}）\n`);
   let offset = existsSync(path) ? statSync(path).size : 0;

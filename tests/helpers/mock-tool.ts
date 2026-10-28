@@ -1,6 +1,6 @@
 import type {JsonObject, Tool, ToolContext, ToolEffect, ToolExecutionResult} from '../../src/tools/types.js';
 
-/** [s02] 可控制延迟、异常和结果的工具替身。 */
+/** 可控制延迟、异常和结果的工具替身。 */
 export class MockTool implements Tool {
   readonly inputSchema = {type: 'object', additionalProperties: true};
   calls = 0;

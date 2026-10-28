@@ -41,7 +41,7 @@ interface ControllerToolSystem {registry: ToolRegistry; executor: ToolExecutor; 
 interface ControllerToolSystemWithServices extends ControllerToolSystem {services?: AgentServices; memoryClient?: LLMClient}
 interface ActiveRequest {abortController: AbortController; promise: Promise<void>}
 
-/** [s03] 恢复会话时，状态栏继续显示最近一次 Agent 回合的累计用量和停止原因。 */
+/** 恢复会话时，状态栏继续显示最近一次 Agent 回合的累计用量和停止原因。 */
 function restoredRunState(messages: readonly StoredMessage[], runs: readonly AgentRunRecord[]): Pick<AppState, 'latestUsage' | 'runUsage' | 'stopReason'> {
   const latestRun = runs.at(-1);
   const latestUsage = messages.findLast(message => message.usage !== null)?.usage ?? null;
@@ -52,14 +52,14 @@ function restoredRunState(messages: readonly StoredMessage[], runs: readonly Age
   };
 }
 
-/** [s04] 统计会话 run 记录尾部连续 plan 模式 run 数；调用前本次 run 已入库，计数即本轮 Plan 轮次，/do 产生的 execute run 天然打断连续序列。 */
+/** 统计会话 run 记录尾部连续 plan 模式 run 数；调用前本次 run 已入库，计数即本轮 Plan 轮次，/do 产生的 execute run 天然打断连续序列。 */
 function trailingPlanRuns(runs: readonly AgentRunRecord[]): number {
   let count = 0;
   for (let index = runs.length - 1; index >= 0 && runs[index]!.mode === 'plan'; index--) count++;
   return count;
 }
 
-/** [s03] TUI 入口只负责命令、会话、取消和 AgentEvent 投影。 */
+/** TUI 入口只负责命令、会话、取消和 AgentEvent 投影。 */
 export class ChatController {
   readonly #repository: SessionRepositoryContract;
   readonly #listeners = new Set<StateListener>();
@@ -67,7 +67,7 @@ export class ChatController {
   readonly #client: LLMClient;
   readonly #runner: AgentRunner;
   #profile: ProviderProfile | null = null;
-  /** [s04] 会话激活时构建并冻结的系统提示；无 profile 时为 null。 */
+  /** 会话激活时构建并冻结的系统提示；无 profile 时为 null。 */
   #systemBlocks: PromptBlock[] | null = null;
   #state = initialAppState();
   #active: ActiveRequest | null = null;
@@ -77,17 +77,17 @@ export class ChatController {
   readonly #services: AgentServices | null;
   readonly #memoryClient: LLMClient | null;
   readonly #maxIterations: number;
-  // [s15] trace 写入器与每 profile 的投影 tap；组合根未注入观测目录时保持 null，测试因此不写用户主目录。
+  // trace 写入器与每 profile 的投影 tap；组合根未注入观测目录时保持 null，测试因此不写用户主目录。
   #traceWriter: TraceWriter | null = null;
   #tap: AgentTraceTap | null = null;
-  // [s15] 技能与命令使用统计（JSONL）；可丢弃数据。
+  // 技能与命令使用统计（JSONL）；可丢弃数据。
   readonly #usage: UsageRecorder | null;
-  // [s15] 本会话已激活技能（面板展示与统计双用）。
+  // 本会话已激活技能（面板展示与统计双用）。
   readonly #activeSkills = new Set<string>();
 
   constructor(client: LLMClient, repository: SessionRepositoryContract, tools: ControllerToolSystem | null = null, runner?: AgentRunner, options: {maxIterations?: number; observability?: {traceDirectory: string; usagePath: string}} = {}) {
     this.#repository = repository; this.#client = client;
-    // [s15] 观测面只在组合根显式给出目录时启用；缺省完全关闭，测试不污染用户主目录。
+    // 观测面只在组合根显式给出目录时启用；缺省完全关闭，测试不污染用户主目录。
     if (options.observability !== undefined) {
       this.#traceWriter = new TraceWriter(options.observability.traceDirectory);
       this.#usage = new UsageRecorder(options.observability.usagePath);
@@ -108,7 +108,7 @@ export class ChatController {
   subscribe(listener: StateListener): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
   async initialize(profile: ProviderProfile): Promise<void> {
     if (this.#profile) return; this.#profile = profile; await this.#repository.initialize();
-    // [s15] profile 就绪后创建 trace tap；真实路径沙箱与 trace 共用工作目录事实。
+    // profile 就绪后创建 trace tap；真实路径沙箱与 trace 共用工作目录事实。
     if (this.#traceWriter !== null && this.#usage !== null) {
       const usageRecorder = this.#usage;
       this.#tap = new AgentTraceTap(this.#traceWriter, {profileName: profile.name, model: profile.model, protocol: profile.protocol, workspaceRoot: process.cwd(), onSkillActivated: (name, sessionId) => {
@@ -131,7 +131,7 @@ export class ChatController {
     if (legacy !== null && typeof legacy === 'object' && legacy.type === 'unknown') {
       const known = this.#commands.find(text.trim().slice(1).split(/\s+/)[0] ?? '');
       if (!known) { this.#error(`未知命令：${text.trim()}。输入 /help 查看可用命令`); return; }
-      // [s15] 命令使用统计与 trace 事实；prompt 与 local 命令都算一次使用。
+      // 命令使用统计与 trace 事实；prompt 与 local 命令都算一次使用。
       this.#usage?.record({kind: 'command', name: known.name, source: 'user', sessionId: this.#state.session?.id ?? '', ...(this.#profile === null ? {} : {profileName: this.#profile.name})});
       if (this.#state.session) this.#tap?.fact(this.#state.session.id, 'command_executed', {name: known.name});
       if (known.type === 'prompt') { await this.#startRun(text, known.handler({workDir: process.cwd(), args: text.trim().slice(1).split(' ').slice(1).join(' ')}), 'message'); return; }
@@ -148,7 +148,7 @@ export class ChatController {
     if (legacy === 'compact') { await this.#compactConversation(); return; }
     await this.#startRun(text, text, 'message');
   }
-  /** [s07] 空闲时手动压缩；不发起普通对话请求，只额外调用一次摘要模型。 */
+  /** 空闲时手动压缩；不发起普通对话请求，只额外调用一次摘要模型。 */
   async #compactConversation(): Promise<void> {
     const session = this.#state.session; if (!session || !this.#profile) return;
     if (this.#active) { this.#error('生成期间不能手动压缩上下文'); return; }
@@ -164,11 +164,11 @@ export class ChatController {
   async #startRun(displayText: string, instruction: string, trigger: 'message' | 'do'): Promise<void> {
     const session = this.#state.session; if (!session) return; const runId = createId();
     const begun = await this.#repository.beginAgentRun({runId, sessionId: session.id, displayText, mode: this.#state.agentMode});
-    // [s15] run 元信息入 trace：模型/协议/模式/触发方式。
+    // run 元信息入 trace：模型/协议/模式/触发方式。
     this.#tap?.runHeader(session.id, runId, this.#state.agentMode, trigger);
     this.#publish({...this.#state, messages: [...this.#state.messages, begun.userMessage], requestStatus: 'streaming', latestUsage: null, runUsage: {inputTokens: 0, outputTokens: 0}, visibleError: null});
     const conversation = await this.#repository.getConversation(session.id); if (!conversation) throw new Error('Agent 回合创建后无法恢复会话');
-    // [s04] Plan 轮次由会话 run 记录推导（本次 run 已入库）；reminders 只由模式与轮次决定，请求级注入、不持久化。
+    // Plan 轮次由会话 run 记录推导（本次 run 已入库）；reminders 只由模式与轮次决定，请求级注入、不持久化。
     const reminders = buildReminders(this.#state.agentMode, this.#state.agentMode === 'plan' ? trailingPlanRuns(conversation.agentRuns) : 0);
     const abortController = new AbortController(); const active: ActiveRequest = {abortController, promise: Promise.resolve()}; this.#active = active;
     active.promise = this.#consume(runId, instruction, trigger, AgentContext.fromConversation(conversation), abortController.signal, reminders); await active.promise;
@@ -180,15 +180,15 @@ export class ChatController {
       while (true) {
         const step = await generator.next();
         if (step.done) break;
-        // [s15] trace 订阅者同步火后不理，不进入持久化屏障。
+        // trace 订阅者同步火后不理，不进入持久化屏障。
         this.#tap?.record(step.value);
         await projector.project(step.value);
       }
       await projector.flush(); const restored = await this.#repository.getSession(session.id); if (restored) this.#publish({...this.#state, session: restored, agentMode: restored.agentMode});
-      // [s08] 回合自然停止后异步提取记忆；提取失败不影响本轮结果。
+      // 回合自然停止后异步提取记忆；提取失败不影响本轮结果。
       if (this.#services && this.#profile && this.#memoryClient) {
         const dialogue = [...this.#state.messages].slice(-20).map(message => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`).join('\n');
-        // [s15] 记忆提取失败降级为日志，不再完全静默。
+        // 记忆提取失败降级为日志，不再完全静默。
         void this.#services.memoryExtractor(this.#memoryClient).extract(dialogue).catch((error: unknown) => { logger.warn('记忆提取失败', {error: errorMessage(error)}); });
       }
     } catch (error) { if (!signal.aborted) this.#publish({...this.#state, requestStatus: 'failed', activeRunId: null, visibleError: error instanceof Error ? error.message : String(error)}); }
@@ -201,7 +201,7 @@ export class ChatController {
   async listSessions(): Promise<Session[]> { return this.#profile ? this.#repository.listSessions(this.#profile.name) : []; }
   async switchSession(sessionId: string): Promise<void> { if (!this.#canChangeSession() || !this.#profile) return; const session = await this.#repository.getSession(sessionId); if (!session || session.profileName !== this.#profile.name) { this.#error('该会话不属于当前 profile'); return; } this.#rebuildSystemPrompt(); const conversation = await this.#repository.getConversation(session.id); this.#tap?.fact(session.id, 'session_switched', {profileName: this.#profile.name}); await this.#publishSession(session, conversation?.messages ?? await this.#repository.getMessages(session.id), conversation?.toolCalls ?? [], conversation?.agentRuns ?? []); }
   setScreen(screen: AppState['screen']): void { this.#publish({...this.#state, screen}); }
-  /** [s15] 调试面板开关；面板内容在渲染时通过 debugEntries/activeSkills 实时读取。 */
+  /** 调试面板开关；面板内容在渲染时通过 debugEntries/activeSkills 实时读取。 */
   toggleDebugPanel(): void { this.#publish({...this.#state, debugOpen: !this.#state.debugOpen}); }
   debugEntries(limit = 30): DebugEntry[] { return this.#tap?.recentDebugEntries(limit) ?? []; }
   activeSkills(): string[] { return [...this.#activeSkills]; }
@@ -210,7 +210,7 @@ export class ChatController {
   shutdown(): Promise<void> { if (this.#shutdownPromise) return this.#shutdownPromise; this.#shutdownPromise = (async () => { this.#closed = true; if (this.#active) await this.cancelActiveRequest(); await this.#services?.hooks.fire('shutdown', {event: 'shutdown'}); await this.#tap?.flush(); await this.#repository.close(); })(); return this.#shutdownPromise; }
   async #setMode(mode: 'plan' | 'execute'): Promise<void> { const session = this.#state.session; if (!session) return; const updated = await this.#repository.setSessionMode(session.id, mode); this.#tap?.fact(session.id, 'mode_switch', {mode}); this.#publish({...this.#state, session: updated, agentMode: mode, visibleError: null}); }
   #setPermissionTier(tier: PermissionTier): void { if (!this.#tools.permissions) { this.#error('当前工具系统未启用权限引擎'); return; } this.#tools.permissions.setTier(tier); this.#publish({...this.#state, permissionTier: tier, visibleError: null}); }
-  /** [s04] 会话激活时采集环境并冻结系统提示；同一会话内逐字节稳定，保证 Anthropic 可缓存前缀不被破坏。 */
+  /** 会话激活时采集环境并冻结系统提示；同一会话内逐字节稳定，保证 Anthropic 可缓存前缀不被破坏。 */
   #rebuildSystemPrompt(): void {
     if (!this.#profile) { this.#systemBlocks = null; return; }
     const optional = [];

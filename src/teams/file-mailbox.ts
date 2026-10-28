@@ -36,7 +36,7 @@ export function withLock<T>(filePath: string, operation: () => T): T {
   finally { releaseLock(lockFile); }
 }
 
-/** [s14] JSONL 邮箱按行持久化；read 游标独立保存，新实例能继续消费未读消息。 */
+/** JSONL 邮箱按行持久化；read 游标独立保存，新实例能继续消费未读消息。 */
 export class FileMailbox {
   readonly #filePath: string;
   readonly #readStatePath: string;

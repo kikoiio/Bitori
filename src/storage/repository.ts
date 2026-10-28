@@ -6,7 +6,7 @@ import {StorageWorkerClient} from './worker-client.js';
 import type {BeginTurnResult, FinalMessageUpdate, Session, SessionRepositoryContract, StoredConversation, StoredMessage, ToolCallRecord, AgentRunRecord} from './types.js';
 import type {AgentMode, AgentRunResult} from '../agent/types.js';
 
-/** [s01]
+/**
  * 面向业务层的仓储门面。
  * 它把易用的具体方法翻译为 Worker 消息，并在这里集中做数据库目录创建。
  */
@@ -18,7 +18,7 @@ export class SessionRepository implements SessionRepositoryContract {
     this.#client = new StorageWorkerClient(databasePath, workerUrl);
   }
 
-  // [s01] 下列方法虽然大多只是转发，但保住了“控制器不认识 Worker 协议”的架构边界。
+  // 下列方法虽然大多只是转发，但保住了“控制器不认识 Worker 协议”的架构边界。
   public async initialize(): Promise<void> { await this.#client.request({type: 'initialize'}); }
   public async findLatestSession(profileName: string): Promise<Session | null> {
     return this.#client.request({type: 'find_latest_session', profileName}) as Promise<Session | null>;
@@ -60,6 +60,6 @@ export class SessionRepository implements SessionRepositoryContract {
 }
 
 export function asStorageError(error: unknown): StorageError {
-  // [s01] 保留已经标准化的 StorageError，其余异常统一包装并通过 cause 保留原错误。
+  // 保留已经标准化的 StorageError，其余异常统一包装并通过 cause 保留原错误。
   return error instanceof StorageError ? error : new StorageError('本地会话存储操作失败', {cause: error});
 }

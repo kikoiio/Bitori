@@ -8,7 +8,7 @@ function isInside(root: string, candidate: string): boolean {
   const rel = relative(root.toLowerCase(), candidate.toLowerCase());
   return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
 }
-/** [s02] 所有文件工具共用真实路径边界，避免规范化及链接逃逸。 */
+/** 所有文件工具共用真实路径边界，避免规范化及链接逃逸。 */
 export class WorkspacePaths {
   private constructor(readonly root: string) {}
   static async create(root: string): Promise<WorkspacePaths> { return new WorkspacePaths(await realpath(root)); }
@@ -19,7 +19,7 @@ export class WorkspacePaths {
     if (!isInside(this.root, candidate)) throw new WorkspacePathError('path_outside_workspace', '路径位于工作区之外');
     return candidate;
   }
-  /** [s05] 权限管线校验 glob 等尚未落到具体文件的相对路径表达式。 */
+  /** 权限管线校验 glob 等尚未落到具体文件的相对路径表达式。 */
   validateRelative(relativePath: string): void { this.#syntactic(relativePath); }
   async existingFile(relativePath: string): Promise<string> {
     let actual: string;

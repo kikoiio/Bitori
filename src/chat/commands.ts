@@ -2,7 +2,7 @@ import type {PermissionTier} from '../tools/permission-engine.js';
 
 export type ChatCommand = 'plan' | 'do' | 'compact' | {type: 'permission'; tier: PermissionTier} | {type: 'unknown'; text: string} | null;
 
-/** [s03] 仅精确的小写命令会改变会话模式。 */
+/** 仅精确的小写命令会改变会话模式。 */
 export function parseChatCommand(text: string): ChatCommand {
   const normalized = text.trim();
   if (normalized === '/plan') return 'plan';

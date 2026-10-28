@@ -10,7 +10,7 @@ function sseData(text: string): string[] {
   return events.map(event => event.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n')).filter(Boolean);
 }
 
-/** [s06] Streamable HTTP 同时接受普通 JSON 响应与 POST 返回的 SSE 消息流。 */
+/** Streamable HTTP 同时接受普通 JSON 响应与 POST 返回的 SSE 消息流。 */
 export class StreamableHttpMcpTransport implements McpTransport {
   #onMessage: ((message: unknown) => void) | null = null;
   #sessionId: string | null = null;
@@ -30,7 +30,7 @@ export class StreamableHttpMcpTransport implements McpTransport {
   async send(message: JsonRpcMessage, signal?: AbortSignal): Promise<void> {
     if (this.#closed) throw new McpProtocolError('MCP HTTP 连接已经关闭');
     const headers = new Headers(this.customHeaders);
-    // [s06] 协议管理的 header 不允许被静态配置伪造或覆盖。
+    // 协议管理的 header 不允许被静态配置伪造或覆盖。
     headers.delete('Mcp-Session-Id');
     headers.delete('MCP-Protocol-Version');
     headers.set('Content-Type', 'application/json');
@@ -56,8 +56,8 @@ export class StreamableHttpMcpTransport implements McpTransport {
     const headers = new Headers(this.customHeaders);
     headers.set('Mcp-Session-Id', this.#sessionId);
     headers.set('MCP-Protocol-Version', this.#protocolVersion ?? MCP_PROTOCOL_VERSION);
-    // [s06] 关闭阶段不因远端不可达阻塞应用退出。
-    // [s15] 关闭失败降级为日志，会话资源泄漏可被观察。
+    // 关闭阶段不因远端不可达阻塞应用退出。
+    // 关闭失败降级为日志，会话资源泄漏可被观察。
     try { await this.fetcher(this.url, {method: 'DELETE', headers}); }
     catch (error) { logger.debug('MCP HTTP 会话关闭失败', {url: this.url, error: errorMessage(error)}); }
   }

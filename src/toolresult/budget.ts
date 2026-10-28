@@ -28,7 +28,7 @@ export function writeSpill(workDir: string, toolUseId: string, content: string):
   return path;
 }
 
-/** [s07] 预览替换体固定模板；同一输入永远生成同一输出，避免破坏 prompt cache。 */
+/** 预览替换体固定模板；同一输入永远生成同一输出，避免破坏 prompt cache。 */
 export function buildSpillPreview(content: string, spillPath: string): string {
   const bytes = byteLength(content);
   const preview = Buffer.from(content, 'utf8').subarray(0, PREVIEW_BYTES).toString('utf8');
@@ -83,7 +83,7 @@ function replaceResult(
     state.record(result.callId, original, replacement);
     return withContent(result, replacement);
   } catch {
-    // [s07] 磁盘失败只放弃本次替换，不阻断对话；该 id 未入账，下轮还能重试。
+    // 磁盘失败只放弃本次替换，不阻断对话；该 id 未入账，下轮还能重试。
     return result;
   }
 }
@@ -111,7 +111,7 @@ function aggregateReplace(
   return next;
 }
 
-/** [s07] 请求前轻量预算：单个超大结果落盘、单轮聚合超标按大小落盘。 */
+/** 请求前轻量预算：单个超大结果落盘、单轮聚合超标按大小落盘。 */
 export function applyToolResultBudget(
   items: readonly ModelContextItem[],
   workDir: string,
@@ -125,7 +125,7 @@ export function applyToolResultBudget(
   return snipStaleToolResults(normalized);
 }
 
-/** [s07] 旧轮次的中小结果不落盘，只在请求上下文中替换成稳定占位符。 */
+/** 旧轮次的中小结果不落盘，只在请求上下文中替换成稳定占位符。 */
 export function snipStaleToolResults(items: readonly ModelContextItem[]): ModelContextItem[] {
   const turns = items.filter(item => item.type === 'assistant_iteration' && item.toolCalls.length === 0).length;
   if (turns <= KEEP_RECENT_TURNS) return [...items];

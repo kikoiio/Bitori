@@ -16,7 +16,7 @@ export class ActiveSkills {
   }
 }
 
-/** [s10] inline 返回主对话 prompt；fork 的独立执行由 AgentRunner 派生会话后回流摘要。 */
+/** inline 返回主对话 prompt；fork 的独立执行由 AgentRunner 派生会话后回流摘要。 */
 export class SkillExecutor {
   constructor(private readonly active: ActiveSkills) {}
 

@@ -59,7 +59,7 @@ describe('Agent 工具回合', () => {
   }, 20_000);
 
   it('连续工具回合的内部 ID 重复时仍能持久化（回归：UNIQUE 约束崩溃）', async () => {
-    // [s02] 真实供应商每条流的 internalId 都从 0 重新开始；TwoPhaseClient 每回合都发同一个 'call-1' 正好复现。
+    // 真实供应商每条流的 internalId 都从 0 重新开始；TwoPhaseClient 每回合都发同一个 'call-1' 正好复现。
     const root = mkdtempSync(join(tmpdir(), 'bitori-tool-turn-')); roots.push(root); writeFileSync(join(root, 'note.txt'), '中文内容', 'utf8');
     const client = new TwoPhaseClient(); const repository = new SessionRepository(join(root, 'db.sqlite'));
     const controller = new ChatController(client, repository, createToolSystem(root));

@@ -1,4 +1,4 @@
-/** [s03] Agent Loop、会话模式和逐迭代关联的持久化结构。 */
+/** Agent Loop、会话模式和逐迭代关联的持久化结构。 */
 export const agentLoopMigration = {version: 3, sql: `
   ALTER TABLE sessions ADD COLUMN agent_mode TEXT NOT NULL DEFAULT 'execute' CHECK(agent_mode IN ('plan','execute'));
   ALTER TABLE sessions ADD COLUMN latest_plan_message_id TEXT NULL REFERENCES messages(id);

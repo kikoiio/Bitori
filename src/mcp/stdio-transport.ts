@@ -7,7 +7,7 @@ import type {JsonRpcMessage, McpTransport} from './types.js';
 
 export interface StdioTransportOptions {command: string; args: string[]; env: Record<string, string>; cwd: string}
 
-/** [s06] stdio 每行恰好一条 UTF-8 JSON-RPC 消息，stderr 仅被消费而不参与协议。 */
+/** stdio 每行恰好一条 UTF-8 JSON-RPC 消息，stderr 仅被消费而不参与协议。 */
 export class StdioMcpTransport implements McpTransport {
   #child: ChildProcessWithoutNullStreams | null = null;
   #closePromise: Promise<void> | null = null;
@@ -22,7 +22,7 @@ export class StdioMcpTransport implements McpTransport {
       env: {...process.env, ...this.options.env},
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
-      // [s06] Windows 的 npx.cmd 等脚本必须经系统 shell 启动；配置文件本身是用户授权的命令来源。
+      // Windows 的 npx.cmd 等脚本必须经系统 shell 启动；配置文件本身是用户授权的命令来源。
       shell: process.platform === 'win32',
     });
     this.#child = child;

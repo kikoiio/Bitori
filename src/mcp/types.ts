@@ -1,7 +1,7 @@
 import type {JsonObject} from '../tools/types.js';
 import type {McpClient} from './client.js';
 
-/** [s06] 本步固定使用仍包含 initialize 握手的 2025-06-18 协议版本。 */
+/** 固定使用包含 initialize 握手的 2025-06-18 协议版本。 */
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 
 export type JsonRpcId = string | number;

@@ -28,8 +28,8 @@ export class OpenAIResponsesClient implements LLMClient {
 
   public async *streamChat(request: ChatRequest, signal: AbortSignal): AsyncIterable<StreamEvent> {
     try {
-      // [s01] Responses API 的 assistant 输出不只是文本，还可能包含推理等 output items。
-      // [s01] 若数据库里保存了原始 items，就原样回放；否则用普通 role/content 消息。
+      // Responses API 的 assistant 输出不只是文本，还可能包含推理等 output items。
+      // 若数据库里保存了原始 items，就原样回放；否则用普通 role/content 消息。
       const input: unknown[] = [];
       if (request.items) for (const item of request.items) {
         if (item.type === 'message') input.push({role: item.role, content: item.content});
@@ -39,14 +39,14 @@ export class OpenAIResponsesClient implements LLMClient {
             if (item.content) input.push({role: 'assistant', content: item.content});
             for (const call of item.toolCalls) input.push({type: 'function_call', call_id: call.providerCallId ?? call.callId, name: call.name, arguments: call.argumentsText});
           }
-        // [s04] 请求级提醒渲染为用户角色 input 消息；文本已含标签，由 prompt 模块生成。
+        // 请求级提醒渲染为用户角色 input 消息；文本已含标签，由 prompt 模块生成。
         } else if (item.type === 'reminder') input.push({role: 'user', content: item.text});
         else for (const entry of item.results) input.push({type: 'function_call_output', call_id: entry.providerCallId ?? entry.callId, output: JSON.stringify(entry.result)});
       }
       if (input.length === 0 && request.system === undefined) {
         for (const message of request.messages) {
           if (message.role === 'assistant' && message.providerState?.protocol === 'openai-responses' && isReplayPayload(message.providerState.payload)) {
-            // [s02] 纯文本请求可重放非工具项；工具循环始终通过 items 精确重建调用与结果。
+            // 纯文本请求可重放非工具项；工具循环始终通过 items 精确重建调用与结果。
             input.push(...message.providerState.payload.filter(item => typeof item !== 'object' || item === null || !('type' in item) || (item.type !== 'function_call' && item.type !== 'function_call_output')));
           } else input.push({role: message.role, content: message.content});
         }
@@ -55,8 +55,8 @@ export class OpenAIResponsesClient implements LLMClient {
         model: this.#profile.model,
         input: input as never,
         stream: true,
-        store: false, // [s01] 明确要求 OpenAI 不在服务端持久保存该响应。
-        // [s04] 系统提示全文放入 instructions 字段；该协议无显式缓存标记，依赖服务端自动前缀缓存。
+        store: false, // 明确要求 OpenAI 不在服务端持久保存该响应。
+        // 系统提示全文放入 instructions 字段；该协议无显式缓存标记，依赖服务端自动前缀缓存。
         ...(request.system?.length ? {instructions: request.system.map(block => block.text).join('\n\n')} : {}),
         ...(!request.tools?.length ? {} : {tools: request.tools.map(tool => ({type: 'function' as const, name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: tool.strict ?? true}))}),
       }, {signal});
@@ -78,7 +78,7 @@ export class OpenAIResponsesClient implements LLMClient {
           if (usage?.input_tokens !== undefined && usage.output_tokens !== undefined) {
             yield {type: 'usage', usage: {inputTokens: usage.input_tokens, outputTokens: usage.output_tokens}};
           }
-          // [s01] 完整 output items 随 assistant 消息存入 SQLite，供下一轮准确重放。
+          // 完整 output items 随 assistant 消息存入 SQLite，供下一轮准确重放。
           const state: ProviderState = {protocol: 'openai-responses', payload: event.response.output ?? []};
           yield {type: 'completed', finishReason: emittedToolCall ? 'tool_calls' : event.response.status === 'completed' ? 'stop' : 'unknown', providerState: state};
         } else if (event.type === 'error' || event.type === 'response.failed') {
@@ -87,7 +87,7 @@ export class OpenAIResponsesClient implements LLMClient {
         }
       }
     } catch (error) {
-      // [s01] 用户取消是正常控制流，不向 UI 显示为供应商错误。
+      // 用户取消是正常控制流，不向 UI 显示为供应商错误。
       if (!isAbortError(error, signal)) yield {type: 'error', error: normalizeProviderError(error, this.#profile)};
     }
   }

@@ -34,7 +34,7 @@ describe('Plan Mode', () => {
     expect(client.requests).toHaveLength(0); expect(controller.getState().visibleError).toContain('没有可执行计划'); await controller.shutdown();
   });
 
-  // [s04] Plan 提醒注入节奏：首轮完整、每隔 3 轮重复完整、其余精简。
+  // Plan 提醒注入节奏：首轮完整、每隔 3 轮重复完整、其余精简。
   it('Plan 模式按轮次注入完整或精简提醒', async () => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-plan-')); roots.push(root);
     const client = new MockLLMClient(Array.from({length: 5}, () => [{type: 'completed', finishReason: 'stop'}] as never));
@@ -48,11 +48,11 @@ describe('Plan Mode', () => {
       return (last as {text: string}).text.includes('只能使用只读工具进行探索和分析') ? 'full' : 'compact';
     });
     expect(kinds).toEqual(['full', 'compact', 'compact', 'full', 'compact']);
-    // [s04] 系统提示随控制器冻结并随每次请求发送。
+    // 系统提示随控制器冻结并随每次请求发送。
     expect(client.requests[0]?.system?.[0]?.cacheable).toBe(true);
     expect(client.requests[0]?.system?.[0]?.text).toContain('# 身份');
     expect(client.requests[0]?.system?.[1]?.text).toContain('# 环境信息');
-    // [s04] 提醒不进入界面消息列表。
+    // 提醒不进入界面消息列表。
     expect(controller.getState().messages.every(message => !message.content.includes('<system-reminder>'))).toBe(true);
     await controller.shutdown();
   }, 20_000);
@@ -75,7 +75,7 @@ describe('Plan Mode', () => {
     expect(reentered).toMatchObject({type: 'reminder'});
     expect((reentered as {text: string}).text).toContain('只能使用只读工具进行探索和分析');
     await controller.shutdown();
-    // [s04] 重启后持久化历史不含提醒；继续回合仍按轮次规则注入。
+    // 重启后持久化历史不含提醒；继续回合仍按轮次规则注入。
     const persisted = new ChatController(new MockLLMClient([[{type: 'completed', finishReason: 'stop'}]]), new SessionRepository(database), createToolSystem(root));
     await persisted.initialize(profile);
     expect(persisted.getState().messages.every(message => !message.content.includes('<system-reminder>'))).toBe(true);

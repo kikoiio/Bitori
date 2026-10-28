@@ -43,7 +43,7 @@ function readHooks(path: string, label: string): HookConfig[] {
   return normalized;
 }
 
-/** [s11] 用户级先加载，项目级追加；once id 在合并集合内全局生效。 */
+/** 用户级先加载，项目级追加；once id 在合并集合内全局生效。 */
 export function loadHookConfigs(workDir = process.cwd(), home = homedir()): HookConfig[] {
   return [
     ...readHooks(join(home, '.bitori', 'hooks.yaml'), '用户级'),

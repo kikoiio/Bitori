@@ -1,4 +1,4 @@
-/** [s07] 工具结果替换决策账本；决策一旦写入就冻结，保证每轮请求前缀逐字节稳定。 */
+/** 工具结果替换决策账本；决策一旦写入就冻结，保证每轮请求前缀逐字节稳定。 */
 export class ToolResultReplacementState {
   readonly #seenIds = new Set<string>();
   readonly #replacements = new Map<string, string>();

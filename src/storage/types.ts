@@ -3,7 +3,7 @@ import type {MessageRole, ProviderState, Usage} from '../providers/types.js';
 import type {ApprovalStatus, JsonObject, ToolExecutionResult, ToolExecutionStatus} from '../tools/types.js';
 import type {AgentMode, AgentRunResult, AgentRunStatus, AgentStopReason} from '../agent/types.js';
 
-/** [s01] 一段会话的元数据；消息正文保存在 messages 表中。 */
+/** 一段会话的元数据；消息正文保存在 messages 表中。 */
 export interface Session {
   id: string;
   profileName: string;
@@ -20,10 +20,10 @@ export interface AgentRunRecord {
   startedAt: number; finishedAt: number | null; updatedAt: number;
 }
 
-/** [s01] streaming 是临时状态，其余三个是不可再改变的终态。 */
+/** streaming 是临时状态，其余三个是不可再改变的终态。 */
 export type MessageStatus = 'streaming' | 'completed' | 'cancelled' | 'failed';
 
-/** [s01] SQLite 中一行消息在 TypeScript 世界里的完整形状。 */
+/** SQLite 中一行消息在 TypeScript 世界里的完整形状。 */
 export interface StoredMessage {
   id: string;
   sessionId: string;
@@ -44,7 +44,7 @@ export interface StoredMessage {
 export interface FinalMessageUpdate {
   content: string;
   thinking: string;
-  // [s01] Exclude 从联合类型中去掉 streaming，编译期保证“finalize”只能写入终态。
+  // Exclude 从联合类型中去掉 streaming，编译期保证“finalize”只能写入终态。
   status: Exclude<MessageStatus, 'streaming'>;
   error: ProviderError | null;
   usage: Usage | null;
@@ -63,7 +63,7 @@ export interface ToolCallRecord {
 }
 export interface StoredConversation {session: Session; messages: StoredMessage[]; toolCalls: ToolCallRecord[]; agentRuns: AgentRunRecord[]}
 
-/** [s01]
+/**
  * 控制器所依赖的仓储接口。测试可以传入内存假实现，生产环境则使用 Worker + SQLite。
  */
 export interface SessionRepositoryContract {

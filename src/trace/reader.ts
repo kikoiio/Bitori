@@ -6,11 +6,11 @@ const logger = getLogger('trace');
 
 export interface TraceReadResult {
   events: TraceEvent[];
-  /** [s15] 无法解析的行数；损坏行跳过不中断读取。 */
+  /** 无法解析的行数；损坏行跳过不中断读取。 */
   corruptLines: number;
 }
 
-/** [s15] 读取会话 trace 文件；每行一个 JSON，坏行跳过并计数。 */
+/** 读取会话 trace 文件；每行一个 JSON，坏行跳过并计数。 */
 export function readTraceFile(path: string): TraceReadResult {
   if (!existsSync(path)) return {events: [], corruptLines: 0};
   const events: TraceEvent[] = [];
@@ -37,7 +37,7 @@ export interface TraceIteration {
   retries: Array<Extract<TraceEvent, {type: 'request_retry'}>>;
 }
 
-/** [s15] 按 iteration 分组，保留出现顺序。 */
+/** 按 iteration 分组，保留出现顺序。 */
 export function groupByIteration(events: readonly TraceEvent[]): TraceIteration[] {
   const map = new Map<number, TraceIteration>();
   const ensure = (iteration: number, iterationId: string): TraceIteration => {

@@ -21,7 +21,7 @@ class McpServerInitializationError extends Error {
 
 export type McpTransportFactory = (name: string, config: McpServerConfig) => McpTransport;
 
-/** [s06] 每个 Server 独立建立并缓存一条 Client；失败只淘汰自身，不影响其他连接。 */
+/** 每个 Server 独立建立并缓存一条 Client；失败只淘汰自身，不影响其他连接。 */
 export class McpManager {
   readonly #clients = new Map<string, McpClient>();
   #initializePromise: Promise<McpInitializationResult> | null = null;
@@ -60,7 +60,7 @@ export class McpManager {
         const tools = await client.listTools();
         return {name, client, tools};
       } catch (error) {
-        // [s15] 初始化失败后的关闭也降级记录，避免传输资源泄漏不可见。
+        // 初始化失败后的关闭也降级记录，避免传输资源泄漏不可见。
         await client.close().catch((closeError: unknown) => { logger.warn('MCP Server 初始化失败后关闭连接异常', {server: name, error: errorMessage(closeError)}); });
         throw new McpServerInitializationError(name, error instanceof Error ? error : new Error(String(error)));
       }
@@ -82,7 +82,7 @@ export class McpManager {
       const duplicate = names.find((publicName, index) => names.indexOf(publicName) !== index || this.registry.get(publicName) !== undefined);
       if (duplicate) {
         failed.push({name, error: new Error(`MCP 工具名称冲突：${duplicate}`)});
-        // [s15] 冲突淘汰路径的关闭失败同样可见。
+        // 冲突淘汰路径的关闭失败同样可见。
         await client.close().catch((closeError: unknown) => { logger.warn('MCP Server 工具名冲突后关闭连接异常', {server: name, error: errorMessage(closeError)}); });
         continue;
       }

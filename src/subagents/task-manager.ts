@@ -10,7 +10,7 @@ export interface AgentTask {
   finishedAt: number | null;
 }
 
-/** [s12] 后台任务完成时写入通知队列，由主循环 drain 成 task-notification。 */
+/** 后台任务完成时写入通知队列，由主循环 drain 成 task-notification。 */
 export class TaskManager {
   readonly #tasks = new Map<string, AgentTask>();
   #notifications: string[] = [];

@@ -6,7 +6,7 @@ import type {PreparedToolCall} from '../tools/types.js';
 
 function callId(call: PreparedToolCall): string { return call.availability === 'available' ? call.call.internalId : call.draft.internalId; }
 
-/** [s03] 事件消费的写盘顺序构成 Agent 继续推进前的持久化屏障。 */
+/** 事件消费的写盘顺序构成 Agent 继续推进前的持久化屏障。 */
 export class AgentEventProjector {
   #state: AppState;
   readonly #records = new Map<string, ToolCallRecord>();

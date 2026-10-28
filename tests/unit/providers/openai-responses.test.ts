@@ -27,7 +27,7 @@ describe('OpenAIResponsesClient', () => {
     expect(create).toHaveBeenCalledWith(expect.objectContaining({input: [{role: 'assistant', content: 'fallback'}]}), expect.anything());
   });
 
-  // [s04] 系统提示与提醒注入映射。
+  // 系统提示与提醒注入映射。
   it('system 映射为 instructions 字段，reminder 渲染为用户 input', async () => {
     const create = vi.fn().mockResolvedValue(stream());
     const sdk = {responses: {create}} as unknown as OpenAI;
@@ -48,7 +48,7 @@ describe('OpenAIResponsesClient', () => {
     expect(create.mock.calls[0]?.[0] as Record<string, unknown>).not.toHaveProperty('instructions');
   });
 
-  // [s06] MCP Server 提供的 JSON Schema 不保证满足 OpenAI strict 子集。
+  // MCP Server 提供的 JSON Schema 不保证满足 OpenAI strict 子集。
   it('按工具定义保留 strict 开关', async () => {
     const create = vi.fn().mockResolvedValue(stream());
     const sdk = {responses: {create}} as unknown as OpenAI;
