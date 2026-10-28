@@ -1,5 +1,5 @@
 import {readFileSync} from 'node:fs';
-import type {SkillForkContext, SkillMeta, SkillMode} from './types.js';
+import type {SkillMeta} from './types.js';
 
 export interface ParsedSkill {meta: SkillMeta; body: string}
 
@@ -14,25 +14,18 @@ function splitFrontmatter(text: string): {values: Map<string, string>; body: str
   return {values, body: text.replace(/^---\n[\s\S]*?\n---\n?/, '').trim()};
 }
 
-function normalizeList(value: string | undefined): string[] {
-  return (value ?? '').split(',').map(item => item.trim()).filter(Boolean);
-}
-
-/** 只信任显式 fork/fork-context；未知值回退 inline/none，避免手写错误破坏执行。 */
+/** 解析元数据并记录当前不能执行的选项，供激活时拒绝。 */
 export function parseSkillText(text: string): ParsedSkill {
   const {values, body} = splitFrontmatter(text);
   const name = values.get('name');
   if (!name) throw new Error('Skill 缺少 name');
-  const mode = values.get('mode') === 'fork' ? 'fork' satisfies SkillMode : 'inline';
-  const context = values.get('fork-context') === 'recent' || values.get('fork-context') === 'full' ? values.get('fork-context') as SkillForkContext : 'none';
+  const unsupportedFields = ['allowed-tools', 'fork-context', 'model'].filter(field => values.has(field));
+  if (values.has('mode') && values.get('mode') !== 'inline') unsupportedFields.push('mode');
   return {
     meta: {
       name,
       description: values.get('description') ?? '',
-      allowedTools: normalizeList(values.get('allowed-tools')),
-      mode,
-      forkContext: mode === 'fork' ? context : 'none',
-      model: values.get('model') ?? null,
+      unsupportedFields,
     },
     body,
   };

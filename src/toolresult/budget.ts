@@ -46,24 +46,22 @@ export function buildSpillPreview(content: string, spillPath: string): string {
 }
 
 function resultContent(result: ModelToolResultsItem['results'][number]): string {
-  if (result.result.status === 'success') return typeof result.result.output.text === 'string' ? result.result.output.text : JSON.stringify(result.result.output);
-  if ('partialOutput' in result.result && result.result.partialOutput) return typeof result.result.partialOutput.text === 'string' ? result.result.partialOutput.text : JSON.stringify(result.result.partialOutput);
-  return result.result.error.message;
+  const output = result.result.status === 'success' ? result.result.output : 'partialOutput' in result.result ? result.result.partialOutput : undefined;
+  if (output) return typeof output.text === 'string' && Object.keys(output).length === 1 ? output.text : JSON.stringify(output);
+  return JSON.stringify(result.result.status === 'success' ? result.result.output : result.result.error);
 }
 
 function withContent(result: ModelToolResultsItem['results'][number], content: string): ModelToolResultsItem['results'][number] {
   if (result.result.status === 'success') {
-    const output = {...result.result.output};
-    if ('text' in output) output.text = content; else output.persistedContent = content;
+    const output = typeof result.result.output.text === 'string' ? {text: content} : {persistedContent: content};
     return {...result, result: {...result.result, output}};
   }
   const partial = 'partialOutput' in result.result ? result.result.partialOutput : undefined;
   if (partial !== undefined) {
-    const output = {...partial};
-    if ('text' in output) output.text = content; else output.persistedContent = content;
+    const output = typeof partial.text === 'string' ? {text: content} : {persistedContent: content};
     return {...result, result: {...result.result, partialOutput: output}};
   }
-  return {...result, result: {...result.result, error: {...result.result.error, message: content}}};
+  return {...result, result: {...result.result, error: {code: result.result.error.code, message: content, retryable: result.result.error.retryable}}};
 }
 
 function replaceResult(

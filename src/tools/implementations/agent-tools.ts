@@ -38,7 +38,7 @@ export class AgentTool implements Tool<z.infer<typeof schema>> {
       const names = this.definitions.map(item => item.name).join(', ');
       return {status: 'error', error: {code: 'unknown_tool', message: `SubAgent 不存在：${args.agent}。可用：${names}`, retryable: false}};
     }
-    if (definition.tools !== undefined || definition.disallowedTools !== undefined || definition.maxTurns !== undefined || definition.permissionMode !== undefined || definition.background !== undefined) {
+    if (definition.unsupportedFields?.length) {
       return {status: 'error', error: {code: 'tool_unavailable_in_mode', message: '文本咨询不支持工具、权限模式、轮次或后台配置', retryable: false}};
     }
     try {

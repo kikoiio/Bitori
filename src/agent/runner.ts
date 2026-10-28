@@ -14,7 +14,6 @@ import {applyToolResultBudget} from '../toolresult/budget.js';
 import {compactionBoundaryMessageId, manageContext} from '../compact/compact.js';
 import {usageAnchorFrom, type UsageAnchor} from '../shared/token-estimate.js';
 import type {HookEngine} from '../hooks/engine.js';
-import {RecoveryState} from '../compact/recovery.js';
 
 function callId(call: PreparedToolCall): string { return call.availability === 'available' ? call.call.internalId : call.draft.internalId; }
 function providerCallId(call: PreparedToolCall): string | null { return call.availability === 'available' ? call.call.providerCallId : call.draft.providerCallId; }
@@ -43,15 +42,15 @@ export class AgentRunner {
   async *run(input: AgentRunInput, signal: AbortSignal): AsyncGenerator<AgentEvent, AgentRunResult, void> {
     const maxIterations = input.limits?.maxIterations ?? 20;
     const maxUnknown = input.limits?.maxUnknownToolIterations ?? 3;
-    const requestContext = input.trigger === 'do'
-      ? input.context.map((item, index) => index === input.context.length - 1 && item.type === 'message' && item.role === 'user' ? {...item, content: input.instruction} : item)
-      : input.context;
+    const lastUser = input.context.findLast(item => item.type === 'message' && item.role === 'user');
+    const userMessageId = input.userMessageId ?? (lastUser?.type === 'message' ? lastUser.messageId : undefined);
+    const requestContext = input.context.map(item => item.type === 'message' && item.role === 'user' && item.messageId === userMessageId ? {...item, content: input.instruction} : item);
     const context = new AgentContext(requestContext);
     // 提醒注入位于最后一条用户消息之后，随后续每次迭代请求一起发送。
     for (const text of input.reminders ?? []) context.appendReminder({type: 'reminder', text});
     const policy = new ToolPolicy(this.registry, input.mode);
     let total: Usage = {inputTokens: 0, outputTokens: 0}; let unknownIterations = 0; let finalIterationId: string | null = null;
-    const replacementState = new ToolResultReplacementState(); const recovery = new RecoveryState(); const tracking = {consecutiveFailures: 0}; let usageAnchor: UsageAnchor | null = null;
+    const replacementState = new ToolResultReplacementState(); const tracking = {consecutiveFailures: 0}; let usageAnchor: UsageAnchor | null = null;
     const retryBaseDelayMs = input.limits?.retryBaseDelayMs ?? 5_000;
     let retryDelayMs = retryBaseDelayMs;
     let retriesLeft = 3;
@@ -71,10 +70,10 @@ export class AgentRunner {
       /* 每次请求前先做全量摘要兜底，再做工具结果轻量预算；替换决策冻结以保护缓存前缀。 */
       let requestItems = [...context.items()];
       if (input.contextManagement?.windowTokens) {
-        const compact = await manageContext({items: requestItems, client: this.client, contextWindow: input.contextManagement.windowTokens, tracking, recovery, tools: policy.definitions(), anchor: usageAnchor, signal});
+        const compact = await manageContext({items: requestItems, client: this.client, contextWindow: input.contextManagement.windowTokens, tracking, tools: policy.definitions(), anchor: usageAnchor, signal});
         if (compact.compacted) {
           const boundaryMessageId = compactionBoundaryMessageId(requestItems, compact.keepIndex);
-          yield {...base(), type: 'context_compacted', beforeTokens: compact.beforeTokens, afterTokens: compact.afterTokens, keepIndex: compact.keepIndex, reason: 'auto', boundaryMessageId, items: compact.items.filter(item => item.type !== 'reminder')};
+          yield {...base(), type: 'context_compacted', beforeTokens: compact.beforeTokens, afterTokens: compact.afterTokens, keepIndex: compact.keepIndex, reason: 'auto', boundaryMessageId, items: compact.checkpointItems};
           context.replaceItems(compact.items);
           usageAnchor = null;
           await this.hooks?.fire('compact', {event: 'compact', message: `${compact.beforeTokens} -> ${compact.afterTokens}`});

@@ -37,7 +37,7 @@ npm run desktop
 
 ## 配置
 
-将 [配置示例](examples/config.example.yaml) 和 [环境变量示例](examples/.env.example) 分别复制为 `~/.bitori/config.yaml` 和 `~/.bitori/.env`（Windows 为 `%USERPROFILE%\.bitori\` 下的同名文件）。将示例模型 ID 和 API key 替换为供应商提供的真实值；占位值不能用于真实请求。`.env` 文件必须存在，进程环境变量优先于其中的值，不要提交真实密钥。
+将 [配置示例](config.example.yaml) 和 [环境变量示例](.env.example) 分别复制为 `~/.bitori/config.yaml` 和 `~/.bitori/.env`（Windows 为 `%USERPROFILE%\.bitori\` 下的同名文件）。将示例模型 ID 和 API key 替换为供应商提供的真实值；占位值不能用于真实请求。`.env` 文件必须存在，进程环境变量优先于其中的值，不要提交真实密钥。
 
 示例默认只启用一个 profile，不启动 MCP。未配置密钥的 profile 在被选中时才报错；启用 MCP 时，其配置引用的环境变量在启动时展开，缺失即报错。支持的 profile、扩展路径与权限规则见[配置与扩展参考](docs/configuration.md)。终端会话数据库为 `~/.bitori/bitori.db`；`exec` 使用目标工作区的 `.bitori/bitori.db`。项目级 `.bitori/config.yaml` 只承载 MCP Server，同名项完整覆盖用户级配置。
 
@@ -68,6 +68,6 @@ MCP 使用 `2025-06-18` 协议版本，以 `initialize` / `notifications/initial
 - [配置、扩展与权限](docs/configuration.md)
 - [开发、测试与发布](docs/development.md)
 - [产品目标和路线图](docs/product.md)
-- [贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)、[变更记录](CHANGELOG.md)
+- [贡献与验证](docs/development.md#贡献与验收)、[安全策略](SECURITY.md)、[变更记录](CHANGELOG.md)
 
 目前不支持多模态、多个用户任务并行、云同步、会话导入或自动断点续跑；不估算 token 成本，也不发送遥测。实际供应商兼容性需要针对所用端点验证。

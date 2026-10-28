@@ -31,6 +31,29 @@ describe('AgentRunner', () => {
     expect(value.client.requests).toHaveLength(2); expect(value.result).toMatchObject({status: 'completed', stopReason: 'natural_completion', iterationCount: 2});
     expect(value.client.requests[1]?.items?.at(-1)?.type).toBe('tool_results');
   });
+  it('主路径保留工具的非严格 schema 标记', async () => {
+    const value = await run([[{type: 'completed', finishReason: 'stop'}]]);
+    expect(value.client.requests[0]?.tools?.find(tool => tool.name === 'search_text')?.strict).toBe(false);
+  });
+
+  it.each(['denied', 'cancelled'] as const)('审批发布时同步%s不会丢失决定', async decision => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-runner-')); roots.push(root);
+    const client = new MockLLMClient([toolCall('write_file', '{"path":"blocked.txt","content":"x"}'), [{type: 'completed', finishReason: 'stop'}]]);
+    const tools = createToolSystem(root);
+    const runner = new AgentRunner(client, tools.registry, new StreamCollector(), new SafetyBatchScheduler(tools.executor, tools.approvals));
+    const abort = new AbortController();
+    const results: string[] = [];
+    for await (const event of runner.run({runId: 'r', sessionId: 's', trigger: 'message', mode: 'execute', instruction: 'write', context: []}, abort.signal)) {
+      if (event.type === 'approval_requested') {
+        if (decision === 'cancelled') abort.abort();
+        else tools.approvals.resolve(event.callId, 'denied');
+      }
+      if (event.type === 'tool_result') results.push(event.result.status);
+    }
+    expect(results).toEqual([decision === 'cancelled' ? 'interrupted' : 'denied']);
+    expect(tools.approvals.current()).toBeNull();
+    await tools.close();
+  }, 2_000);
   it('连续三轮全未知工具后停止', async () => {
     const value = await run([toolCall('missing_a', '{}', 'a'), toolCall('missing_b', '{}', 'b'), toolCall('missing_c', '{}', 'c')]);
     expect(value.client.requests).toHaveLength(3); expect(value.result.stopReason).toBe('unknown_tool_limit');

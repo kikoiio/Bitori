@@ -1,13 +1,7 @@
-export type SkillMode = 'inline' | 'fork';
-export type SkillForkContext = 'none' | 'recent' | 'full';
-
 export interface SkillMeta {
   name: string;
   description: string;
-  allowedTools: string[];
-  mode: SkillMode;
-  forkContext: SkillForkContext;
-  model: string | null;
+  unsupportedFields?: string[];
 }
 
 export interface Skill {

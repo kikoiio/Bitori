@@ -35,7 +35,11 @@ export class AgentContext {
     let tail = boundary + 1;
     const next = items[tail];
     if (next?.type === 'tool_results' && next.assistantMessageId === checkpoint.boundaryMessageId) tail++;
-    return new AgentContext([...checkpoint.items, ...items.slice(tail)]);
+    const retained = items.slice(tail);
+    const retainedIds = new Set(retained.flatMap(item => item.type === 'message' || item.type === 'assistant_iteration' ? [item.messageId] : item.type === 'tool_results' ? [item.assistantMessageId] : []));
+    // 兼容旧检查点曾保存整段保留尾部的格式，避免升级后重复回放。
+    const prefix = checkpoint.items.filter(item => item.type === 'reminder' || !retainedIds.has(item.type === 'tool_results' ? item.assistantMessageId : item.messageId));
+    return new AgentContext([...prefix, ...retained]);
   }
 
   items(): readonly ModelContextItem[] { return this.#items; }

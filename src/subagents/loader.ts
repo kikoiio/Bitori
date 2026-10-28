@@ -14,13 +14,9 @@ export function parseAgentDefinition(content: string): AgentDefinition | null {
     return {
       name: raw.name,
       description: typeof raw.description === 'string' ? raw.description : body.slice(0, 200),
-      ...(Array.isArray(raw.tools) ? {tools: raw.tools as string[]} : {}),
-      ...(Array.isArray(raw.disallowed_tools) ? {disallowedTools: raw.disallowed_tools as string[]} : {}),
       ...(typeof raw.system_prompt === 'string' ? {systemPromptOverride: raw.system_prompt} : {}),
-      ...(typeof raw.max_turns === 'number' ? {maxTurns: raw.max_turns} : {}),
       ...(typeof raw.model === 'string' ? {model: raw.model} : {}),
-      ...(raw.permission_mode === 'plan' || raw.permission_mode === 'execute' ? {permissionMode: raw.permission_mode} : {}),
-      ...(typeof raw.background === 'boolean' ? {background: raw.background} : {}),
+      unsupportedFields: ['tools', 'disallowed_tools', 'max_turns', 'permission_mode', 'background'].filter(field => Object.hasOwn(raw, field)),
       ...(body ? {initialPrompt: body} : {}),
     };
   } catch { return null; }

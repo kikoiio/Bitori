@@ -16,7 +16,6 @@ export class AgentEventProjector {
   async project(event: AgentEvent): Promise<void> {
     if (event.type === 'run_started') this.#set({...this.#state, activeRunId: event.runId, agentMode: event.mode, requestStatus: 'streaming', iteration: 0, maxIterations: event.maxIterations, agentPhase: 'preparing', runUsage: {inputTokens: 0, outputTokens: 0}, stopReason: null, visibleError: null});
     else if (event.type === 'context_compacted') {
-      if (!this.repository.saveContextCheckpoint) throw new Error('当前仓储不支持持久化压缩检查点');
       await this.repository.saveContextCheckpoint(event.sessionId, {boundaryMessageId: event.boundaryMessageId, items: event.items});
     }
     else if (event.type === 'iteration_started') {
@@ -53,8 +52,6 @@ export class AgentEventProjector {
       this.#set({...this.#state, activeRunId: null, requestStatus: event.result.status === 'failed' ? 'failed' : 'idle', agentPhase: 'finishing', runUsage: event.result.usage, stopReason: event.result.stopReason, approvalPrompt: null, visibleError: message});
     }
   }
-
-  async flush(): Promise<void> { await Promise.resolve(); }
 
   async #finishIteration(event: Extract<AgentEvent, {type: 'iteration_finished'}>): Promise<void> {
     const message = this.#state.messages.find(item => item.id === event.iterationId); if (!message) throw new Error(`缺少迭代消息：${event.iterationId}`);

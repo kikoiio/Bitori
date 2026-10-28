@@ -1,5 +1,4 @@
 import type {LLMClient, ModelContextItem} from '../providers/types.js';
-import type {RecoveryState} from './recovery.js';
 import type {ToolDefinition} from '../tools/types.js';
 import {CHARS_PER_TOKEN, estimateContextTokens, serializedItem} from '../shared/token-estimate.js';
 import type {UsageAnchor} from '../shared/token-estimate.js';
@@ -17,13 +16,12 @@ export interface ManageContextInput {
   client: LLMClient;
   contextWindow: number;
   tracking: CompactTrackingState;
-  recovery: RecoveryState;
   tools: readonly ToolDefinition[];
   anchor: UsageAnchor | null;
   signal: AbortSignal;
 }
 export type CompactResult =
-  | {compacted: true; beforeTokens: number; afterTokens: number; summary: string; items: ModelContextItem[]; keepIndex: number; reason: 'auto' | 'manual'}
+  | {compacted: true; beforeTokens: number; afterTokens: number; summary: string; items: ModelContextItem[]; checkpointItems: ModelContextItem[]; keepIndex: number; reason: 'auto' | 'manual'}
   | {compacted: false; beforeTokens: number; afterTokens: number; summary: null; reason: 'below_threshold' | 'circuit_open' | 'too_few_messages'};
 
 /** 找到被摘要覆盖部分的最后一条可重放消息，避免检查点错误地指向保留尾部。 */
@@ -93,12 +91,16 @@ export async function manageContext(input: ManageContextInput, options: {force?:
   try {
     const summary = await summarize(input, input.items.slice(0, keepStart));
     input.tracking.consecutiveFailures = 0;
-    const attachment = input.recovery.buildRecoveryAttachment(input.tools);
-    const compacted: ModelContextItem[] = [
+    const attachment = [
+      '## 当前可用工具', ...input.tools.map(tool => `- ${tool.name}: ${tool.description}`), '',
+      '## 边界提示',
+      '以上内容是压缩后的恢复信息。需要文件、工具输出或代码细节时请重新读取原文，不要凭摘要或头部预览猜测。',
+    ].join('\n');
+    const checkpointItems: ModelContextItem[] = [
       {type: 'message', messageId: 'compact-summary', role: 'user', content: `${summary}\n\n${attachment}`},
-      ...input.items.slice(keepStart),
     ];
-    return {compacted: true, beforeTokens: before, afterTokens: estimateContextTokens(compacted, null), summary, items: compacted, keepIndex: keepStart, reason: options.force ? 'manual' : 'auto'};
+    const compacted = [...checkpointItems, ...input.items.slice(keepStart)];
+    return {compacted: true, beforeTokens: before, afterTokens: estimateContextTokens(compacted, null), summary, items: compacted, checkpointItems, keepIndex: keepStart, reason: options.force ? 'manual' : 'auto'};
   } catch {
     if (!input.signal.aborted) input.tracking.consecutiveFailures++;
     throw new Error('上下文压缩失败');

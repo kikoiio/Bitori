@@ -3,14 +3,14 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
 import {parseSkillText} from '../../../src/skills/parser.js';
-import {renderSkillBody, SkillLoader} from '../../../src/skills/loader.js';
+import {SkillLoader} from '../../../src/skills/loader.js';
 import {ActiveSkills, SkillExecutor} from '../../../src/skills/executor.js';
 
 describe('Skill 系统', () => {
-  it('解析 frontmatter 并回退未知执行选项', () => {
+  it('解析 frontmatter 并记录不支持的执行选项', () => {
     const parsed = parseSkillText('---\nname: review\ndescription: 审查\nallowed-tools: read_file, search_text\nmode: fork\nfork-context: recent\nmodel: low\n---\n请审查 $ARGUMENTS');
-    expect(parsed.meta).toMatchObject({name: 'review', mode: 'fork', forkContext: 'recent', allowedTools: ['read_file', 'search_text']});
-    expect(parseSkillText('---\nname: bad\nmode: strange\nfork-context: strange\n---\n正文').meta).toMatchObject({mode: 'inline', forkContext: 'none'});
+    expect(parsed.meta).toEqual({name: 'review', description: '审查', unsupportedFields: ['allowed-tools', 'fork-context', 'model', 'mode']});
+    expect(parseSkillText('---\nname: bad\nmode: strange\nfork-context: strange\n---\n正文').meta.unsupportedFields).toEqual(['fork-context', 'mode']);
     expect(() => parseSkillText('正文')).toThrow('缺少 name');
   });
 
@@ -39,12 +39,11 @@ describe('Skill 系统', () => {
     }
   });
 
-  it('激活 Skill 渲染环境段并替换参数', () => {
+  it('激活 Skill 渲染环境段并清空未提供的参数', () => {
     const active = new ActiveSkills();
     const executor = new SkillExecutor(active);
-    const skill = {meta: {name: 'commit', description: '', allowedTools: ['run_command'], mode: 'inline' as const, forkContext: 'none' as const, model: null}, body: '提交 $ARGUMENTS', sourcePath: '/tmp/SKILL.md', source: 'project' as const};
-    expect(executor.executeInline(skill, 'feat: login')).toContain('提交 feat: login');
+    const skill = {meta: {name: 'commit', description: ''}, body: '提交 $ARGUMENTS', sourcePath: '/tmp/SKILL.md', source: 'project' as const};
+    expect(executor.executeInline(skill)).toBe('提交 ');
     expect(active.render()).toContain('### Skill: commit');
-    expect(renderSkillBody('无占位', '参数')).toContain('参数');
   });
 });

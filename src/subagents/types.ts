@@ -1,15 +1,9 @@
-export type SubAgentPermissionMode = 'plan' | 'execute';
-
 export interface AgentDefinition {
   name: string;
   description: string;
-  tools?: string[];
-  disallowedTools?: string[];
   systemPromptOverride?: string;
-  maxTurns?: number;
   model?: string;
-  permissionMode?: SubAgentPermissionMode;
-  background?: boolean;
+  unsupportedFields?: string[];
   initialPrompt?: string;
 }
 

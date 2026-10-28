@@ -1,21 +1,37 @@
-export type CommandType = 'local' | 'prompt';
+import type {PermissionTier} from '../tools/permission-engine.js';
+
+export type LocalCommandAction = 'help' | 'plan' | 'do' | 'compact' | 'permission';
 
 export interface CommandContext {workDir: string; args: string}
-export interface Command {
+interface CommandBase {
   name: string;
   aliases: string[];
-  type: CommandType;
   description: string;
-  handler: (context: CommandContext) => string;
 }
+export type Command = CommandBase & (
+  | {type: 'local'; action: LocalCommandAction}
+  | {type: 'prompt'; handler: (context: CommandContext) => string}
+);
 
 export interface ParsedCommand {name: string; args: string}
 
+const localCommands = [
+  {name: 'help', aliases: ['h', '?'], description: '显示可用命令'},
+  {name: 'plan', aliases: [], description: '切换到计划模式'},
+  {name: 'do', aliases: [], description: '执行最近计划'},
+  {name: 'compact', aliases: ['c'], description: '手动压缩上下文'},
+  {name: 'permission', aliases: ['permissions', 'mode'], description: '切换权限档：strict、default 或 bypass'},
+] as const;
+
 export function parseCommand(input: string): ParsedCommand | null {
-  if (!input.startsWith('/')) return null;
-  const trimmed = input.slice(1).trim();
-  const space = trimmed.indexOf(' ');
-  return space === -1 ? {name: trimmed, args: ''} : {name: trimmed.slice(0, space), args: trimmed.slice(space + 1).trim()};
+  const trimmed = input.trim();
+  if (!trimmed.startsWith('/')) return null;
+  const match = trimmed.match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
+  return {name: match?.[1] ?? '', args: match?.[2]?.trim() ?? ''};
+}
+
+export function permissionTierArgument(value: string): PermissionTier | undefined {
+  return new Map<string, PermissionTier>([['strict', 'strict'], ['严格', 'strict'], ['default', 'default'], ['默认', 'default'], ['bypass', 'bypass'], ['放行', 'bypass']]).get(value);
 }
 
 /** 内置与用户命令统一注册；名称和别名都不可冲突。 */
@@ -51,9 +67,8 @@ export class CommandRegistry {
 
 export function createDefaultRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
-  registry.register({name: 'help', aliases: ['h', '?'], type: 'local', description: '显示可用命令', handler: () => ''});
-  registry.register({name: 'plan', aliases: [], type: 'local', description: '切换到计划模式', handler: () => '/plan'});
-  registry.register({name: 'do', aliases: [], type: 'local', description: '执行最近计划', handler: () => '/do'});
-  registry.register({name: 'compact', aliases: ['c'], type: 'local', description: '手动压缩上下文', handler: () => '/compact'});
+  for (const command of localCommands) {
+    registry.register({...command, aliases: [...command.aliases], type: 'local', action: command.name});
+  }
   return registry;
 }

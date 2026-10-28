@@ -1,5 +1,6 @@
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {homedir} from 'node:os';
 import {CommandRegistry} from './registry.js';
 
 export interface UserCommandFrontmatter {description: string; argumentHint: string}
@@ -23,7 +24,7 @@ export function renderBody(body: string, args: string): string {
 }
 
 /** 扫描用户级与项目级 commands 目录；子目录形成 namespace。 */
-export function loadUserCommands(workDir: string, homeDirectory = process.env.HOME ?? '', registry = new CommandRegistry()): CommandRegistry {
+export function loadUserCommands(workDir: string, homeDirectory = homedir(), registry = new CommandRegistry()): CommandRegistry {
   const roots = [join(homeDirectory, '.bitori', 'commands'), join(workDir, '.bitori', 'commands')];
   for (const root of roots) {
     if (!existsSync(root)) continue;

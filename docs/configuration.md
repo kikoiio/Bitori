@@ -4,16 +4,16 @@
 
 ## 模型和 MCP
 
-从 [配置示例](../examples/config.example.yaml) 和 [环境变量示例](../examples/.env.example) 开始，替换模型 ID 与密钥。`profiles` 至少包含一项，`protocol` 为 `anthropic`、`openai-responses` 或 `openai-chat`；`api_key` 必须是完整的 `${ENV_NAME}` 引用。`thinking` 仅适用于 Anthropic，可设为 `false`、`true`、`{type: adaptive}`，或设为 `type: manual` 并提供小于 `max_tokens` 的 `budget_tokens`（至少 1024）。可选 `context_window` 为正整数。可通过 `models` 映射 SubAgent 的逻辑模型名到 profile 名。
+从 [配置示例](../config.example.yaml) 和 [环境变量示例](../.env.example) 开始，替换模型 ID 与密钥。`profiles` 至少包含一项，`protocol` 为 `anthropic`、`openai-responses` 或 `openai-chat`；`api_key` 必须是完整的 `${ENV_NAME}` 引用。`thinking` 仅适用于 Anthropic，可设为 `false`、`true`、`{type: adaptive}`，或设为 `type: manual` 并提供小于 `max_tokens` 的 `budget_tokens`（至少 1024）。可选 `context_window` 为正整数。可通过 `models` 映射 SubAgent 的逻辑模型名到 profile 名。
 
 用户级 `config.yaml` 可包含 `mcp_servers`；项目级同名文件只允许 `mcp_servers`，同名服务完整覆盖用户级服务。stdio 服务配置 `transport: stdio`、`command`，可选 `args` 和 `env`；HTTP 服务配置 `transport: http`、`url`，可选 `headers`。命令、参数、环境值、URL 和 header 引用的环境变量在加载时展开，缺失即报错。示例中的 HTTP URL 是占位符，不是可用服务。stdio 服务会执行配置的命令，HTTP 服务会接收发往它的数据；只启用可信服务，并先检查命令、地址和凭据。
 
 ## 指令与扩展
 
-- 指令按用户级 `~/.bitori/BITORI.md`、项目级 `.bitori/BITORI.md`、工作区根 `BITORI.md` 的顺序加入提示，后面的说明靠后。`@include` 或 `@import` 引入的路径相对于包含文件，并受工作区边界及最多五层嵌套限制；不存在的目标会留下提示。仓库根的 [BITORI.md](../BITORI.md) 引入唯一规范 [AGENTS.md](../AGENTS.md)；Bitori 不自动发现 `AGENTS.md` 或 `AGENT.md`。
-- Skill 从用户和项目的 `.bitori/skills/` 加载，支持直接放 `.md` 文件，或放在子目录的 `SKILL.md`。frontmatter 至少需要 `name`，可填 `description`、逗号分隔的 `allowed-tools`、`mode: fork`、`fork-context: recent` 或 `full`、`model`。同名项目 Skill 覆盖用户 Skill；正文可使用 `$ARGUMENTS`。
+- 指令按用户级 `~/.bitori/`、项目级 `.bitori/`、工作区根的顺序加入提示；每个位置优先读取 `BITORI.md`，没有时读取 `AGENTS.md`，同一位置只选一个。`@include` 或 `@import` 相对于包含文件，用户级指令不能越出用户 `.bitori/`，项目指令不能越出工作区，最多嵌套五层；不存在的目标会留下提示。本仓库只保留 [AGENTS.md](../AGENTS.md) 作为工作约定，不再另设转发文件。
+- Skill 从用户和项目的 `.bitori/skills/` 加载，支持直接放 `.md` 文件，或放在子目录的 `SKILL.md`。frontmatter 至少需要 `name`，可填 `description` 和 `mode: inline`。当前只支持内联激活：声明 `allowed-tools`、`fork-context`、`model` 或其他 `mode` 值时激活会报错，并移除该名称已激活的旧内容；这些配置不能限制工具、派生会话或切换模型。同名项目 Skill 覆盖用户 Skill。正文支持 `$ARGUMENTS` 替换，但目前模型的 `load_skill` 工具没有参数输入，会用空字符串替换。
 - Slash Command 从用户和项目的 `.bitori/commands/` 加载 `.md` 文件，一级子目录构成命名空间。内置命令先注册，用户级先于项目级；同名项不会覆盖已注册命令。正文中的 `$ARGUMENTS` 被参数替换，缺少占位符时参数追加到正文。
-- SubAgent 从用户和项目的 `.bitori/agents/` 加载 `.md` 文件；frontmatter 需要 `name`，可设置 `description` 和 `model`。当前仅支持基于提供内容的一次文本咨询，不能使用工具、读取工作区或后台运行；配置 `tools`、`disallowed_tools`、`max_turns`、`permission_mode` 或 `background` 的角色会被拒绝。项目级同名定义覆盖用户级，用户级覆盖内置定义。
+- SubAgent 从用户和项目的 `.bitori/agents/` 加载 `.md` 文件；frontmatter 需要 `name`，可设置 `description`、`model` 和 `system_prompt`，正文作为默认提示，`system_prompt` 存在时优先使用。当前仅支持基于提供内容的一次文本咨询，不能使用工具、读取工作区或后台运行；声明 `tools`、`disallowed_tools`、`max_turns`、`permission_mode` 或 `background` 的角色会被拒绝，空值和错误类型也不例外。项目级同名定义覆盖用户级，用户级覆盖内置定义。
 - Hook 从用户级和项目级 `.bitori/hooks.yaml` 按顺序追加加载；动作支持 `command`、`prompt` 和 `http`；`agent` 动作尚不支持。HTTP Hook 支持 `timeout_ms` 和取消；`reject: true` 的失败默认拦截，`failure_policy: open` 可显式选择失败时放行。`command` 可执行本地程序，`http` 可向外发送事件上下文；启用前审查来源和目标。事件、条件和限制见 [`src/hooks/types.ts`](../src/hooks/types.ts) 与 [`src/hooks/engine.ts`](../src/hooks/engine.ts)。
 
 例如，将以下内容保存为项目 `.bitori/skills/review/SKILL.md`，模型调用该 Skill 时会载入正文：
@@ -21,9 +21,9 @@
 ```markdown
 ---
 name: review
-description: 检查指定文件
+description: 按对话要求审查文件
 ---
-检查 $ARGUMENTS，并说明发现与验证范围。
+根据当前对话确定审查范围，并说明发现与验证范围。
 ```
 
 例如，项目 `.bitori/commands/explain.md` 可写为下列内容，在聊天中输入 `/explain src/index.ts`：

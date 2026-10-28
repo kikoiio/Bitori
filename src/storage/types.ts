@@ -51,16 +51,12 @@ export interface FinalMessageUpdate {
   providerState: ProviderState | null;
 }
 
-export interface BeginTurnResult {
-  userMessage: StoredMessage;
-  assistantMessage: StoredMessage;
-}
-
 export interface ToolCallRecord {
   id: string; sessionId: string; assistantMessageId: string; providerCallId: string | null; position: number;
   toolName: string; arguments: JsonObject; argumentsText?: string; agentRunId?: string | null; approvalStatus: ApprovalStatus; executionStatus: ToolExecutionStatus;
   result: ToolExecutionResult | null; createdAt: number; updatedAt: number;
 }
+/** items 只替代 boundaryMessageId 及之前的历史；保留尾部由原始消息恢复。 */
 export interface ContextCheckpoint {boundaryMessageId: string; items: ModelContextItem[]}
 export interface StoredConversation {session: Session; messages: StoredMessage[]; toolCalls: ToolCallRecord[]; agentRuns: AgentRunRecord[]; checkpoint?: ContextCheckpoint | null}
 
@@ -75,19 +71,15 @@ export interface SessionRepositoryContract {
   getSession(sessionId: string): Promise<Session | null>;
   getMessages(sessionId: string): Promise<StoredMessage[]>;
   getConversation(sessionId: string): Promise<StoredConversation | null>;
-  saveContextCheckpoint?(sessionId: string, checkpoint: ContextCheckpoint): Promise<void>;
-  saveToolBatch(records: ToolCallRecord[]): Promise<void>;
-  finalizeAssistantWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void>;
+  saveContextCheckpoint(sessionId: string, checkpoint: ContextCheckpoint): Promise<void>;
   updateToolCall(record: ToolCallRecord): Promise<void>;
-  beginTurn(sessionId: string, text: string): Promise<BeginTurnResult>;
-  beginAssistantContinuation(sessionId: string): Promise<StoredMessage>;
   checkpointAssistant(messageId: string, content: string, thinking: string): Promise<void>;
   finalizeMessage(messageId: string, update: FinalMessageUpdate): Promise<void>;
   setSessionMode(sessionId: string, mode: AgentMode): Promise<Session>;
   beginAgentRun(input: {runId: string; sessionId: string; displayText: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}>;
   beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage>;
   finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void>;
-  abortAgentRun?(runId: string, result: AgentRunResult, message: string): Promise<void>;
+  abortAgentRun(runId: string, result: AgentRunResult, message: string): Promise<void>;
   finishAgentRun(runId: string, result: AgentRunResult, latestPlanMessageId?: string): Promise<void>;
   close(): Promise<void>;
 }

@@ -1,4 +1,4 @@
-import {mkdtempSync, rmSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it, vi} from 'vitest';
@@ -56,16 +56,53 @@ describe('ChatController', () => {
       const after = requests.at(-1)?.items ?? [];
       expect(after.some(item => item.type === 'message' && item.content.includes('持久摘要标记'))).toBe(true);
       expect(after.some(item => item.type === 'message' && item.content === '较早消息')).toBe(false);
+      const afterIds = after.flatMap(item => item.type === 'message' || item.type === 'assistant_iteration' ? [item.messageId] : []);
+      expect(afterIds.length).toBe(new Set(afterIds).size);
       await controller.shutdown();
       const restored = new ChatController(client, new SessionRepository(database), null, undefined, {workspaceRoot: root});
       await restored.initialize(selectedProfile); await restored.sendMessage('重启后');
       const replay = requests.at(-1)?.items ?? [];
       expect(replay.some(item => item.type === 'message' && item.content.includes('持久摘要标记'))).toBe(true);
       expect(replay.some(item => item.type === 'message' && item.content === '较早消息')).toBe(false);
+      const replayIds = replay.flatMap(item => item.type === 'message' || item.type === 'assistant_iteration' ? [item.messageId] : []);
+      expect(replayIds.length).toBe(new Set(replayIds).size);
       expect(restored.getState().messages.some(message => message.content === '较早消息')).toBe(true);
       await restored.shutdown();
     }, 20_000);
   }
+
+  it('自定义命令展开正文进入请求，原始命令保留为显示消息', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);
+    mkdirSync(join(root, '.bitori', 'commands'), {recursive: true});
+    writeFileSync(join(root, '.bitori', 'commands', 'explain.md'), '解释 $ARGUMENTS 并说明调用者');
+    const client = new MockLLMClient([{type: 'completed', finishReason: 'stop'}]);
+    const controller = new ChatController(client, new SessionRepository(join(root, 'db.sqlite')), null, undefined, {workspaceRoot: root});
+    try {
+      await controller.initialize(profile);
+      await controller.sendMessage('/explain\t  note.ts');
+      expect(client.requests[0]?.items).toContainEqual(expect.objectContaining({type: 'message', role: 'user', content: '解释 note.ts 并说明调用者'}));
+      expect(controller.getState().messages[0]?.content).toBe('/explain\t  note.ts');
+    } finally { await controller.shutdown(); }
+  });
+
+  it('兼容旧检查点中已保存的保留尾部，不重复回放', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);
+    const client = new MockLLMClient([{type: 'text_delta', text: '旧回答'}, {type: 'completed', finishReason: 'stop'}]);
+    const repository = new SessionRepository(join(root, 'db.sqlite'));
+    const controller = new ChatController(client, repository, null, undefined, {workspaceRoot: root});
+    try {
+      await controller.initialize(profile); await controller.sendMessage('旧问题');
+      const state = controller.getState();
+      await repository.saveContextCheckpoint(state.session!.id, {boundaryMessageId: state.messages[0]!.id, items: [
+        {type: 'message', messageId: 'compact-summary', role: 'user', content: '旧摘要'},
+        {type: 'message', messageId: state.messages[1]!.id, role: 'assistant', content: '旧回答'},
+      ]});
+      await controller.sendMessage('新问题');
+      const items = client.requests.at(-1)?.items ?? [];
+      expect(items.filter(item => item.type === 'message' && item.content === '旧回答')).toHaveLength(1);
+      expect(items.some(item => item.type === 'message' && item.content === '旧摘要')).toBe(true);
+    } finally { await controller.shutdown(); }
+  });
 
   it('工作区选项进入系统提示', async () => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);

@@ -12,8 +12,7 @@ export class ToolPolicy {
   constructor(readonly registry: ToolRegistry, readonly mode: AgentMode) {}
 
   definitions(): ToolDefinition[] {
-    return this.registry.entries().filter(tool => this.mode === 'execute' || tool.effect === 'read')
-      .map(({name, description, inputSchema}) => ({name, description, inputSchema}));
+    return this.registry.definitions().filter(tool => this.mode === 'execute' || this.registry.get(tool.name)?.effect === 'read');
   }
 
   prepare(draft: ToolCallDraft): PreparedToolCall {

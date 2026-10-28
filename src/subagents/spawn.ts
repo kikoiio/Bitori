@@ -14,6 +14,7 @@ export interface SpawnSubAgentInput {
 
 /** 子 Agent 非交互执行，不调用工具，只收集最终文本。 */
 export async function spawnSubAgent(input: SpawnSubAgentInput): Promise<string> {
+  if (input.definition.unsupportedFields?.length) throw new Error(`文本咨询不支持配置：${input.definition.unsupportedFields.join(', ')}`);
   const system = input.definition.systemPromptOverride ?? input.definition.initialPrompt;
   const content = ['You have no tools or workspace access. Use only supplied context; do not claim to have searched, inspected, or changed files.', system, input.prompt].filter(Boolean).join('\n\n');
   const items: ModelContextItem[] = [...(input.context ?? []), {type: 'message', messageId: 'subagent-prompt', role: 'user', content}];

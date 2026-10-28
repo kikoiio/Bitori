@@ -65,6 +65,3 @@ export class SkillLoader {
   names(): string[] { return [...this.#skills.keys()]; }
 }
 
-export function renderSkillBody(body: string, args: string): string {
-  return body.includes('$ARGUMENTS') ? body.replaceAll('$ARGUMENTS', args) : args ? `${body}\n\n${args}` : body;
-}

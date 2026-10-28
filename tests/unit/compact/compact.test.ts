@@ -2,7 +2,6 @@ import {describe, expect, it} from 'vitest';
 import type {LLMClient, ModelContextItem, StreamEvent} from '../../../src/providers/types.js';
 import {computeKeepStartIndex, manageContext} from '../../../src/compact/compact.js';
 import {estimateContextTokens, usageAnchorFrom} from '../../../src/shared/token-estimate.js';
-import {RecoveryState} from '../../../src/compact/recovery.js';
 import type {ToolDefinition} from '../../../src/tools/types.js';
 
 function user(content: string): ModelContextItem { return {type: 'message', messageId: content, role: 'user', content}; }
@@ -32,7 +31,7 @@ describe('全量上下文压缩', () => {
 
   it('低于阈值不触发摘要，手动强制触发', async () => {
     const items = Array.from({length: 10}, (_, index) => user(index === 9 ? '长'.repeat(40_000) : `消息 ${index}`));
-    const base = {items, client: client('摘要结果'), contextWindow: 200_000, tracking: {consecutiveFailures: 0}, recovery: new RecoveryState(), tools, anchor: null, signal: new AbortController().signal};
+    const base = {items, client: client('摘要结果'), contextWindow: 200_000, tracking: {consecutiveFailures: 0}, tools, anchor: null, signal: new AbortController().signal};
     await expect(manageContext(base)).resolves.toMatchObject({compacted: false, reason: 'below_threshold'});
     await expect(manageContext(base, {force: true})).resolves.toMatchObject({compacted: true, reason: 'manual'});
   });
@@ -41,7 +40,7 @@ describe('全量上下文压缩', () => {
     const items = Array.from({length: 10}, (_, index) => user(index === 9 ? '长'.repeat(40_000) : `消息 ${index}`));
     const failing: LLMClient = {async *streamChat(): AsyncIterable<StreamEvent> { yield {type: 'error', error: {code: 'provider_error', message: '失败', retryable: false}}; }};
     const tracking = {consecutiveFailures: 0};
-    const base = {items, client: failing, contextWindow: 10, tracking, recovery: new RecoveryState(), tools, anchor: null, signal: new AbortController().signal};
+    const base = {items, client: failing, contextWindow: 10, tracking, tools, anchor: null, signal: new AbortController().signal};
     await expect(manageContext(base, {force: true})).rejects.toThrow('上下文压缩失败');
     expect(tracking.consecutiveFailures).toBe(1);
     const success = {...base, client: client('成功')};
@@ -60,17 +59,17 @@ describe('全量上下文压缩', () => {
   it('摘要未完成或取消时不提交结果', async () => {
     const items = Array.from({length: 7}, (_, index) => user(index === 6 ? '长'.repeat(40_000) : `消息 ${index}`));
     const incomplete: LLMClient = {async *streamChat() { yield {type: 'text_delta', text: '部分摘要'}; }};
-    await expect(manageContext({items, client: incomplete, contextWindow: 10, tracking: {consecutiveFailures: 0}, recovery: new RecoveryState(), tools, anchor: null, signal: new AbortController().signal}, {force: true})).rejects.toThrow('上下文压缩失败');
+    await expect(manageContext({items, client: incomplete, contextWindow: 10, tracking: {consecutiveFailures: 0}, tools, anchor: null, signal: new AbortController().signal}, {force: true})).rejects.toThrow('上下文压缩失败');
   });
 
-  it('恢复段包含最近文件、工具与边界提示', () => {
-    const recovery = new RecoveryState();
-    for (let index = 0; index < 7; index++) recovery.recordFileRead(`/file-${index}`, `内容 ${index}`, index);
-    const attachment = recovery.buildRecoveryAttachment(tools);
-    expect(attachment).toContain('## 最近读过的文件');
-    expect(attachment).toContain('/file/6'.replace('/file/', '/file-'));
-    expect(attachment).not.toContain('/file-0\n');
-    expect(attachment).toContain('read_file');
-    expect(attachment).toContain('不要凭摘要或头部预览猜测');
+  it('摘要检查点只保存前缀与边界提示，不复制保留历史', async () => {
+    const items = Array.from({length: 10}, (_, index) => user(index === 9 ? '长'.repeat(40_000) : `消息 ${index}`));
+    const result = await manageContext({items, client: client('摘要结果'), contextWindow: 200_000, tracking: {consecutiveFailures: 0}, tools, anchor: null, signal: new AbortController().signal}, {force: true});
+    expect(result.compacted).toBe(true);
+    if (!result.compacted) return;
+    expect(result.checkpointItems).toHaveLength(1);
+    expect(result.items).toEqual([...result.checkpointItems, ...items.slice(result.keepIndex)]);
+    expect(JSON.stringify(result.checkpointItems)).toContain('read_file');
+    expect(JSON.stringify(result.checkpointItems)).toContain('不要凭摘要或头部预览猜测');
   });
 });

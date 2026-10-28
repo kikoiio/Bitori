@@ -83,8 +83,11 @@ export class SafetyBatchScheduler {
           result = {status: 'denied', error: {code: 'hook_rejected', message: hookRejected, retryable: false}};
         } else if (needsApproval) {
           await this.#hooks?.fire('permission_request', {event: 'permission_request', toolName: call.name, args: call.arguments});
-          yield {...base(), type: 'approval_requested', callId: call.internalId, prompt};
-          decision = await this.approvals.request(call, true, check?.reason);
+          const approval = this.approvals.request(call, true, check?.reason, input.signal);
+          try {
+            yield {...base(), type: 'approval_requested', callId: call.internalId, prompt};
+            decision = await approval;
+          } finally { this.approvals.resolve(call.internalId, 'denied'); }
           yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision};
           if (!input.signal.aborted && decision === 'approved_session' && this.permissions) this.permissions.addSessionAllow(call);
           if (!input.signal.aborted && decision === 'approved_permanent' && this.permissions) this.permissions.addPermanentAllow(call);

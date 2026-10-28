@@ -1,7 +1,7 @@
 import {mkdtempSync, readFileSync, rmSync, statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, onTestFinished} from 'vitest';
 import type {ModelContextItem, ModelToolResultsItem} from '../../../src/providers/types.js';
 import {applyToolResultBudget, buildSpillPreview, writeSpill} from '../../../src/toolresult/budget.js';
 import {ToolResultReplacementState} from '../../../src/toolresult/state.js';
@@ -17,6 +17,21 @@ function content(item: ModelContextItem): string {
 }
 
 describe('工具结果预算', () => {
+  it.each(['content', 'stdout', 'partialOutput', 'errorDetails'] as const)('裁剪实际%s载荷而非额外附加预览', shape => {
+    const workspace = mkdtempSync(join(tmpdir(), 'bitori-budget-'));
+    onTestFinished(() => rmSync(workspace, {recursive: true, force: true}));
+    const payload = 'x'.repeat(60_000);
+    const item: ModelToolResultsItem = {type: 'tool_results', assistantMessageId: 'a', results: [{callId: 'actual', providerCallId: 'p', name: 'tool', result:
+      shape === 'partialOutput' ? {status: 'interrupted', error: {code: 'interrupted', message: 'cancelled', retryable: false}, partialOutput: {stdout: payload}} :
+      shape === 'errorDetails' ? {status: 'error', error: {code: 'mcp_error', message: 'failed', retryable: false, details: {content: payload}}} :
+      {status: 'success', output: {[shape]: payload}},
+    }]};
+    const next = applyToolResultBudget([item], workspace, new ToolResultReplacementState());
+    expect(Buffer.byteLength(JSON.stringify(next))).toBeLessThan(4_000);
+    expect(JSON.stringify(next)).toContain('<persisted-output>');
+    expect(readFileSync(join(workspace, '.bitori', 'tool-results', 'actual'), 'utf8')).toContain(payload);
+    expect(JSON.stringify(item)).toContain(payload);
+  });
   it('单个超大结果落盘并生成稳定预览', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'bitori-budget-'));
     try {

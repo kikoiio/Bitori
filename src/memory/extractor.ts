@@ -10,8 +10,6 @@ const TAG_TYPES: Record<MemoryTag, MemoryType> = {
   MEMORY_REFERENCE: 'reference',
 };
 
-export interface MemoryCandidate {tag: MemoryTag; title: string; description: string; content: string}
-
 /** 回合自然停止后异步提取；返回 NONE 时不写任何文件。 */
 export class MemoryExtractor {
   readonly #manager: MemoryManager;

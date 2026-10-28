@@ -14,6 +14,8 @@ export interface AgentRunInput {
   trigger: 'message' | 'do';
   mode: AgentMode;
   instruction: string;
+  /** 本次显示消息的标识；模型请求使用 instruction，持久化仍保留用户输入。 */
+  userMessageId?: string;
   context: ModelContextItem[];
   /** 控制器在会话激活时冻结的系统提示；缺省时不发送系统提示。 */
   system?: PromptBlock[];

@@ -1,4 +1,4 @@
-import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
@@ -29,5 +29,23 @@ describe('指令文件', () => {
     expect(sources[0]!.content).toBe('模块内容');
     writeFileSync(join(root, 'loop.md'), '@include loop.md', 'utf8');
     expect(discoverInstructions(root, root).length).toBe(1);
+  });
+
+  it('没有 BITORI.md 时直接读取 AGENTS.md，并保持每个位置唯一来源', ({onTestFinished}) => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-memory-'));
+    onTestFinished(() => rmSync(root, {recursive: true, force: true}));
+    writeFileSync(join(root, 'AGENTS.md'), '共享工作约定', 'utf8');
+    expect(discoverInstructions(root, root).map(source => source.content)).toEqual(['共享工作约定']);
+    writeFileSync(join(root, 'BITORI.md'), '专用约定', 'utf8');
+    expect(discoverInstructions(root, root).map(source => source.content)).toEqual(['专用约定']);
+  });
+
+  it.skipIf(process.platform === 'win32')('拒绝通过符号链接读取工作区外的指令', ({onTestFinished}) => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-memory-'));
+    const outside = mkdtempSync(join(tmpdir(), 'bitori-outside-'));
+    onTestFinished(() => { rmSync(root, {recursive: true, force: true}); rmSync(outside, {recursive: true, force: true}); });
+    writeFileSync(join(outside, 'secret.md'), '外部内容', 'utf8');
+    symlinkSync(join(outside, 'secret.md'), join(root, 'BITORI.md'));
+    expect(() => discoverInstructions(root, root)).toThrow(/越界/);
   });
 });
