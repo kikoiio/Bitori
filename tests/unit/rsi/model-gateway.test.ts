@@ -574,8 +574,8 @@ describe('trusted RSI model gateway', () => {
       const result = await fetch(url + paths['openai-chat'], {method: 'POST', headers: {authorization: `Bearer ${runToken}`, 'content-type': 'application/json'}, body: JSON.stringify(body('openai-chat'))});
       expect(await result.text()).toBe(stream('openai-chat'));
       child.kill('SIGTERM');
-      const [code] = await exited;
-      if (process.platform !== 'win32') expect(code).toBe(0);
+      const exit = await exited as [number | null, NodeJS.Signals | null];
+      if (process.platform !== 'win32') expect(exit[0]).toBe(0);
       expect(stdout + stderr).not.toContain(apiKey);
       expect(stdout + stderr).not.toContain(runToken);
       expect(stderr).toBe('');
