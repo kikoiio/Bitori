@@ -42,6 +42,18 @@ def grade(dataset, instance_id, predictions, run_id):
     return report
 
 
+def repair_pvlib_image(instance):
+    """Repair an upstream NumPy 2 incompatibility; caller must re-run the gold check."""
+    image = image_for(instance)
+    container = command(['docker', 'create', image, 'tail', '-f', '/dev/null'], capture_output=True).stdout.strip()
+    try:
+        command(['docker', 'start', container], capture_output=True)
+        command(['docker', 'exec', container, '/opt/miniconda3/envs/testbed/bin/python', '-m', 'pip', 'install', 'numpy<2'], capture_output=True)
+        command(['docker', 'commit', container, image], capture_output=True)
+    finally:
+        subprocess.run(['docker', 'rm', '-f', container], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--index', type=int, required=True)
@@ -66,6 +78,10 @@ def main():
     container = None
     try:
         gold = grade(dataset, iid, 'gold', 'gold')
+        if not gold['resolved'] and instance.get('repo') == 'pvlib/pvlib-python' and 'np.Inf' in gold.get('test_output_tail', ''):
+            repair_pvlib_image(instance)
+            result['environment_adjustments'] = ['pvlib: numpy<2']
+            gold = grade(dataset, iid, 'gold', 'gold-repaired')
         if not gold['resolved']:
             result['gold_report'] = gold
             raise RuntimeError('官方答案未通过评分，不能信任此任务的环境')
