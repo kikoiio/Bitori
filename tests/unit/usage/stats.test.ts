@@ -54,7 +54,7 @@ describe('usage stats', () => {
     const path = join(directory, 'skills.jsonl');
     const recorder = new UsageRecorder(path);
     recorder.record({kind: 'skill', name: 'demo', source: 'model', sessionId: 's1'});
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await recorder.flush();
     expect(aggregateUsage(readUsageRecords(path).records)[0]).toMatchObject({name: 'demo', count: 1});
     expect(readFileSync(path, 'utf8').trim().split('\n')).toHaveLength(1);
   });

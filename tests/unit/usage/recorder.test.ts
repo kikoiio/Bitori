@@ -14,8 +14,7 @@ describe('UsageRecorder', () => {
     const recorder = new UsageRecorder(join(directory, 'skills.jsonl'));
     recorder.record({kind: 'skill', name: 'demo', source: 'model', sessionId: 's1', profileName: 'p'});
     recorder.record({kind: 'command', name: 'compact', source: 'user', sessionId: 's1'});
-    // appendFile 异步落盘；留出一拍。
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await recorder.flush();
     const lines = readFileSync(join(directory, 'skills.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatchObject({kind: 'skill', name: 'demo', source: 'model', sessionId: 's1', profileName: 'p', agent: 'bitori'});

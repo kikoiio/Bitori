@@ -243,6 +243,7 @@ export class ChatController {
         async () => { await this.#services?.close(); },
         async () => { await this.#services?.hooks.fire('shutdown', {event: 'shutdown'}); },
         async () => { await this.#tap?.flush(); },
+        async () => { await this.#usage?.flush(); },
         async () => { await this.#repository.close(); },
       ]) { try { await cleanup(); } catch (error) { errors.push(error); } }
       if (errors.length === 1) throw errors[0];
