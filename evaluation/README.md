@@ -6,6 +6,8 @@
 
 每题上传 `result.json`，包含任务、数据集版本、模型、代码提交、结果、耗时及部分用量，不上传模型回复、补丁或运行轨迹。`resolved`、`unresolved`、`agent_error` 和 `infrastructure_error` 分开记录；若作业启动前失败或超时，可能没有结果文件。为检查完整性需确认 23 个独立任务都产生了结果。
 
+汇总作业将逐题结果写入 `swe-lite-summary` artifact；缺题、任务重复或运行错误会使汇总失败。旧版运行没有汇总作业时，可将各 artifact 下载到同一目录后运行 `python3 evaluation/rsi/aggregate.py <目录> --indices '[0,1]' --output <报告.json>`。
+
 `rsi/compare.py <baseline目录> <candidate目录>` 比较两次结果，拒绝不同任务、数据集、模型或未完成的运行。该工具是 RSI 的对比起点；尚未自动生成修改、执行候选版本、保护留出集或判断结果统计显著性。现有 `scripts/auto-improve.sh` 是独立的 draft PR 流程，尚未接入这里。更改需要人工审查，不会自动合并。
 
 `rsi/experiment.py --hypothesis '<假设>' --baseline <目录> --candidate <目录> --output <报告.json>` 在相同约束下保存两次提交、改进假设和逐题对比，并标记为等待人工审查。公开数据集 revision 与评分器顶层版本已固定；上游镜像标签和 Python 间接依赖尚未固定，当前结果还不能保证完全可复现。
