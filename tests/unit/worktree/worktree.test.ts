@@ -46,7 +46,9 @@ describe('Worktree', () => {
     const context = {workspaceRoot: root, signal: new AbortController().signal, limits: {timeoutMs: 10_000, maxResultBytes: 65_536, maxMatches: 500}};
     const result = await enter.execute({slug: 'clean'}, context);
     expect(result).toMatchObject({status: 'success', output: {relativePath: join('.bitori', 'worktrees', 'clean')}});
-    expect(await new ReadFileTool().execute({path: join('.bitori', 'worktrees', 'clean', 'README.md')}, context)).toMatchObject({status: 'success', output: {content: 'init\n'}});
+    const readme = await new ReadFileTool().execute({path: join('.bitori', 'worktrees', 'clean', 'README.md')}, context);
+    const content = readme.status === 'success' && typeof readme.output.content === 'string' ? readme.output.content : undefined;
+    expect(content?.replaceAll('\r\n', '\n')).toBe('init\n');
     expect(await exit.execute({slug: 'clean', force: false})).toMatchObject({status: 'success'});
     expect(await exit.execute({slug: 'clean', force: false})).toMatchObject({status: 'error', error: {code: 'path_not_found'}});
     expect(await enter.execute({slug: 'clean'}, context)).toMatchObject({status: 'success'});
