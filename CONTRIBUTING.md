@@ -1,6 +1,6 @@
 # 贡献指南
 
-欢迎提交问题和改进。开始前请阅读 [产品目标](docs/product.md)、[架构](docs/architecture.md) 和 [开发流程](docs/development.md)，确认变更适用于当前终端产品或明确标注为计划。
+欢迎提交问题和改进。开始前请阅读 [产品目标](docs/product.md)、[架构](docs/architecture.md) 和 [开发流程](docs/development.md)，确认变更的适用平台及当前实现状态。
 
 1. 描述问题、使用场景和预期行为；较大的接口或架构调整先讨论方案。
 2. 使用 Node.js 24，按开发文档准备环境；改动尽量聚焦，并为行为变化增加适当测试。
