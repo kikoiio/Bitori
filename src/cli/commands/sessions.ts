@@ -10,7 +10,8 @@ export async function runSessionsCommand(options: NonNullable<CliOptions['sessio
   if (profile === null) throw new UsageError('多 profile 时 sessions 命令需要 --profile 指定');
   const repository = new SessionRepository(configPaths().database);
   try {
-    await repository.initialize();
+    // 只读命令不应把其他进程留下的活动回合改写成中断状态。
+    await repository.initialize({recover: false});
     if (options.action === 'list') {
       const sessions = await repository.listSessions(profile.name);
       if (options.json === true) {

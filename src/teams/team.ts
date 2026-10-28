@@ -31,7 +31,11 @@ export class TeamManager {
     return team;
   }
 
-  directory(name: string): string { return join(this.#homeDirectory, sanitize(name)); }
+  directory(name: string): string {
+    const safeName = sanitize(name);
+    if (!safeName) throw new Error('团队名称无效');
+    return join(this.#homeDirectory, safeName);
+  }
 
   get(name: string): TeamRecord | null {
     const path = join(this.directory(name), 'team.json');

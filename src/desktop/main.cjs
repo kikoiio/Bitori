@@ -7,7 +7,7 @@ const {pathToFileURL} = require('node:url');
 
 let window;
 let controller;
-let toolSystem;
+let runtime;
 let config;
 let unsubscribe;
 let workspace = '';
@@ -20,28 +20,19 @@ let startupError;
 async function loadCore() {
   const base = resolve(__dirname, '../../dist');
   const load = name => import(pathToFileURL(join(base, name)).href);
-  const [chat, loader, types, providers, storage, tools, logging, redaction, retention] = await Promise.all([
-    load('chat/agent-controller.js'), load('config/loader.js'), load('config/types.js'),
-    load('providers/factory.js'), load('storage/repository.js'), load('tools/create-tool-system.js'),
-    load('shared/logger.js'), load('shared/redact.js'), load('trace/retention.js'),
+  const [application, loader, types] = await Promise.all([
+    load('app/runtime.js'), load('config/loader.js'), load('config/types.js'),
   ]);
-  return {...chat, ...loader, ...types, ...providers, ...storage, ...tools, ...logging, ...redaction, ...retention};
+  return {...application, ...loader, ...types};
 }
 
 async function dispose() {
   unsubscribe?.();
   unsubscribe = undefined;
-  const previous = controller;
   controller = undefined;
-  try { if (previous) await previous.shutdown(); }
-  finally {
-    const previousTools = toolSystem;
-    toolSystem = undefined;
-    if (previousTools) {
-      previousTools.close();
-      await previousTools.mcp.close().catch(() => {});
-    }
-  }
+  const previous = runtime;
+  runtime = undefined;
+  if (previous) await previous.close();
 }
 
 function snapshot(error) {
@@ -65,34 +56,13 @@ async function selectProfile(name) {
   const profile = core.resolveProfileWithApiKey(config, name);
   if (!profile) throw new Error('请选择模型配置');
   await dispose();
-  const cache = new Map();
-  const clientFor = model => {
-    const requested = model === null ? profile.name : (config.models[model] ?? model);
-    const chosen = config.profiles.find(item => item.name === requested) ?? profile;
-    if (!cache.has(chosen.name)) cache.set(chosen.name, core.createLLMClient(chosen));
-    return cache.get(chosen.name);
-  };
-  toolSystem = core.createToolSystem(workspace, config.mcpServers, {clientFor, memoryClient: core.createLLMClient(profile)});
-  try {
-    const result = await toolSystem.mcp.initialize();
-    await toolSystem.services.hooks.fire('startup', {event: 'startup'});
-    const repository = new core.SessionRepository();
-    const paths = core.configPaths();
-    const next = new core.ChatController(core.createLLMClient(profile), repository, toolSystem, undefined, {
-      observability: {traceDirectory: paths.traces, usagePath: join(paths.usage, 'skills.jsonl')},
-    });
-    try { await next.initialize(profile); }
-    catch (error) { await repository.close().catch(() => {}); throw error; }
-    controller = next;
-    unsubscribe = next.subscribe(state => {
-      if (window && !window.isDestroyed()) window.webContents.send('bitori:state', state);
-    });
-    const warning = result.failed.map(item => `MCP ${item.name}：${item.error.message}`).join('\n');
-    return currentSnapshot(warning);
-  } catch (error) {
-    await dispose();
-    throw error;
-  }
+  const next = await core.createApplicationRuntime({config, profileName: profile.name, workspace});
+  runtime = next;
+  controller = next.controller;
+  unsubscribe = controller.subscribe(state => {
+    if (window && !window.isDestroyed()) window.webContents.send('bitori:state', state);
+  });
+  return currentSnapshot(next.warnings.join('\n'));
 }
 
 async function initialize() {
@@ -100,13 +70,8 @@ async function initialize() {
   config = undefined;
   startupError = undefined;
   try {
-    process.chdir(workspace);
     config = core.loadConfig(undefined, workspace);
-    const paths = core.configPaths();
-    const redactor = core.createRedactor(core.collectSecretValues(config));
-    core.setGlobalRedactor(redactor);
-    core.configureLogging({directory: paths.logs, redactor, ...config.logging.level && {level: config.logging.level}, ...config.logging.retention_days && {retentionDays: config.logging.retention_days}});
-    core.cleanupExpiredTraces(paths.traces, config.trace.retention_days ?? 30);
+    core.configureApplicationLogging(config);
     if (config.profiles.length === 1) {
       const result = await selectProfile(config.profiles[0].name);
       startupError = result.error;

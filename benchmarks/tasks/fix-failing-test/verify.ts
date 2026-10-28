@@ -1,2 +1,2 @@
-import {execFileSync} from 'node:child_process';
-execFileSync('npm', ['test'], {stdio: 'inherit'});
+import {verifyTestAssets} from '../../verify-test-assets.js';
+verifyTestAssets(import.meta.dirname, ['index.test.js']);

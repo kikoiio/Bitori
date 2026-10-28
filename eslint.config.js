@@ -3,9 +3,21 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  {ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'eslint.config.js', '.tmp/**', 'chrome-profile*/**', 'benchmarks/tasks/**/workspace/**', 'src/desktop/**/*.cjs', 'src/desktop/renderer/**/*.js', 'tests/desktop/**/*.mjs']},
+  {ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'eslint.config.js', '.tmp/**', 'chrome-profile*/**', 'benchmarks/tasks/**/workspace/**']},
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: ['src/desktop/**/*.cjs', 'src/desktop/renderer/**/*.js', 'tests/desktop/**/*.mjs', 'benchmarks/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        Buffer: 'readonly', __dirname: 'readonly', module: 'readonly', require: 'readonly',
+        process: 'readonly', console: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly',
+        URL: 'readonly', window: 'readonly', document: 'readonly', navigator: 'readonly',
+      },
+    },
+  },
+  {files: ['src/desktop/**/*.cjs'], rules: {'@typescript-eslint/no-require-imports': 'off'}},
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {

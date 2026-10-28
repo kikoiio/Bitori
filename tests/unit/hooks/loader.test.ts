@@ -13,6 +13,16 @@ function setup(home: string, work: string): void {
 }
 
 describe('Hook 配置加载', () => {
+  it('加载失败策略并拒绝未实现的 agent 动作', () => {
+    const home = mkdtempSync(join(tmpdir(), 'bitori-hooks-home-'));
+    const work = mkdtempSync(join(tmpdir(), 'bitori-hooks-work-'));
+    roots.push(home, work); setup(home, work);
+    const path = join(work, '.bitori', 'hooks.yaml');
+    writeFileSync(path, '- event: pre_tool_use\n  reject: true\n  failure_policy: open\n  timeout_ms: 50\n  action: {type: http, url: "https://example.invalid"}\n', 'utf8');
+    expect(loadHookConfigs(work, home)[0]).toMatchObject({failurePolicy: 'open', timeoutMs: 50});
+    writeFileSync(path, '- event: startup\n  action: {type: agent, prompt: test}\n', 'utf8');
+    expect(() => loadHookConfigs(work, home)).toThrow(/Hook 配置无效/);
+  });
   it('用户级先加载，项目级追加', () => {
     const home = mkdtempSync(join(tmpdir(), 'bitori-hooks-home-'));
     const work = mkdtempSync(join(tmpdir(), 'bitori-hooks-work-'));

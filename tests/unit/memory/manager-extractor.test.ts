@@ -1,5 +1,5 @@
 import {existsSync, readFileSync} from 'node:fs';
-import {mkdtempSync} from 'node:fs';
+import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
@@ -12,9 +12,11 @@ function client(text: string): LLMClient {
 }
 
 describe('长期记忆', () => {
-  it('解析 frontmatter 并生成轻量索引', () => {
+  it('解析 frontmatter 并生成轻量索引', ({onTestFinished}) => {
     const work = mkdtempSync(join(tmpdir(), 'bitori-memory-'));
+    onTestFinished(() => rmSync(work, {recursive: true, force: true}));
     const home = mkdtempSync(join(tmpdir(), 'bitori-home-'));
+    onTestFinished(() => rmSync(home, {recursive: true, force: true}));
     const manager = new MemoryManager(work, home);
     manager.write('project', 'style.md', {name: '代码风格', description: '注释使用中文', type: 'project'}, '源码注释使用中文。');
     expect(manager.buildSystemReminder()).toContain('代码风格');
@@ -24,9 +26,11 @@ describe('长期记忆', () => {
     expect(Buffer.byteLength(index, 'utf8')).toBeLessThanOrEqual(25_000);
   });
 
-  it('extractor 支持四类记忆、NONE 与索引重建', async () => {
+  it('extractor 支持四类记忆、NONE 与索引重建', async ({onTestFinished}) => {
     const work = mkdtempSync(join(tmpdir(), 'bitori-memory-'));
+    onTestFinished(() => rmSync(work, {recursive: true, force: true}));
     const home = mkdtempSync(join(tmpdir(), 'bitori-home-'));
+    onTestFinished(() => rmSync(home, {recursive: true, force: true}));
     const manager = new MemoryManager(work, home);
     await new MemoryExtractor(manager, client('MEMORY_USER_PREFERENCE|终端偏好|喜欢简短回复|用户偏好简短中文回复。')).extract('用户：回复短一点');
     expect(existsSync(join(home, '.bitori', 'memory'))).toBe(true);

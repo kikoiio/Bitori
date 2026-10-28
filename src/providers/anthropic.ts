@@ -83,7 +83,7 @@ export class AnthropicClient implements LLMClient {
       else if (item.type === 'reminder') messages.push({role: 'user', content: item.text});
       else messages.push({role: 'user', content: item.results.map(entry => ({type: 'tool_result', tool_use_id: entry.providerCallId ?? entry.callId, content: JSON.stringify(entry.result), is_error: entry.result.status !== 'success'}))});
     }
-    if (messages.length === 0 && request.system === undefined) {
+    if (messages.length === 0) {
       for (const message of request.messages) messages.push({role: message.role, content: message.content});
     }
     const parameters = {

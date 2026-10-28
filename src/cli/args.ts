@@ -54,8 +54,8 @@ exec 选项：
   --json                结束时向 stdout 追加结构化结果 JSON`;
 
 function positiveInteger(value: string, option: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) throw new UsageError(`${option} 必须是正整数`);
+  const parsed = Number(value);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsed) || parsed <= 0) throw new UsageError(`${option} 必须是正整数`);
   return parsed;
 }
 
@@ -97,13 +97,31 @@ function parseSubcommand(name: 'trace' | 'usage' | 'sessions', context: Subcomma
   // 子命令内也接受 --profile（sessions 需要）；与全局 profile 冲突时报错。
   const profileFlag = flags.get('--profile');
   if (typeof profileFlag === 'string') {
-    if (context.profile !== undefined && context.profile !== profileFlag) throw new UsageError('--profile 不能重复');
+    if (context.profile !== undefined) throw new UsageError('--profile 不能重复');
     context.profile = profileFlag;
   }
   const json = flags.get('--json') === true;
   const sessionFlag = flags.get('--session');
+  const action = positionals[0];
+  const allowed: Record<string, readonly string[]> = {
+    'trace:show': ['--json', '--session', '--iteration'],
+    'trace:tail': ['--session'],
+    'trace:export': ['--session', '--out', '--raw'],
+    'trace:replay': [],
+    'usage:stats': ['--json', '--session', '--kind'],
+    'usage:tail': [],
+    'sessions:list': ['--profile', '--json'],
+    'sessions:show': ['--profile', '--json', '--session'],
+  };
+  const accepted = allowed[`${name}:${action}`];
+  if (accepted !== undefined) {
+    if (name !== 'sessions' && context.profile !== undefined) throw new UsageError(`${name} ${action} 不支持 --profile`);
+    for (const flag of flags.keys()) if (!accepted.includes(flag)) throw new UsageError(`${name} ${action} 不支持 ${flag}`);
+    const maxPositionals = name === 'usage' && action === 'tail' || name === 'sessions' && action === 'list' ? 1 : 2;
+    if (positionals.length > maxPositionals) throw new UsageError(`${name} ${action} 参数过多`);
+    if (sessionFlag !== undefined && positionals[1] !== undefined) throw new UsageError('会话 ID 不能重复');
+  }
   if (name === 'trace') {
-    const action = positionals[0];
     const iterationFlag = flags.get('--iteration');
     const iteration = typeof iterationFlag === 'string' ? positiveInteger(iterationFlag, '--iteration') : undefined;
     if (action === 'show') {
@@ -113,6 +131,7 @@ function parseSubcommand(name: 'trace' | 'usage' | 'sessions', context: Subcomma
     }
     if (action === 'tail') {
       const sessionId = typeof sessionFlag === 'string' ? sessionFlag : positionals[1];
+      if (sessionId === undefined) throw new UsageError('trace tail 需要 --session <sessionId>');
       return {trace: {action, ...(sessionId === undefined ? {} : {sessionId}), json}};
     }
     if (action === 'export') {
@@ -128,7 +147,6 @@ function parseSubcommand(name: 'trace' | 'usage' | 'sessions', context: Subcomma
     throw new UsageError('trace 子命令需要 show|tail|export|replay');
   }
   if (name === 'usage') {
-    const action = positionals[0];
     const kind = flags.get('--kind');
     if (action === 'stats') {
       const sessionId = typeof sessionFlag === 'string' ? sessionFlag : positionals[1];
@@ -139,7 +157,6 @@ function parseSubcommand(name: 'trace' | 'usage' | 'sessions', context: Subcomma
     throw new UsageError('usage 子命令需要 stats|tail');
   }
   // sessions
-  const action = positionals[0];
   if (action === 'list') return {sessions: {action, json}};
   if (action === 'show') {
     const sessionId = positionals[1] ?? (typeof sessionFlag === 'string' ? sessionFlag : undefined);
@@ -213,7 +230,9 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
   }
 
   if (exec && help) throw new UsageError('exec 不能和 --help 同时使用');
+  if (subcommand && help) throw new UsageError('子命令不能和 --help 同时使用');
   if (help && profile !== undefined) throw new UsageError('--help 不能和 --profile 同时使用');
+  if (help && logLevelOption !== undefined) throw new UsageError('--help 不能和 --log-level 同时使用');
   if (subcommand !== undefined) {
     return {
       help: false,

@@ -4,5 +4,5 @@ difficulty: easy
 skills: [prefer-dedicated-tools]
 maxIterations: 6
 forbiddenTools: [run_command, write_file, edit_file]
-expectReplyContains: ['secrets.md']
+expectReplyExact: 'secrets.md'
 task: docs 目录下有一份文件提到 credentials 一词。请用专用查找工具找出文件名，只回答文件名。

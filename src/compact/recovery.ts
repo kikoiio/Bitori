@@ -27,9 +27,7 @@ export class RecoveryState {
       return `- ${file.path}${Buffer.byteLength(content, 'utf8') < Buffer.byteLength(file.content, 'utf8') ? ' (content truncated)' : ''}\n${content}`;
     });
     return [
-      '## 最近读过的文件',
-      ...(files.length > 0 ? files : ['- 无']),
-      '',
+      ...(files.length > 0 ? ['## 最近读过的文件', ...files, ''] : []),
       '## 当前可用工具',
       ...tools.map(tool => `- ${tool.name}: ${tool.description}`),
       '',

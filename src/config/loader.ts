@@ -1,4 +1,4 @@
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync, readFileSync, realpathSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {parse as parseEnv} from 'dotenv';
@@ -98,7 +98,8 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     const parsed = parseConfig(parseYaml(yamlText));
     const projectPath = join(workspaceRoot, '.bitori', 'config.yaml');
     // 工作区为主目录时，同一文件只按用户配置解析，避免项目级严格校验重复读取。
-    const project = resolve(projectPath) === resolve(paths.config) ? {} : readProjectConfig(projectPath);
+    const sameConfig = resolve(projectPath) === resolve(paths.config) || (existsSync(projectPath) && realpathSync(projectPath) === realpathSync(paths.config));
+    const project = sameConfig ? {} : readProjectConfig(projectPath);
     const profiles: ProviderProfile[] = parsed.profiles.map(source => {
       // `${NAME}` 去掉前后两个字符，得到 .env 中真正的变量名 NAME。
       const variable = source.api_key.slice(2, -1);

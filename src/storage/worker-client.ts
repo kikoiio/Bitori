@@ -23,7 +23,7 @@ export class StorageWorkerClient {
     this.#worker.on('message', (response: StorageResponse) => this.#handleResponse(response));
     this.#worker.on('error', error => this.#rejectAll(new StorageError('存储 Worker 发生错误', {cause: error})));
     this.#worker.on('exit', code => {
-      if (!this.#closed && code !== 0) this.#rejectAll(new StorageError(`存储 Worker 意外退出（${code}）`));
+      if (!this.#closed) this.#rejectAll(new StorageError(`存储 Worker 意外退出（${code}）`));
     });
   }
 

@@ -1,5 +1,5 @@
 import type {ProviderError, ProviderErrorCode} from '../providers/errors.js';
-import type {MessageRole, ProviderState, Usage} from '../providers/types.js';
+import type {MessageRole, ModelContextItem, ProviderState, Usage} from '../providers/types.js';
 import type {ApprovalStatus, JsonObject, ToolExecutionResult, ToolExecutionStatus} from '../tools/types.js';
 import type {AgentMode, AgentRunResult, AgentRunStatus, AgentStopReason} from '../agent/types.js';
 
@@ -61,19 +61,21 @@ export interface ToolCallRecord {
   toolName: string; arguments: JsonObject; argumentsText?: string; agentRunId?: string | null; approvalStatus: ApprovalStatus; executionStatus: ToolExecutionStatus;
   result: ToolExecutionResult | null; createdAt: number; updatedAt: number;
 }
-export interface StoredConversation {session: Session; messages: StoredMessage[]; toolCalls: ToolCallRecord[]; agentRuns: AgentRunRecord[]}
+export interface ContextCheckpoint {boundaryMessageId: string; items: ModelContextItem[]}
+export interface StoredConversation {session: Session; messages: StoredMessage[]; toolCalls: ToolCallRecord[]; agentRuns: AgentRunRecord[]; checkpoint?: ContextCheckpoint | null}
 
 /**
  * 控制器所依赖的仓储接口。测试可以传入内存假实现，生产环境则使用 Worker + SQLite。
  */
 export interface SessionRepositoryContract {
-  initialize(): Promise<void>;
+  initialize(options?: {recover?: boolean}): Promise<void>;
   findLatestSession(profileName: string): Promise<Session | null>;
   listSessions(profileName: string): Promise<Session[]>;
   createSession(profileName: string): Promise<Session>;
   getSession(sessionId: string): Promise<Session | null>;
   getMessages(sessionId: string): Promise<StoredMessage[]>;
   getConversation(sessionId: string): Promise<StoredConversation | null>;
+  saveContextCheckpoint?(sessionId: string, checkpoint: ContextCheckpoint): Promise<void>;
   saveToolBatch(records: ToolCallRecord[]): Promise<void>;
   finalizeAssistantWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void>;
   updateToolCall(record: ToolCallRecord): Promise<void>;
@@ -85,6 +87,7 @@ export interface SessionRepositoryContract {
   beginAgentRun(input: {runId: string; sessionId: string; displayText: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}>;
   beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage>;
   finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void>;
+  abortAgentRun?(runId: string, result: AgentRunResult, message: string): Promise<void>;
   finishAgentRun(runId: string, result: AgentRunResult, latestPlanMessageId?: string): Promise<void>;
   close(): Promise<void>;
 }

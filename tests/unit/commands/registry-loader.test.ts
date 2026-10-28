@@ -1,4 +1,4 @@
-import {mkdirSync, mkdtempSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
@@ -20,9 +20,11 @@ describe('Slash 命令', () => {
     expect(new CommandRegistry().registerIfAbsent({name: 'x', aliases: [], type: 'local', description: '', handler: () => ''})).toBe(true);
   });
 
-  it('加载用户 Markdown 命令、命名空间与 $ARGUMENTS', () => {
+  it('加载用户 Markdown 命令、命名空间与 $ARGUMENTS', ({onTestFinished}) => {
     const work = mkdtempSync(join(tmpdir(), 'bitori-cmd-'));
+    onTestFinished(() => rmSync(work, {recursive: true, force: true}));
     const home = mkdtempSync(join(tmpdir(), 'bitori-home-'));
+    onTestFinished(() => rmSync(home, {recursive: true, force: true}));
     mkdirSync(join(work, '.bitori', 'commands', 'review'), {recursive: true});
     writeFileSync(join(work, '.bitori', 'commands', 'review', 'security.md'), '---\ndescription: 安全审查\n---\n请审查 $ARGUMENTS 的安全问题', 'utf8');
     const registry = loadUserCommands(work, home, createDefaultRegistry());

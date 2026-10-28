@@ -63,5 +63,5 @@ export type AgentEvent =
   // 请求级可观察性：完整请求载荷、重试序列与压缩事实只在此处可见。
   | (AgentEventBase & {type: 'request_prepared'; iterationId: string; iteration: number; items: ModelContextItem[]; system: PromptBlock[]; toolDefinitions: ToolDefinition[]; toolDefinitionDigest: string})
   | (AgentEventBase & {type: 'request_retry'; iterationId: string; iteration: number; attempt: number; delayMs: number; error: ProviderError})
-  | (AgentEventBase & {type: 'context_compacted'; beforeTokens: number; afterTokens: number; keepIndex: number; reason: 'auto' | 'manual'})
+  | (AgentEventBase & {type: 'context_compacted'; beforeTokens: number; afterTokens: number; keepIndex: number; reason: 'auto' | 'manual'; boundaryMessageId: string; items: ModelContextItem[]})
   | (AgentEventBase & {type: 'run_finished'; result: AgentRunResult});

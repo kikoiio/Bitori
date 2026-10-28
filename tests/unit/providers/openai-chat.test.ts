@@ -59,4 +59,11 @@ describe('OpenAIChatClient', () => {
     const sent = (create.mock.calls[0]?.[0] as Record<string, unknown>).messages as Array<Record<string, unknown>>;
     expect(sent.every(message => message.role !== 'system')).toBe(true);
   });
+  it('同时传入系统提示和消息时保留用户消息', async () => {
+    const create = vi.fn().mockResolvedValue(chunks());
+    const sdk = {chat: {completions: {create}}} as unknown as OpenAI;
+    for await (const event of new OpenAIChatClient(profile, sdk).streamChat({system: [{text: 'system', cacheable: false}], messages: [{role: 'user', content: 'hello'}]}, new AbortController().signal)) { void event; }
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({messages: [{role: 'system', content: 'system'}, {role: 'user', content: 'hello'}]}), expect.anything());
+  });
+
 });

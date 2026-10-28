@@ -18,7 +18,7 @@ const onlyTasks = (process.env.BITORI_BENCH_TASKS ?? '').split(',').map(name => 
 
 function discoverTasks(): Array<{definition: TaskDefinition; directory: string}> {
   if (!existsSync(tasksRoot)) return [];
-  return readdirSync(tasksRoot, {withFileTypes: true})
+  const tasks = readdirSync(tasksRoot, {withFileTypes: true})
     .filter(entry => entry.isDirectory())
     .map(entry => {
       const directory = join(tasksRoot, entry.name);
@@ -28,6 +28,9 @@ function discoverTasks(): Array<{definition: TaskDefinition; directory: string}>
     })
     .filter(task => onlyTasks.length === 0 || onlyTasks.includes(task.definition.id))
     .sort((a, b) => a.definition.id.localeCompare(b.definition.id));
+  const missing = onlyTasks.filter(id => !tasks.some(task => task.definition.id === id));
+  if (missing.length > 0) throw new Error(`未知 benchmark 任务：${missing.join(', ')}`);
+  return tasks;
 }
 
 interface ExecSummary {
@@ -58,6 +61,7 @@ function violatedConstraints(task: TaskDefinition, summary: ExecSummary): string
   for (const tool of task.forbiddenTools ?? []) {
     if (summary.toolCalls.some(call => call.name === tool)) violations.push(`禁止使用工具 ${tool}`);
   }
+  if (task.expectReplyExact !== undefined && summary.reply.trim() !== task.expectReplyExact) violations.push(`回复应为 ${task.expectReplyExact}`);
   for (const expected of task.expectReplyContains ?? []) {
     if (!summary.reply.includes(expected)) violations.push(`回复应包含 ${expected}`);
   }
@@ -80,9 +84,9 @@ async function verify(task: {definition: TaskDefinition; directory: string}, wor
 async function runTask(task: {definition: TaskDefinition; directory: string}): Promise<TaskResult> {
   const workspace = mkdtempSync(join(tmpdir(), `bitori-bench-${task.definition.id}-`));
   const source = join(task.directory, 'workspace');
-  if (existsSync(source)) cpSync(source, workspace, {recursive: true});
   const started = Date.now();
   try {
+    if (existsSync(source)) cpSync(source, workspace, {recursive: true});
     const args = [join(root, 'dist', 'bin', 'bitori.js'), 'exec', '--task', task.definition.task, '--workspace', workspace, '--json'];
     if (profile) args.push('--profile', profile);
     if (task.definition.maxIterations !== undefined) args.push('--max-iterations', String(task.definition.maxIterations));
@@ -136,6 +140,7 @@ async function runTaskWithRateLimitRetry(task: {definition: TaskDefinition; dire
 if (!model) throw new Error('缺少 BITORI_BENCH_MODEL 或 LLM_MODEL');
 const tasks = discoverTasks();
 if (tasks.length === 0) throw new Error('未发现 benchmark 任务');
+const startedAt = new Date().toISOString();
 const runId = `${new Date().toISOString().replace(/[:.]/g, '-')}-${provider}`;
 const results: TaskResult[] = [];
 for (const task of tasks) {
@@ -152,7 +157,7 @@ for (const task of tasks) {
   process.stderr.write(`${result.status} (${result.durationMs}ms)\n`);
 }
 const passed = results.filter(result => result.status === 'pass').length;
-const ledger: RunLedger = {runId, startedAt: new Date().toISOString(), provider, model, results, summary: {passed, failed: results.filter(result => result.status === 'fail').length, errored: results.filter(result => result.status === 'error').length, total: results.length, passRate: passed / results.length}};
+const ledger: RunLedger = {runId, startedAt, provider, model, results, summary: {passed, failed: results.filter(result => result.status === 'fail').length, errored: results.filter(result => result.status === 'error').length, total: results.length, passRate: passed / results.length}};
 const outputDirectory = join(root, 'benchmarks', 'results');
 mkdirSync(outputDirectory, {recursive: true});
 writeFileSync(join(outputDirectory, `${runId}.json`), JSON.stringify(ledger, null, 2) + '\n', 'utf8');

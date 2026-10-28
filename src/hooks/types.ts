@@ -20,6 +20,7 @@ export interface HookConfig {
   condition?: string;
   action: HookAction;
   reject?: boolean;
+  failurePolicy?: 'open' | 'closed';
   once?: boolean;
   async?: boolean;
   timeoutMs?: number;

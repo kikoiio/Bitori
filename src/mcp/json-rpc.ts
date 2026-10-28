@@ -21,19 +21,21 @@ export class JsonRpcPeer {
   readonly #pending = new Map<JsonRpcId, PendingRequest>();
   #nextId = 1;
   #closed = false;
+  #closePromise: Promise<void> | null = null;
 
   constructor(readonly transport: McpTransport, readonly timeoutMs = 30_000) {}
 
   async start(): Promise<void> {
     await this.transport.start(
       message => { void this.#receive(message).catch(error => this.#failAll(error instanceof Error ? error : new McpProtocolError(String(error)))); },
-      error => this.#failAll(error ?? new McpProtocolError('MCP 连接已关闭')),
+      error => { this.#closed = true; this.#failAll(error ?? new McpProtocolError('MCP 连接已关闭')); },
     );
   }
 
   async request(method: string, params: JsonObject = {}, signal?: AbortSignal): Promise<unknown> {
     if (this.#closed) throw new McpProtocolError('MCP 连接已经关闭');
     const id = this.#nextId++;
+    const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let abort: (() => void) | undefined;
     const response = new Promise<unknown>((resolve, reject) => {
@@ -41,6 +43,7 @@ export class JsonRpcPeer {
         if (timeout !== undefined) clearTimeout(timeout);
         if (abort !== undefined) signal?.removeEventListener('abort', abort);
         this.#pending.delete(id);
+        controller.abort();
       };
       abort = () => { cleanup(); reject(new DOMException('MCP 请求已取消', 'AbortError')); };
       this.#pending.set(id, {resolve: value => { cleanup(); resolve(value); }, reject: error => { cleanup(); reject(error); }, cleanup});
@@ -54,24 +57,37 @@ export class JsonRpcPeer {
       this.#pending.get(id)?.reject(new DOMException('MCP 请求已取消', 'AbortError'));
       return response;
     }
-    try {
-      await this.transport.send({jsonrpc: '2.0', id, method, params}, signal);
-    } catch (error) {
+    void this.transport.send({jsonrpc: '2.0', id, method, params}, controller.signal).catch(error => {
       this.#pending.get(id)?.reject(error instanceof Error ? error : new McpProtocolError(String(error)));
-    }
+    });
     return response;
   }
 
   async notify(method: string, params: JsonObject = {}, signal?: AbortSignal): Promise<void> {
     if (this.#closed) throw new McpProtocolError('MCP 连接已经关闭');
-    await this.transport.send({jsonrpc: '2.0', method, params}, signal);
+    const controller = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let abort = () => {};
+    try {
+      await new Promise<void>((resolve, reject) => {
+        abort = () => { controller.abort(); reject(new DOMException('MCP 通知已取消', 'AbortError')); };
+        if (signal?.aborted) { abort(); return; }
+        signal?.addEventListener('abort', abort, {once: true});
+        timeout = setTimeout(() => { controller.abort(); reject(new McpProtocolError(`MCP 通知超时：${method}`)); }, this.timeoutMs);
+        void this.transport.send({jsonrpc: '2.0', method, params}, controller.signal).then(resolve, reject);
+      });
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
+      signal?.removeEventListener('abort', abort);
+    }
   }
 
-  async close(): Promise<void> {
-    if (this.#closed) return;
+  close(): Promise<void> {
+    if (this.#closePromise) return this.#closePromise;
     this.#closed = true;
     this.#failAll(new McpProtocolError('MCP 连接已经关闭'));
-    await this.transport.close();
+    this.#closePromise = this.transport.close();
+    return this.#closePromise;
   }
 
   async #receive(value: unknown): Promise<void> {

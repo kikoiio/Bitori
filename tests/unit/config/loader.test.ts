@@ -1,4 +1,4 @@
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, relative} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
@@ -57,6 +57,21 @@ mcp_servers:
     api_key: \${API_KEY}
 `);
     expect(() => loadConfig(root, project('profiles: []'), {})).toThrow(/项目级配置无效/);
+  });
+
+  it.skipIf(process.platform === 'win32')('工作区通过符号链接指向主目录时不会重复解析配置', () => {
+    const root = home(`profiles:
+  - name: one
+    protocol: openai-chat
+    model: model
+    base_url: https://example.com/v1
+    api_key: \${API_KEY}
+`);
+    const links = mkdtempSync(join(tmpdir(), 'bitori-config-link-'));
+    temporaryDirectories.push(links);
+    const alias = join(links, 'home');
+    symlinkSync(root, alias, 'dir');
+    expect(loadConfig(root, alias).profiles[0]?.name).toBe('one');
   });
 
   it('只从固定目录加载多个 profile', () => {

@@ -58,4 +58,11 @@ describe('OpenAIResponsesClient', () => {
     ]}, new AbortController().signal)) { void event; }
     expect((create.mock.calls[0]?.[0] as {tools: Array<{strict: boolean}>}).tools.map(tool => tool.strict)).toEqual([true, false]);
   });
+  it('同时传入系统提示和消息时保留用户消息', async () => {
+    const create = vi.fn().mockResolvedValue(stream());
+    const sdk = {responses: {create}} as unknown as OpenAI;
+    for await (const event of new OpenAIResponsesClient(profile, sdk).streamChat({system: [{text: 'system', cacheable: false}], messages: [{role: 'user', content: 'hello'}]}, new AbortController().signal)) { void event; }
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({instructions: 'system', input: [{role: 'user', content: 'hello'}]}), expect.anything());
+  });
+
 });

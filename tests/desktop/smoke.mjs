@@ -59,7 +59,7 @@ try {
   assert.equal(await page.getByTestId('profile-select').inputValue(), 'test');
   await mkdir(resolve('desktop-test-output'), {recursive: true});
   await page.screenshot({path: resolve(`desktop-test-output/${packaged ? 'packaged' : 'startup'}.png`)});
-  if (!packaged) {
+  {
     await page.getByTestId('message-input').fill('你好');
     await page.getByTestId('send').click();
     await page.getByText('测试回复 <img src=x>').waitFor();
@@ -69,7 +69,7 @@ try {
     await page.getByTestId('message-input').fill('执行写入');
     await page.getByTestId('send').click();
     await page.getByTestId('approval').waitFor({state: 'visible'});
-    await page.screenshot({path: resolve('desktop-test-output/approval.png')});
+    await page.screenshot({path: resolve(`desktop-test-output/${packaged ? 'packaged-' : ''}approval.png`)});
     assert.equal(existsSync(join(workspace, 'result.txt')), false);
     const staleRejected = await page.evaluate(() => window.bitori.decideApproval('allow', 'stale-call').then(() => false, () => true));
     assert.equal(staleRejected, true);

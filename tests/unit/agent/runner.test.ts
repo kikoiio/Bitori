@@ -45,6 +45,23 @@ describe('AgentRunner', () => {
     const value = await run([[{type: 'text_delta', text: '部分'}]]); expect(value.client.requests).toHaveLength(1); expect(value.result.stopReason).toBe('stream_error');
   });
 
+  it('输出后遇到可重试错误不拼接另一次尝试', async () => {
+    const value = await run([[{type: 'text_delta', text: '部分'}, {type: 'error', error: {code: 'provider_error', message: '失败', retryable: true}}], [{type: 'text_delta', text: '重试'}, {type: 'completed', finishReason: 'stop'}]]);
+    expect(value.client.requests).toHaveLength(1);
+    expect(value.result.stopReason).toBe('stream_error');
+  });
+
+  it('退避期间取消无需等待退避时间', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-runner-')); roots.push(root);
+    const client = new MockLLMClient([[{type: 'error', error: {code: 'provider_error', message: '失败', retryable: true}}]]);
+    const tools = createToolSystem(root);
+    const runner = new AgentRunner(client, tools.registry, new StreamCollector(), new SafetyBatchScheduler(tools.executor, tools.approvals));
+    const abort = new AbortController();
+    const generator = runner.run({runId: 'r', sessionId: 's', trigger: 'message', mode: 'execute', instruction: 'test', context: [], limits: {maxIterations: 1, maxUnknownToolIterations: 3, retryBaseDelayMs: 60_000}}, abort.signal);
+    for await (const event of generator) { if (event.type === 'request_retry') abort.abort(); }
+    expect(client.requests).toHaveLength(1);
+  }, 2_000);
+
   // 系统提示透传、提醒注入与缓存用量累计。
   it('每次模型请求携带同一份系统提示', async () => {
     const system: PromptBlock[] = [{text: '稳定模块', cacheable: true}, {text: '环境信息', cacheable: false}];

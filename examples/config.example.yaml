@@ -1,3 +1,4 @@
+# 复制到 ~/.bitori/config.yaml，替换 model 为供应商提供的实际模型 ID。
 profiles:
   - name: claude-main
     protocol: anthropic
@@ -8,41 +9,14 @@ profiles:
     # 可选；缺省 anthropic=200000，openai*=128000。
     context_window: 200000
 
-  - name: claude-manual
-    protocol: anthropic
-    model: claude-model-id
-    base_url: https://api.anthropic.com
-    api_key: ${ANTHROPIC_API_KEY}
-    thinking:
-      type: manual
-      budget_tokens: 4096
-      max_tokens: 8192
-
-  - name: openai-responses
-    protocol: openai-responses
-    model: model-id
-    base_url: https://api.openai.com/v1
-    api_key: ${OPENAI_API_KEY}
-
-  - name: compatible-chat
-    protocol: openai-chat
-    model: model-id
-    base_url: https://example.com/v1
-    api_key: ${COMPATIBLE_API_KEY}
-
-# 用户级 Server；项目可在 .bitori/config.yaml 用同名项完整覆盖。
-mcp_servers:
-  local-files:
-    transport: stdio
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
-    env:
-      EXAMPLE_TOKEN: ${MCP_EXAMPLE_TOKEN}
-  remote-search:
-    transport: http
-    url: https://example.com/mcp
-    headers:
-      Authorization: Bearer ${MCP_REMOTE_TOKEN}
+# 可选 MCP：只在准备好真实服务和凭据后取消注释并替换占位值。
+# MCP 配置中的变量在启动时展开，缺失即报错。
+# mcp_servers:
+#   remote-search:
+#     transport: http
+#     url: https://your-server.example/mcp
+#     headers:
+#       Authorization: Bearer ${MCP_REMOTE_TOKEN}
 
 # 可选：SubAgent 逻辑模型名 -> profile 名；未命中时回退当前 profile。
 # models:

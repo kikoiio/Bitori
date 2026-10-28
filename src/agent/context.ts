@@ -26,10 +26,16 @@ export class AgentContext {
         continue;
       }
       items.push({type: 'assistant_iteration', messageId: message.id, content: message.content, ...(message.thinking ? {thinking: message.thinking} : {}), ...(message.providerState === null ? {} : {providerState: message.providerState}), toolCalls: calls.map(call => ({callId: call.id, providerCallId: call.providerCallId, name: call.toolName, argumentsText: call.argumentsText ?? JSON.stringify(call.arguments), arguments: call.arguments}))});
-      const completed = calls.filter(call => call.result !== null);
-      if (completed.length > 0) items.push({type: 'tool_results', assistantMessageId: message.id, results: completed.map(call => ({callId: call.id, providerCallId: call.providerCallId, name: call.toolName, result: call.result!}))});
+      items.push({type: 'tool_results', assistantMessageId: message.id, results: calls.map(call => ({callId: call.id, providerCallId: call.providerCallId, name: call.toolName, result: call.result ?? {status: 'interrupted', error: {code: 'interrupted', message: '工具结果不可用', retryable: false}}}))});
     }
-    return new AgentContext(items);
+    const checkpoint = conversation.checkpoint;
+    if (!checkpoint) return new AgentContext(items);
+    const boundary = items.findLastIndex(item => (item.type === 'message' || item.type === 'assistant_iteration') && item.messageId === checkpoint.boundaryMessageId);
+    if (boundary < 0) throw new Error('压缩检查点边界不在可重放历史中');
+    let tail = boundary + 1;
+    const next = items[tail];
+    if (next?.type === 'tool_results' && next.assistantMessageId === checkpoint.boundaryMessageId) tail++;
+    return new AgentContext([...checkpoint.items, ...items.slice(tail)]);
   }
 
   items(): readonly ModelContextItem[] { return this.#items; }

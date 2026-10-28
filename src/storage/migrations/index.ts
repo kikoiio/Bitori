@@ -2,13 +2,14 @@ import {now} from '../../shared/ids.js';
 import {initialMigration} from './001-initial.js';
 import {toolCallsMigration} from './002-tool-calls.js';
 import {agentLoopMigration} from './003-agent-loop.js';
+import {ownershipCheckpointMigration} from './004-ownership-checkpoint.js';
 
 export interface Migration {
   version: number;
   sql: string;
 }
 
-export const migrations: readonly Migration[] = [initialMigration, toolCallsMigration, agentLoopMigration];
+export const migrations: readonly Migration[] = [initialMigration, toolCallsMigration, agentLoopMigration, ownershipCheckpointMigration];
 
 /** 只描述迁移器需要的最小数据库能力，避免它绑定到具体 SQLite 类。 */
 export interface MigrationDatabase {
@@ -32,6 +33,8 @@ export function runMigrations(database: MigrationDatabase): void {
     // 每个迁移和其版本记录在同一事务中：要么全部成功，要么全部回滚。
     database.exec('BEGIN IMMEDIATE');
     try {
+      const current = database.prepare('SELECT version FROM schema_migrations').all() as Array<{version: number}>;
+      if (current.some(row => row.version === migration.version)) { database.exec('COMMIT'); continue; }
       database.exec(migration.sql);
       database.prepare('INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)').run(migration.version, now());
       database.exec('COMMIT');

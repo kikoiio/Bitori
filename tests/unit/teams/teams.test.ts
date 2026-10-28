@@ -1,14 +1,29 @@
-import {mkdtempSync} from 'node:fs';
+import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
 import {FileMailbox} from '../../../src/teams/file-mailbox.js';
 import {TeamManager} from '../../../src/teams/team.js';
 import {createProgress, recordToolUse, summarizeActivities} from '../../../src/teams/progress.js';
+import {TeamTools} from '../../../src/tools/implementations/team-tools.js';
 
 describe('Agent Teams', () => {
-  it('文件邮箱支持发送、游标恢复与标记已读', async () => {
+  it('通过工具 schema 创建、发送和接收，并拒绝目录逃逸', async ({onTestFinished}) => {
+    const home = mkdtempSync(join(tmpdir(), 'bitori-team-tool-'));
+    onTestFinished(() => rmSync(home, {recursive: true, force: true}));
+    const manager = new TeamManager(home);
+    const tool = new TeamTools(manager);
+    await expect(tool.execute(tool.parseArguments({action: 'create', name: 'demo'}))).resolves.toMatchObject({status: 'success'});
+    await expect(tool.execute(tool.parseArguments({action: 'send', team: 'demo', from: 'lead', to: 'alice', text: 'hello'}))).resolves.toMatchObject({status: 'success'});
+    await expect(tool.execute(tool.parseArguments({action: 'receive', team: 'demo', member: 'alice'}))).resolves.toMatchObject({status: 'success', output: {messages: [{text: 'hello'}]}});
+    expect(() => tool.parseArguments({action: 'send', team: 'demo', from: 'lead', to: '../other', text: 'x'})).toThrow();
+    expect(() => new FileMailbox(home, '../other')).toThrow();
+    expect(() => manager.delete('..', true)).toThrow();
+    await expect(tool.execute(tool.parseArguments({action: 'receive', team: 'missing', member: 'alice'}))).resolves.toMatchObject({status: 'error'});
+  });
+  it('文件邮箱支持发送、游标恢复与标记已读', async ({onTestFinished}) => {
     const directory = mkdtempSync(join(tmpdir(), 'bitori-mail-'));
+    onTestFinished(() => rmSync(directory, {recursive: true, force: true}));
     const mailbox = new FileMailbox(directory, 'alice');
     await mailbox.send('lead', 'hi');
     await mailbox.send('lead', 'second');
@@ -21,8 +36,9 @@ describe('Agent Teams', () => {
     expect(mailbox.unreadCount()).toBe(0);
   });
 
-  it('团队创建、成员更新、状态保护与删除', () => {
+  it('团队创建、成员更新、状态保护与删除', ({onTestFinished}) => {
     const home = mkdtempSync(join(tmpdir(), 'bitori-teams-'));
+    onTestFinished(() => rmSync(home, {recursive: true, force: true}));
     const manager = new TeamManager(home);
     const team = manager.create('Review Team!');
     expect(team.name).toBe('Review-Team');

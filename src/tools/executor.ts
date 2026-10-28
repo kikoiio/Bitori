@@ -8,14 +8,14 @@ export interface ToolExecutorOptions {workspaceRoot: string; limits: Record<'rea
 /** 每次执行都注入固定限制并将所有路径收敛成一个结构化终态。 */
 export class ToolExecutor {
   constructor(readonly registry: ToolRegistry, readonly options: ToolExecutorOptions) {}
-  async execute(call: ToolCall, signal: AbortSignal): Promise<ToolExecutionResult> {
+  async execute(call: ToolCall, signal: AbortSignal, authorization?: {approvedCallId: string}): Promise<ToolExecutionResult> {
     const tool = this.registry.get(call.name);
     if (!tool) return {status: 'error', error: {code: 'unknown_tool', message: `未知工具：${call.name}`, retryable: false}};
-    // 直接调用执行器也必须经过黑名单与路径沙箱，不能仅依赖 Agent 调度器。
+    if (call.effect !== tool.effect) return {status: 'denied', error: {code: 'permission_denied', message: '工具效果与注册信息不一致', retryable: false}};
     if (this.options.permissions) {
       try {
         const check = await this.options.permissions.evaluate(call);
-        if (check.decision === 'deny') return this.options.permissions.denialResult(check);
+        if (check.decision === 'deny' || (check.decision === 'ask' && authorization?.approvedCallId !== call.internalId)) return this.options.permissions.denialResult(check);
       } catch (error) {
         return {status: 'denied', error: {code: error instanceof Error && 'code' in error && error.code === 'path_outside_workspace' ? 'path_outside_workspace' : 'permission_denied', message: error instanceof Error ? error.message : '路径未通过权限沙箱', retryable: false, details: {source: 'sandbox'}}};
       }

@@ -14,7 +14,7 @@ export interface AgentDefinition {
 }
 
 export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
-  {name: 'general-purpose', description: 'General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks.'},
-  {name: 'plan', description: 'Software architect agent for designing implementation plans. Returns step-by-step plans, identifies critical files.', disallowedTools: ['edit_file', 'write_file', 'run_command'], permissionMode: 'plan'},
-  {name: 'explore', description: 'Fast read-only search agent for locating code. Use it to find files by pattern, grep for symbols or keywords.', disallowedTools: ['edit_file', 'write_file', 'run_command'], permissionMode: 'plan', model: 'haiku'},
+  {name: 'general-purpose', description: 'Text-only consultation based on the information supplied in the prompt; no tools or workspace access.'},
+  {name: 'plan', description: 'Text-only planning consultation based on supplied context; no tools or workspace access.'},
+  {name: 'explore', description: 'Text-only analysis of supplied material; cannot search or inspect files.', model: 'haiku'},
 ];

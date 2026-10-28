@@ -1,9 +1,6 @@
-import {cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync} from 'node:fs';
+import {constants, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
-import {dirname, join, resolve} from 'node:path';
-import {getLogger} from '../shared/logger.js';
-
-const logger = getLogger('worktree');
+import {dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 
 export const SAFE_SLUG_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 export const SHA_RE = /^[0-9a-f]{40}$|^[0-9a-f]{64}$/;
@@ -57,12 +54,44 @@ export function readWorktreeHeadSha(worktreePath: string): string {
   } catch { return ''; }
 }
 
+function lstatIfPresent(path: string): ReturnType<typeof lstatSync> | undefined {
+  try { return lstatSync(path); }
+  catch (error) { if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return undefined; throw error; }
+}
+
+/** 不跟随任一目标目录链接，也不覆盖已有文件。 */
+function ensureDirectory(root: string, path: string): boolean {
+  const parts = relative(root, path).split(sep).filter(Boolean);
+  let current = root;
+  for (const part of parts) {
+    current = join(current, part);
+    let info = lstatIfPresent(current);
+    if (!info) { try { mkdirSync(current); } catch (error) { if (!lstatIfPresent(current)) throw error; } info = lstatIfPresent(current); }
+    if (!info?.isDirectory() || info.isSymbolicLink()) return false;
+  }
+  return true;
+}
+
+function copyWithoutOverwrite(source: string, target: string, targetRoot: string): void {
+  const info = lstatIfPresent(source);
+  if (!info || info.isSymbolicLink()) return;
+  if (!ensureDirectory(targetRoot, dirname(target))) return;
+  if (info.isDirectory()) {
+    if (!ensureDirectory(targetRoot, target)) return;
+    for (const name of readdirSync(source)) copyWithoutOverwrite(join(source, name), join(target, name), targetRoot);
+  } else if (info.isFile()) {
+    try { copyFileSync(source, target, constants.COPYFILE_EXCL); }
+    catch (error) { if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST')) throw error; }
+  }
+}
+
 function copySettings(repoRoot: string, worktreePath: string): void {
   const source = join(repoRoot, '.bitori');
-  if (!existsSync(source)) return;
-  // worktrees 位于 .bitori 内，不能把父目录复制进自身；只复制配置与记忆文件。
+  const info = lstatIfPresent(source);
+  if (!info?.isDirectory() || info.isSymbolicLink()) return;
+  // worktrees 位于 .bitori 内，不能把父目录复制进自身。
   for (const entry of readdirSync(source).filter(name => name !== 'worktrees')) {
-    cpSync(join(source, entry), join(worktreePath, '.bitori', entry), {recursive: true});
+    copyWithoutOverwrite(join(source, entry), join(worktreePath, '.bitori', entry), worktreePath);
   }
 }
 
@@ -77,12 +106,16 @@ function linkDependencies(repoRoot: string, worktreePath: string): void {
 function copyIncludedFiles(repoRoot: string, worktreePath: string): void {
   const manifest = join(repoRoot, '.worktreeinclude');
   if (!existsSync(manifest)) return;
-  for (const line of readFileSync(manifest, 'utf8').split('\n').map(item => item.trim()).filter(item => item && !item.startsWith('#') && !item.includes('..'))) {
-    const source = join(repoRoot, line);
-    if (!existsSync(source)) continue;
-    const target = join(worktreePath, line);
-    mkdirSync(dirname(target), {recursive: true});
-    cpSync(source, target, {recursive: true});
+  for (const line of readFileSync(manifest, 'utf8').split('\n').map(item => item.trim()).filter(item => item && !item.startsWith('#'))) {
+    const normalized = line.replaceAll('\\', '/');
+    if (isAbsolute(normalized) || /^[a-zA-Z]:/.test(normalized) || normalized.split('/').some(part => part === '..')) continue;
+    let source = repoRoot; let safe = true;
+    for (const part of normalized.split('/').filter(part => part && part !== '.')) {
+      source = join(source, part);
+      if (lstatIfPresent(source)?.isSymbolicLink()) { safe = false; break; }
+    }
+    const target = resolve(worktreePath, normalized);
+    if (safe && target !== worktreePath) copyWithoutOverwrite(source, target, worktreePath);
   }
 }
 
@@ -100,32 +133,30 @@ export function createAgentWorktree(slug: string, workspaceRoot = process.cwd())
   const branch = `worktree-${slug}`;
   if (!existsSync(root)) {
     mkdirSync(dirname(root), {recursive: true});
-    git(gitRoot, ['worktree', 'add', '-b', branch, root, 'HEAD']);
+    const branchExists = git(gitRoot, ['branch', '--list', branch]).length > 0;
+    git(gitRoot, branchExists ? ['worktree', 'add', root, branch] : ['worktree', 'add', '-b', branch, root, 'HEAD']);
+    postCreate(gitRoot, root);
   }
+  if (resolve(git(root, ['rev-parse', '--show-toplevel'])) !== resolve(root) || git(root, ['symbolic-ref', '--short', 'HEAD']) !== branch) throw new Error('现有目录不是预期的 Worktree 或分支');
   const headCommit = readWorktreeHeadSha(root) || git(root, ['rev-parse', 'HEAD']);
-  if (existsSync(root)) postCreate(gitRoot, root);
   return {path: root, branch, headCommit, gitRoot};
 }
 
-export function hasWorktreeChanges(worktreePath: string, headCommit: string | null): boolean {
+export function hasWorktreeChanges(worktreePath: string, headCommit: string | null, gitRoot?: string): boolean {
   try {
-    if (git(worktreePath, ['status', '--porcelain']).length > 0) return true;
-    if (!headCommit) return false;
+    if (git(worktreePath, ['status', '--porcelain', '--untracked-files=all', '--ignored=matching']).length > 0) return true;
     const current = readWorktreeHeadSha(worktreePath) || git(worktreePath, ['rev-parse', 'HEAD']);
-    return current !== headCommit;
+    if (headCommit && current !== headCommit) return true;
+    if (gitRoot && git(worktreePath, ['rev-list', '-n', '1', current, '--not', git(gitRoot, ['rev-parse', 'HEAD'])])) return true;
+    return false;
   } catch { return true; }
 }
 
-export function removeAgentWorktree(worktreePath: string, branch: string, gitRoot: string): void {
-  if (!resolve(worktreePath).startsWith(resolve(gitRoot))) throw new Error('Worktree 路径越界');
-  try { git(gitRoot, ['worktree', 'remove', '--force', worktreePath]); }
-  catch (error) { logger.warn('Worktree git remove 失败，回退目录重删', {worktreePath, error: error instanceof Error ? error.message : String(error)}); }
-  if (existsSync(worktreePath)) rmSync(worktreePath, {recursive: true, force: true, maxRetries: 5, retryDelay: 50});
-  try { git(gitRoot, ['branch', '-D', branch]); }
-  catch (error) {
-    // 分支可能已被合并或删除，属预期分支；留 debug 痕迹即可。
-    logger.debug('Worktree 分支删除失败', {branch, error: error instanceof Error ? error.message : String(error)});
-  }
+export function removeAgentWorktree(worktreePath: string, branch: string, gitRoot: string, force = false): void {
+  const slug = branch.startsWith('worktree-') ? branch.slice('worktree-'.length) : '';
+  if (!isSafeSlug(slug) || resolve(worktreePath) !== resolve(gitRoot, '.bitori', 'worktrees', slug)) throw new Error('Worktree 路径越界');
+  if (!force && hasWorktreeChanges(worktreePath, null, gitRoot)) throw new Error('Worktree 存在未提交文件或独有提交');
+  git(gitRoot, ['worktree', 'remove', ...(force ? ['--force'] : []), worktreePath]);
 }
 
 export function listWorktrees(workspaceRoot = process.cwd()): WorktreeResult[] {
@@ -138,10 +169,17 @@ export function listWorktrees(workspaceRoot = process.cwd()): WorktreeResult[] {
   });
 }
 
+export function worktreeRelativePath(parentRoot: string, worktreePath: string): string | null {
+  const path = relative(resolve(parentRoot), resolve(worktreePath));
+  return path && path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path) ? path : null;
+}
+
 export function buildWorktreeNotice(parentRoot: string, worktreePath: string): string {
+  const path = worktreeRelativePath(parentRoot, worktreePath);
   return [
-    `Worktree 已创建：${worktreePath}`,
-    `后续文件与命令操作必须显式使用该绝对路径；主工作区仍是 ${parentRoot}。`,
-    '完成后若无需保留变更，请调用 ExitWorktree 清理。',
+    `Worktree 已创建或恢复：${worktreePath}`,
+    '文件和命令工具仍从原工作区执行，不会自动切换。',
+    path ? `文件工具使用相对路径 ${path}；运行命令时显式切换到该目录。` : '该 Worktree 在当前工作区之外，文件工具无法访问；运行命令时可显式切换到返回的绝对路径。',
+    '退出时默认保留分支；未提交文件或独有提交需要 force=true 才能移除工作树。',
   ].join('\n');
 }

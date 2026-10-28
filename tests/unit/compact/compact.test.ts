@@ -31,14 +31,14 @@ describe('全量上下文压缩', () => {
   });
 
   it('低于阈值不触发摘要，手动强制触发', async () => {
-    const items = Array.from({length: 10}, (_, index) => user(`消息 ${index}`));
+    const items = Array.from({length: 10}, (_, index) => user(index === 9 ? '长'.repeat(40_000) : `消息 ${index}`));
     const base = {items, client: client('摘要结果'), contextWindow: 200_000, tracking: {consecutiveFailures: 0}, recovery: new RecoveryState(), tools, anchor: null, signal: new AbortController().signal};
     await expect(manageContext(base)).resolves.toMatchObject({compacted: false, reason: 'below_threshold'});
     await expect(manageContext(base, {force: true})).resolves.toMatchObject({compacted: true, reason: 'manual'});
   });
 
   it('摘要失败计入熔断，成功清零', async () => {
-    const items = Array.from({length: 10}, (_, index) => user(`消息 ${index}`));
+    const items = Array.from({length: 10}, (_, index) => user(index === 9 ? '长'.repeat(40_000) : `消息 ${index}`));
     const failing: LLMClient = {async *streamChat(): AsyncIterable<StreamEvent> { yield {type: 'error', error: {code: 'provider_error', message: '失败', retryable: false}}; }};
     const tracking = {consecutiveFailures: 0};
     const base = {items, client: failing, contextWindow: 10, tracking, recovery: new RecoveryState(), tools, anchor: null, signal: new AbortController().signal};
@@ -47,6 +47,20 @@ describe('全量上下文压缩', () => {
     const success = {...base, client: client('成功')};
     await expect(manageContext(success, {force: true})).resolves.toMatchObject({compacted: true});
     expect(tracking.consecutiveFailures).toBe(0);
+  });
+
+  it('保留完整工具调用及结果并满足 token 下界', () => {
+    const call: ModelContextItem = {type: 'assistant_iteration', messageId: 'call', content: '', toolCalls: [{callId: 'id', providerCallId: 'provider', name: 'read_file', argumentsText: '{}', arguments: {}}]};
+    const results: ModelContextItem = {type: 'tool_results', assistantMessageId: 'call', results: [{callId: 'id', providerCallId: 'provider', name: 'read_file', result: {status: 'success', output: {content: 'ok'}}}]};
+    const items = [user('旧'), call, results, user('长'.repeat(12_000)), user('a'), user('b'), user('c')];
+    expect(computeKeepStartIndex(items)).toBe(1);
+    expect(computeKeepStartIndex([user('a'), user('b'), user('c'), user('d'), user('e'), user('f')])).toBe(0);
+  });
+
+  it('摘要未完成或取消时不提交结果', async () => {
+    const items = Array.from({length: 7}, (_, index) => user(index === 6 ? '长'.repeat(40_000) : `消息 ${index}`));
+    const incomplete: LLMClient = {async *streamChat() { yield {type: 'text_delta', text: '部分摘要'}; }};
+    await expect(manageContext({items, client: incomplete, contextWindow: 10, tracking: {consecutiveFailures: 0}, recovery: new RecoveryState(), tools, anchor: null, signal: new AbortController().signal}, {force: true})).rejects.toThrow('上下文压缩失败');
   });
 
   it('恢复段包含最近文件、工具与边界提示', () => {

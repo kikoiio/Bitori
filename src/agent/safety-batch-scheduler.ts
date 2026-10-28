@@ -73,24 +73,26 @@ export class SafetyBatchScheduler {
         let decision: ApprovalDecision;
         let hookRejected: string | null = null;
         if (this.#hooks) {
-          const guard = await this.#hooks.firePreToolHooks(call.name, call.arguments);
+          const guard = await this.#hooks.firePreToolHooks(call.name, call.arguments, input.signal);
           if (guard.rejected) hookRejected = guard.reason;
         }
         let result: ToolExecutionResult;
-        if (hookRejected !== null) {
+        if (input.signal.aborted) {
+          result = interrupted();
+        } else if (hookRejected !== null) {
           result = {status: 'denied', error: {code: 'hook_rejected', message: hookRejected, retryable: false}};
         } else if (needsApproval) {
           await this.#hooks?.fire('permission_request', {event: 'permission_request', toolName: call.name, args: call.arguments});
           yield {...base(), type: 'approval_requested', callId: call.internalId, prompt};
           decision = await this.approvals.request(call, true, check?.reason);
           yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision};
-          if (decision === 'approved_session' && this.permissions) this.permissions.addSessionAllow(call);
-          if (decision === 'approved_permanent' && this.permissions) this.permissions.addPermanentAllow(call);
+          if (!input.signal.aborted && decision === 'approved_session' && this.permissions) this.permissions.addSessionAllow(call);
+          if (!input.signal.aborted && decision === 'approved_permanent' && this.permissions) this.permissions.addPermanentAllow(call);
           result = input.signal.aborted
             ? interrupted()
             : decision === 'denied'
               ? {status: 'denied', error: {code: 'denied', message: '用户拒绝了工具调用', retryable: false, details: {source: 'human', reason: '用户在人在回路中拒绝了调用'}}}
-              : await this.#executeChecked(call, input.signal);
+              : await this.#executeChecked(call, input.signal, true);
         } else {
           if (call.effect !== 'read') yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision: 'approved'};
           result = input.signal.aborted ? interrupted() : await this.#executeChecked(call, input.signal);
@@ -111,15 +113,15 @@ export class SafetyBatchScheduler {
 
   async #executeWithReadGuard(call: ToolCall, signal: AbortSignal): Promise<ToolExecutionResult> {
     if (this.#hooks) {
-      const guard = await this.#hooks.firePreToolHooks(call.name, call.arguments);
+      const guard = await this.#hooks.firePreToolHooks(call.name, call.arguments, signal);
       if (guard.rejected) return {status: 'denied', error: {code: 'hook_rejected', message: guard.reason, retryable: false}};
     }
-    return this.#executeChecked(call, signal);
+    return signal.aborted ? interrupted() : this.#executeChecked(call, signal);
   }
 
-  async #executeChecked(call: ToolCall, signal: AbortSignal): Promise<ToolExecutionResult> {
+  async #executeChecked(call: ToolCall, signal: AbortSignal, approved = false): Promise<ToolExecutionResult> {
     if (call.effect === 'command') await this.#hooks?.fire('command_execute', {event: 'command_execute', toolName: call.name, args: call.arguments});
-    return this.executor.execute(call, signal);
+    return approved ? this.executor.execute(call, signal, {approvedCallId: call.internalId}) : this.executor.execute(call, signal);
   }
 
   async #afterTool(call: ToolCall, result: ToolExecutionResult): Promise<void> {

@@ -43,7 +43,7 @@ export class OpenAIResponsesClient implements LLMClient {
         } else if (item.type === 'reminder') input.push({role: 'user', content: item.text});
         else for (const entry of item.results) input.push({type: 'function_call_output', call_id: entry.providerCallId ?? entry.callId, output: JSON.stringify(entry.result)});
       }
-      if (input.length === 0 && request.system === undefined) {
+      if (input.length === 0) {
         for (const message of request.messages) {
           if (message.role === 'assistant' && message.providerState?.protocol === 'openai-responses' && isReplayPayload(message.providerState.payload)) {
             // 纯文本请求可重放非工具项；工具循环始终通过 items 精确重建调用与结果。

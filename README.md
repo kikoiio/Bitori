@@ -1,12 +1,12 @@
 # Bitori
 
-Bitori 是面向软件工作区的 AI 助手，提供流式对话、工具调用和本地会话存储。项目提供终端入口，以及正在开发的 Linux 桌面客户端。产品目标与状态见 [产品与路线图](docs/product.md)，源码入口见 [架构](docs/architecture.md)。
+Bitori 是面向软件工作区的 AI 助手，提供流式对话、工具调用和本地会话存储。项目提供终端入口和 Linux 桌面客户端初版；安装包尚未发布。产品目标与状态见 [产品与路线图](docs/product.md)，源码入口见 [架构](docs/architecture.md)。
 
 ## 能力
 
 - 支持 Anthropic Messages、OpenAI Responses 和 OpenAI Chat Completions；支持流式输出、Anthropic thinking、多会话和 SQLite 持久化。
 - Agent 可多轮调用工具，支持取消、Plan/Do、逐轮及累计 token 用量；默认单任务最多 20 轮，连续三轮只调用未知工具会停止。取消或流错误会保留已有内容，不自动续跑。
-- 六个基础文件、搜索和命令工具，以及 Skill、SubAgent、Teams、Worktree 等扩展工具；MCP 支持 stdio 和 Streamable HTTP。
+- 六个基础文件、搜索和命令工具，以及 Skill、文本咨询 SubAgent、Teams、Worktree 等扩展工具；MCP 支持 stdio 和 Streamable HTTP。SubAgent 当前不能独立访问文件或调用工具。
 - 上下文管理包括工具结果预算、自动摘要和 `/compact`（别名 `/c`）；指令支持 `@include`，长期记忆有 `MEMORY.md` 索引。Slash Command、Skill、Hook 支持项目扩展。
 - 本地日志、请求 trace、用量统计及 `Ctrl+T` 调试面板辅助排查。
 
@@ -37,62 +37,9 @@ npm run desktop
 
 ## 配置
 
-将配置放在用户主目录的 `~/.bitori/config.yaml`（Windows 为 `%USERPROFILE%\.bitori\config.yaml`），同目录必须有 `.env`，可从 [配置示例](examples/config.example.yaml) 开始。进程环境变量优先于 `.env`；未配置密钥的 profile 在被选中时才报错。终端会话数据库为 `~/.bitori/bitori.db`；`exec` 使用目标工作区的 `.bitori/bitori.db`。项目级 `.bitori/config.yaml` 只承载 MCP Server，同名项完整覆盖用户级配置。
+将 [配置示例](examples/config.example.yaml) 和 [环境变量示例](examples/.env.example) 分别复制为 `~/.bitori/config.yaml` 和 `~/.bitori/.env`（Windows 为 `%USERPROFILE%\.bitori\` 下的同名文件）。将示例模型 ID 和 API key 替换为供应商提供的真实值；占位值不能用于真实请求。`.env` 文件必须存在，进程环境变量优先于其中的值，不要提交真实密钥。
 
-```yaml
-profiles:
-  - name: claude-main
-    protocol: anthropic
-    model: claude-model-id
-    base_url: https://api.anthropic.com
-    api_key: ${ANTHROPIC_API_KEY}
-    thinking: true
-
-  - name: openai-responses
-    protocol: openai-responses
-    model: model-id
-    base_url: https://api.openai.com/v1
-    api_key: ${OPENAI_API_KEY}
-
-  - name: compatible-chat
-    protocol: openai-chat
-    model: model-id
-    base_url: https://example.com/v1
-    api_key: ${COMPATIBLE_API_KEY}
-
-mcp_servers:
-  filesystem:
-    transport: stdio
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
-    env:
-      FILESYSTEM_TOKEN: ${MCP_FILESYSTEM_TOKEN}
-
-  remote-search:
-    transport: http
-    url: https://example.com/mcp
-    headers:
-      Authorization: Bearer ${MCP_REMOTE_TOKEN}
-```
-
-`thinking` 仅适用于 Anthropic，可取 `false`、`true`、`{type: adaptive}`，或：
-
-```yaml
-thinking:
-  type: manual
-  budget_tokens: 4096
-  max_tokens: 8192
-```
-
-`.env` 只保存密钥值，不要提交到版本控制：
-
-```dotenv
-ANTHROPIC_API_KEY=replace-with-your-key
-OPENAI_API_KEY=replace-with-your-key
-COMPATIBLE_API_KEY=replace-with-your-key
-MCP_FILESYSTEM_TOKEN=replace-with-your-token
-MCP_REMOTE_TOKEN=replace-with-your-token
-```
+示例默认只启用一个 profile，不启动 MCP。未配置密钥的 profile 在被选中时才报错；启用 MCP 时，其配置引用的环境变量在启动时展开，缺失即报错。支持的 profile、扩展路径与权限规则见[配置与扩展参考](docs/configuration.md)。终端会话数据库为 `~/.bitori/bitori.db`；`exec` 使用目标工作区的 `.bitori/bitori.db`。项目级 `.bitori/config.yaml` 只承载 MCP Server，同名项完整覆盖用户级配置。
 
 配置只有一个 profile 时会直接进入聊天；多个 profile 时显示选择页，也可运行 `bitori --profile <name>` 直接选择。
 
@@ -118,6 +65,7 @@ MCP 使用 `2025-06-18` 协议版本，以 `initialize` / `notifications/initial
 `bitori trace show <sessionId>`、`bitori trace tail --session <sessionId>`、`bitori usage stats` 和 `bitori sessions list` 用于查看本地记录；`bitori --help` 列出完整参数。trace 可导出或离线回放；默认导出脱敏，`--raw` 会关闭导出脱敏。日志和 trace 仍可能包含代码与对话内容，分享前请审查。
 
 - [架构与数据路径](docs/architecture.md)
+- [配置、扩展与权限](docs/configuration.md)
 - [开发、测试与发布](docs/development.md)
 - [产品目标和路线图](docs/product.md)
 - [贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)、[变更记录](CHANGELOG.md)

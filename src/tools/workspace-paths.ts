@@ -5,7 +5,7 @@ export class WorkspacePathError extends Error {
   constructor(readonly code: 'path_outside_workspace' | 'path_not_found' | 'not_a_file', message: string) { super(message); }
 }
 function isInside(root: string, candidate: string): boolean {
-  const rel = relative(root.toLowerCase(), candidate.toLowerCase());
+  const rel = relative(root, candidate);
   return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
 }
 /** 所有文件工具共用真实路径边界，避免规范化及链接逃逸。 */

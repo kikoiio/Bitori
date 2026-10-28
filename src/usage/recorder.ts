@@ -32,13 +32,15 @@ export interface UsageRecord extends UsageRecordInput {
  */
 export class UsageRecorder {
   readonly #path: string;
+  readonly #workspace: string;
 
-  constructor(path = join(configPaths().usage, 'skills.jsonl')) {
+  constructor(path = join(configPaths().usage, 'skills.jsonl'), workspace = process.cwd()) {
     this.#path = path;
+    this.#workspace = workspace;
   }
 
   record(input: UsageRecordInput): void {
-    const record: UsageRecord = {...input, ...(input.profileName === undefined ? {} : {profileName: input.profileName}), ts: new Date(now()).toISOString(), cwd: process.cwd(), agent: 'bitori', event_id: `bitori:${createId()}`};
+    const record: UsageRecord = {...input, ...(input.profileName === undefined ? {} : {profileName: input.profileName}), ts: new Date(now()).toISOString(), cwd: this.#workspace, agent: 'bitori', event_id: `bitori:${createId()}`};
     try {
       mkdirSync(dirname(this.#path), {recursive: true});
     } catch (error) {

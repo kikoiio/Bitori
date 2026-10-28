@@ -1,91 +1,92 @@
 #!/usr/bin/env npx tsx
-import {readFileSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 import {join, resolve} from 'node:path';
+import {z} from 'zod';
 
-const resultsRoot = resolve(import.meta.dirname, 'results');
-const repo = 'kikoiio/Bitori';
-const command = process.argv[2];
+const root = resolve(import.meta.dirname);
+const repo = process.env.GITHUB_REPOSITORY ?? 'kikoiio/Bitori';
 const token = process.env.GH_TOKEN;
 if (!token) throw new Error('缺少 GH_TOKEN 环境变量');
 const headers = {Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`};
-const markerPrefix = '<!-- bench-verify-started:';
+const issueSchema = z.object({number: z.number().int().positive(), title: z.string(), body: z.string().nullable(), state: z.string(), labels: z.array(z.object({name: z.string()})), pull_request: z.unknown().optional()});
+const planSchema = z.array(z.object({number: z.number().int().positive(), taskId: z.string().regex(/^[a-z0-9-]+$/), model: z.string().min(1), provider: z.string().min(1)}));
+const ledgerSchema = z.object({runId: z.string(), model: z.string(), provider: z.string(), results: z.array(z.object({taskId: z.string(), status: z.enum(['pass', 'fail', 'error'])}))});
+const taskIds = new Set(readdirSync(join(root, 'tasks'), {withFileTypes: true}).filter(entry => entry.isDirectory()).map(entry => entry.name));
 
-interface IssueSummary {number: number; title: string; labels: Array<{name: string}>; pull_request?: unknown}
-
-async function openBenchmarkIssues(): Promise<IssueSummary[]> {
-  const response = await fetch(`https://api.github.com/repos/${repo}/issues?state=open&labels=benchmark&per_page=100`, {headers});
-  if (!response.ok) throw new Error(`读取开放 Issue 失败：${response.status} ${await response.text()}`);
-  return (await response.json() as IssueSummary[]).filter(issue => issue.pull_request === undefined);
+async function request(path: string, init?: RequestInit): Promise<unknown> {
+  const response = await fetch(`https://api.github.com/repos/${repo}${path}`, {...init, headers: {...headers, 'Content-Type': 'application/json'}});
+  if (!response.ok) throw new Error(`GitHub ${path}: ${response.status} ${await response.text()}`);
+  return response.json();
 }
 
-async function verifiedWithin(issue: IssueSummary, hours: number): Promise<boolean> {
-  const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issue.number}/comments?per_page=100`, {headers});
-  if (!response.ok) throw new Error(`读取 Issue 评论失败：${issue.number} ${response.status}`);
-  const comments = await response.json() as Array<{body: string | null}>;
-  const cutoff = Date.now() - hours * 3_600_000;
-  return comments.some(comment => {
-    const match = comment.body?.match(/<!-- bench-verify-started: ([^>]+) -->/);
-    return match?.[1] !== undefined && Date.parse(match[1]) > cutoff;
-  });
+function mapping(value: unknown): z.infer<typeof planSchema>[number] | undefined {
+  const issue = issueSchema.parse(value);
+  const taskId = issue.title.match(/^\[benchmark\] ([a-z0-9-]+) 未通过/)?.[1];
+  const modelInfo = issue.body?.match(/^Model: `([^`\r\n]+)` \(([^)\r\n]+)\)$/m);
+  const model = modelInfo?.[1];
+  const provider = modelInfo?.[2];
+  if (model === undefined || provider === undefined || issue.pull_request !== undefined || issue.state !== 'open' || !issue.labels.some(label => label.name === 'benchmark') || issue.labels.some(label => label.name === 'provider') || taskId === undefined || !taskIds.has(taskId)) return undefined;
+  return {number: issue.number, taskId, model, provider};
 }
 
-async function comment(issueNumber: number, body: string): Promise<void> {
-  const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}/comments`, {
-    method: 'POST',
-    headers: {...headers, 'Content-Type': 'application/json'},
-    body: JSON.stringify({body}),
-  });
-  if (!response.ok) throw new Error(`评论 Issue 失败：${issueNumber} ${response.status} ${await response.text()}`);
+async function comment(number: number, body: string): Promise<void> {
+  await request(`/issues/${number}/comments`, {method: 'POST', body: JSON.stringify({body})});
 }
 
+async function recent(number: number): Promise<boolean> {
+  for (let page = 1; ; page++) {
+    const comments = z.array(z.object({body: z.string().nullable()})).parse(await request(`/issues/${number}/comments?per_page=100&page=${page}`));
+    if (comments.some(item => {
+      const timestamp = item.body?.match(/<!-- bench-verify-started: ([^>]+) -->/)?.[1];
+      return timestamp !== undefined && Date.parse(timestamp) > Date.now() - 24 * 3_600_000;
+    })) return true;
+    if (comments.length < 100) return false;
+  }
+}
+
+const command = process.argv[2];
 if (command === 'plan') {
-  const candidates: Array<{number: number; taskId: string}> = [];
-  for (const issue of await openBenchmarkIssues()) {
-    // provider 配额类失败不是任务回归，重跑没有意义。
-    if (issue.labels.some(label => label.name === 'provider')) continue;
-    const taskId = issue.title.match(/^\[benchmark\] (.+?) 未通过/)?.[1];
-    if (taskId === undefined) continue;
-    if (await verifiedWithin(issue, 24)) {
-      console.log(`跳过（24 小时内已验证）：#${issue.number}`);
-      continue;
+  const candidates: z.infer<typeof planSchema> = [];
+  if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
+    const event = z.object({pull_request: z.object({body: z.string().nullable()})}).parse(JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH ?? '', 'utf8')));
+    const numbers = new Set(Array.from((event.pull_request.body ?? '').matchAll(/#(\d+)\b/g), match => Number(match[1])));
+    for (const number of numbers) {
+      const candidate = mapping(await request(`/issues/${number}`));
+      if (candidate !== undefined) candidates.push(candidate);
     }
-    candidates.push({number: issue.number, taskId});
-  }
-  const at = new Date().toISOString();
-  for (const candidate of candidates) {
-    await comment(candidate.number, `开始定向验证 \`${candidate.taskId}\`。\n\n${markerPrefix}${at} -->`);
-  }
-  process.stdout.write(JSON.stringify({tasks: candidates.map(item => item.taskId), issueNumbers: candidates.map(item => item.number)}) + '\n');
-} else if (command === 'close') {
-  const outcomeIndex = process.argv.indexOf('--outcome');
-  const runIdIndex = process.argv.indexOf('--run-id');
-  const runUrlIndex = process.argv.indexOf('--run-url');
-  const outcome = outcomeIndex === -1 ? 'fail' : process.argv[outcomeIndex + 1];
-  const runId = runIdIndex === -1 ? '(unknown)' : process.argv[runIdIndex + 1];
-  const runUrl = runUrlIndex === -1 ? '' : process.argv[runUrlIndex + 1];
-  const issueNumbers = process.argv.slice(3).filter(argument => /^\d+$/.test(argument)).map(Number);
-  if (issueNumbers.length === 0) throw new Error('未指定 Issue 编号');
-  for (const number of issueNumbers) {
-    if (outcome === 'pass') {
-      const closed = await fetch(`https://api.github.com/repos/${repo}/issues/${number}`, {
-        method: 'PATCH',
-        headers: {...headers, 'Content-Type': 'application/json'},
-        body: JSON.stringify({state: 'closed'}),
-      });
-      if (!closed.ok) throw new Error(`关闭 Issue 失败：${number} ${closed.status}`);
-      await comment(number, `定向验证通过（run \`${runId}\`${runUrl === '' ? '' : `，[日志](${runUrl})`}），自动关闭。`);
-    } else {
-      await comment(number, `定向验证仍未通过（run \`${runId}\`${runUrl === '' ? '' : `，[日志](${runUrl})`}），保持开放。`);
+  } else {
+    for (let page = 1; ; page++) {
+      const issues = z.array(issueSchema).parse(await request(`/issues?state=open&labels=benchmark&per_page=100&page=${page}`));
+      for (const issue of issues) {
+        const candidate = mapping(issue);
+        if (candidate === undefined) continue;
+        if (await recent(candidate.number)) { process.stderr.write(`跳过（24 小时内已验证）：#${candidate.number}\n`); continue; }
+        candidates.push(candidate);
+      }
+      if (issues.length < 100) break;
     }
   }
-} else if (command === 'ledger-exists') {
-  const runId = process.argv[3];
-  if (runId === undefined) throw new Error('缺少 runId');
-  try {
-    readFileSync(join(resultsRoot, `${runId}.json`));
-  } catch {
-    process.exitCode = 1;
+  process.stdout.write(`${JSON.stringify(candidates)}\n`);
+} else if (command === 'start' || command === 'finish') {
+  const plan = planSchema.parse(JSON.parse(process.env.BITORI_VERIFY_PLAN ?? ''));
+  if (command === 'start') {
+    for (const candidate of plan) await comment(candidate.number, `开始定向验证 \`${candidate.taskId}\`。\n\n<!-- bench-verify-started: ${new Date().toISOString()} -->`);
+  } else {
+    if (process.env.GITHUB_EVENT_NAME === 'pull_request' || process.env.GITHUB_REF !== `refs/heads/${process.env.GITHUB_DEFAULT_BRANCH}`) throw new Error('只允许默认分支验证后关闭 Issue');
+    const runId = process.argv[3] ?? '';
+    if (!/^[a-zA-Z0-9-]+$/.test(runId)) throw new Error('无效 runId');
+    const ledger = ledgerSchema.parse(JSON.parse(readFileSync(join(process.env.BITORI_BENCH_RESULTS_DIR ?? join(root, 'results'), `${runId}.json`), 'utf8')));
+    if (ledger.runId !== runId) throw new Error('ledger runId 不匹配');
+    for (const candidate of plan) {
+      const current = mapping(await request(`/issues/${candidate.number}`));
+      if (current?.taskId !== candidate.taskId || current.model !== candidate.model || current.provider !== candidate.provider) { process.stderr.write(`Issue #${candidate.number} 已变化，跳过\n`); continue; }
+      const matches = ledger.results.filter(result => result.taskId === candidate.taskId);
+      const passed = ledger.model === candidate.model && ledger.provider === candidate.provider && matches.length === 1 && matches[0]?.status === 'pass';
+      const runUrl = process.env.BITORI_RUN_URL ?? '';
+      await comment(candidate.number, `定向验证${passed ? '通过' : '未通过或缺少结果'}（run \`${runId}\`${runUrl ? `，[日志](${runUrl})` : ''}），${passed ? '自动关闭' : '保持开放'}。`);
+      if (passed) await request(`/issues/${candidate.number}`, {method: 'PATCH', body: JSON.stringify({state: 'closed'})});
+    }
   }
 } else {
-  throw new Error('用法：tsx benchmarks/verify-issues.ts plan | close --outcome pass|fail --run-id <id> --run-url <url> <issue...>');
+  throw new Error('用法：tsx benchmarks/verify-issues.ts plan | start | finish <runId>');
 }

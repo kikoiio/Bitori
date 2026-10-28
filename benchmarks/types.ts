@@ -6,6 +6,7 @@ export interface TaskDefinition {
   task: string;
   maxIterations?: number;
   forbiddenTools?: string[];
+  expectReplyExact?: string;
   expectReplyContains?: string[];
   expectReplyAnyContains?: string[];
 }

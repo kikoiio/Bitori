@@ -8,6 +8,14 @@ export class TemporaryWorkspace {
   static async create(): Promise<TemporaryWorkspace> { return new TemporaryWorkspace(await mkdtemp(join(tmpdir(), 'bitori-workspace-'))); }
   async text(path: string, content: string): Promise<void> { const target = join(this.root, path); await mkdir(dirname(target), {recursive: true}); await writeFile(target, content, 'utf8'); }
   async binary(path: string, content: Uint8Array): Promise<void> { const target = join(this.root, path); await mkdir(dirname(target), {recursive: true}); await writeFile(target, content); }
-  async link(path: string, target: string, type: 'file' | 'junction' = 'file'): Promise<boolean> { try { await symlink(target, join(this.root, path), type); return true; } catch { return false; } }
+  async link(path: string, target: string, type: 'file' | 'junction' = 'file'): Promise<boolean> {
+    try {
+      await symlink(target, join(this.root, path), type);
+      return true;
+    } catch (error) {
+      if (process.platform === 'win32' && error instanceof Error && 'code' in error && (error.code === 'EPERM' || error.code === 'EACCES')) return false;
+      throw error;
+    }
+  }
   async cleanup(): Promise<void> { await rm(this.root, {recursive: true, force: true}); }
 }

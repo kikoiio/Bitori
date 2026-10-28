@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {relative} from 'node:path';
-import {readLimitedUtf8} from '../utf8.js';
+import {interruptedResult, MAX_TEXT_BYTES, readLimitedUtf8, withTextBudget} from '../utf8.js';
 import {WorkspacePaths} from '../workspace-paths.js';
 import {normalizeFileError} from './shared.js';
 import type {Tool, ToolContext, ToolExecutionResult} from '../types.js';
@@ -12,7 +12,7 @@ export class ReadFileTool implements Tool<{path: string}> {
   readonly inputSchema = {type: 'object', properties: {path: {type: 'string'}}, required: ['path'], additionalProperties: false};
   parseArguments(input: unknown): {path: string} { return schema.parse(input); }
   async execute(args: {path: string}, context: ToolContext): Promise<ToolExecutionResult> {
-    try { const paths = await WorkspacePaths.create(context.workspaceRoot); const path = await paths.existingFile(args.path); const result = await readLimitedUtf8(path, context.limits.maxResultBytes); return {status: 'success', output: {path: relative(paths.root, path), content: result.text, bytes: result.fileBytes}, truncation: result.truncation}; }
-    catch (error) { return normalizeFileError(error); }
+    try { return await withTextBudget(context.signal, async () => { const paths = await WorkspacePaths.create(context.workspaceRoot); const path = await paths.existingFile(args.path); const result = await readLimitedUtf8(path, Math.min(context.limits.maxResultBytes, MAX_TEXT_BYTES), context.signal); return {status: 'success', output: {path: relative(paths.root, path), content: result.text, bytes: result.fileBytes}, truncation: result.truncation}; }); }
+    catch (error) { return context.signal.aborted ? interruptedResult() : normalizeFileError(error); }
   }
 }

@@ -24,8 +24,10 @@ export type McpTransportFactory = (name: string, config: McpServerConfig) => Mcp
 /** 每个 Server 独立建立并缓存一条 Client；失败只淘汰自身，不影响其他连接。 */
 export class McpManager {
   readonly #clients = new Map<string, McpClient>();
+  readonly #initializing = new Set<McpClient>();
   #initializePromise: Promise<McpInitializationResult> | null = null;
   #closePromise: Promise<void> | null = null;
+  #closing = false;
 
   constructor(
     readonly registry: ToolRegistry,
@@ -37,6 +39,7 @@ export class McpManager {
   ) {}
 
   initialize(): Promise<McpInitializationResult> {
+    if (this.#closing) return Promise.reject(new Error('MCP Manager 已关闭'));
     this.#initializePromise ??= this.#initializeAll();
     return this.#initializePromise;
   }
@@ -44,8 +47,12 @@ export class McpManager {
   get(name: string): McpClient | undefined { return this.#clients.get(name); }
 
   close(): Promise<void> {
+    if (this.#closePromise) return this.#closePromise;
+    this.#closing = true;
     this.#closePromise ??= (async () => {
-      await Promise.allSettled([...this.#clients.values()].map(client => client.close()));
+      const clients = new Set([...this.#clients.values(), ...this.#initializing]);
+      await Promise.allSettled([...clients].map(client => client.close()));
+      if (this.#initializePromise) await this.#initializePromise.catch(() => undefined);
       this.#clients.clear();
     })();
     return this.#closePromise;
@@ -55,6 +62,7 @@ export class McpManager {
     const settled = await Promise.allSettled(Object.entries(this.servers).map(async ([name, config]) => {
       const transport = this.transportFactory(name, config);
       const client = new McpClient(transport);
+      this.#initializing.add(client);
       try {
         await client.initialize();
         const tools = await client.listTools();
@@ -62,6 +70,7 @@ export class McpManager {
       } catch (error) {
         // 初始化失败后的关闭也降级记录，避免传输资源泄漏不可见。
         await client.close().catch((closeError: unknown) => { logger.warn('MCP Server 初始化失败后关闭连接异常', {server: name, error: errorMessage(closeError)}); });
+        this.#initializing.delete(client);
         throw new McpServerInitializationError(name, error instanceof Error ? error : new Error(String(error)));
       }
     }));
@@ -78,12 +87,18 @@ export class McpManager {
         continue;
       }
       const {name, client, tools} = item.value;
+      if (this.#closing) {
+        this.#initializing.delete(client);
+        failed.push({name, error: new Error('MCP Manager 已关闭')});
+        continue;
+      }
       const names = tools.map(tool => mcpPublicToolName(name, tool.name));
       const duplicate = names.find((publicName, index) => names.indexOf(publicName) !== index || this.registry.get(publicName) !== undefined);
       if (duplicate) {
         failed.push({name, error: new Error(`MCP 工具名称冲突：${duplicate}`)});
         // 冲突淘汰路径的关闭失败同样可见。
         await client.close().catch((closeError: unknown) => { logger.warn('MCP Server 工具名冲突后关闭连接异常', {server: name, error: errorMessage(closeError)}); });
+        this.#initializing.delete(client);
         continue;
       }
       for (const [index, tool] of tools.entries()) {
@@ -92,6 +107,7 @@ export class McpManager {
         registeredTools.push(publicName);
       }
       this.#clients.set(name, client);
+      this.#initializing.delete(client);
       connected.push(name);
     }
     return {connected, failed, registeredTools};

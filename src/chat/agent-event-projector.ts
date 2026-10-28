@@ -15,6 +15,10 @@ export class AgentEventProjector {
 
   async project(event: AgentEvent): Promise<void> {
     if (event.type === 'run_started') this.#set({...this.#state, activeRunId: event.runId, agentMode: event.mode, requestStatus: 'streaming', iteration: 0, maxIterations: event.maxIterations, agentPhase: 'preparing', runUsage: {inputTokens: 0, outputTokens: 0}, stopReason: null, visibleError: null});
+    else if (event.type === 'context_compacted') {
+      if (!this.repository.saveContextCheckpoint) throw new Error('当前仓储不支持持久化压缩检查点');
+      await this.repository.saveContextCheckpoint(event.sessionId, {boundaryMessageId: event.boundaryMessageId, items: event.items});
+    }
     else if (event.type === 'iteration_started') {
       const message = await this.repository.beginAgentIteration({messageId: event.iterationId, runId: event.runId, sessionId: event.sessionId, iteration: event.iteration});
       this.#set({...this.#state, messages: [...this.#state.messages, message], iteration: event.iteration, requestStatus: 'streaming'});
@@ -57,7 +61,7 @@ export class AgentEventProjector {
     const response = event.response;
     const status: FinalMessageUpdate['status'] = response.cancelled ? 'cancelled' : response.error ? 'failed' : 'completed';
     const update: FinalMessageUpdate = {content: response.text, thinking: response.thinking, status, error: response.error, usage: response.usage, providerState: response.providerState};
-    const records = response.calls.map(call => {
+    const records = (response.cancelled || response.error ? [] : response.calls).map(call => {
       const available = call.availability === 'available'; const id = callId(call); const timestamp = now();
       const record: ToolCallRecord = {id, sessionId: event.sessionId, assistantMessageId: event.iterationId, providerCallId: available ? call.call.providerCallId : call.draft.providerCallId, position: available ? call.call.position : call.draft.position, toolName: available ? call.call.name : call.draft.name, arguments: available ? call.call.arguments : {raw: call.draft.argumentsText}, argumentsText: available ? call.argumentsText : call.draft.argumentsText, agentRunId: event.runId, approvalStatus: available && call.call.effect !== 'read' ? 'pending' : 'not_required', executionStatus: available ? 'queued' : 'failed', result: available ? null : call.result, createdAt: timestamp, updatedAt: timestamp};
       this.#records.set(id, record); return record;

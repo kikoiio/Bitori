@@ -45,6 +45,8 @@ jobs:
 
       - name: Write model config
         run: |
+          : "${LLM_MODEL:?缺少模型配置}"
+          : "${LLM_API_KEY:?缺少 API key}"
           mkdir -p "$HOME/.bitori"
           cat > "$HOME/.bitori/config.yaml" <<YAML
           profiles:
@@ -65,7 +67,7 @@ jobs:
         id: bench
         env:
           BITORI_BENCH_PROVIDER: ${{ inputs.provider || 'groq' }}
-          BITORI_BENCH_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
+          BITORI_BENCH_MODEL: ${{ inputs.model || ((inputs.provider || 'groq') == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
           BITORI_BENCH_PROFILE: bench
           BITORI_BENCH_TASKS: ${{ inputs.tasks }}
         run: |

@@ -1,10 +1,7 @@
 import {resolve, join} from 'node:path';
-import {configPaths} from '../config/loader.js';
+import {createApplicationRuntime} from '../app/runtime.js';
+import type {ApplicationRuntime} from '../app/runtime.js';
 import type {AppConfig, ProviderProfile} from '../config/types.js';
-import {createLLMClient} from '../providers/factory.js';
-import {SessionRepository} from '../storage/repository.js';
-import {ChatController} from '../chat/agent-controller.js';
-import {createToolSystem} from '../tools/create-tool-system.js';
 
 export interface ExecOptions {
   task: string;
@@ -30,35 +27,15 @@ export interface ExecResult {
 /** 无头单任务执行入口：复用完整 AgentRunner 链路，为 benchmark harness 提供可脚本化退出码。 */
 export async function runExec(config: AppConfig, profile: ProviderProfile, options: ExecOptions): Promise<number> {
   const workspace = resolve(options.workspace ?? process.cwd());
-  // 控制器内部的部分能力（自定义命令、上下文管理）读取 process.cwd，统一切到目标工作区。
-  process.chdir(workspace);
-  const client = createLLMClient(profile);
-  const profileByName = new Map(config.profiles.map(item => [item.name, item]));
-  const clientCache = new Map<string, ReturnType<typeof createLLMClient>>();
-  const clientFor = (model: string | null): ReturnType<typeof createLLMClient> => {
-    const profileName = model === null ? profile.name : config.models[model] ?? (profileByName.has(model) ? model : profile.name);
-    const cached = clientCache.get(profileName);
-    if (cached) return cached;
-    const resolved = profileByName.get(profileName) ?? profile;
-    const created = createLLMClient(resolved);
-    clientCache.set(profileName, created);
-    return created;
-  };
-  const tools = createToolSystem(workspace, config.mcpServers, {clientFor, memoryClient: client});
-  const repository = new SessionRepository(`${workspace}/.bitori/bitori.db`);
-  // exec 一次性任务同样开启观测面，trace 可被 benchmarks 消费。
-  const observability = {traceDirectory: configPaths().traces, usagePath: join(configPaths().usage, 'skills.jsonl')};
-  const controller = new ChatController(client, repository, tools, undefined, {observability, ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
-  // 无头环境没有审批 UI；未通过权限规则放行的副作用工具一律自动拒绝。
-  controller.subscribe(state => {
-    if (state.approvalPrompt) controller.resolveToolApproval('denied');
-  });
+  let runtime: ApplicationRuntime | undefined;
   let exitCode = 0;
   try {
-    const mcpResult = await tools.mcp.initialize();
-    await tools.services.hooks.fire('startup', {event: 'startup'});
-    for (const failure of mcpResult.failed) process.stderr.write(`MCP Server ${failure.name} 启动失败：${failure.error.message}\n`);
-    await controller.initialize(profile);
+    runtime = await createApplicationRuntime({config, profileName: profile.name, workspace, databasePath: join(workspace, '.bitori', 'bitori.db'), ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
+    const {controller} = runtime;
+    controller.subscribe(state => {
+      if (state.approvalPrompt) controller.resolveToolApproval('denied');
+    });
+    for (const warning of runtime.warnings) process.stderr.write(`${warning}\n`);
     await controller.sendMessage(options.task);
     const state = controller.getState();
     const failed = [...state.messages].findLast(message => message.role === 'assistant' && message.status === 'failed');
@@ -84,8 +61,8 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
     if (options.json) process.stdout.write(`${JSON.stringify({task: options.task, status: 'failed', stopReason: null, iterations: 0, toolCalls: [], inputTokens: 0, outputTokens: 0, reply: '', errorCode: null, errorMessage: message, error: message})}\n`);
     else process.stderr.write(`Bitori exec 失败：${message}\n`);
   } finally {
-    await controller.shutdown();
-    tools.close();
+    try { await runtime?.close(); }
+    catch (error) { process.stderr.write(`Bitori 关闭失败：${error instanceof Error ? error.message : String(error)}\n`); exitCode = 1; }
   }
   return exitCode;
 }

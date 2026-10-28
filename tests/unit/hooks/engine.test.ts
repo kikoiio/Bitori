@@ -3,6 +3,23 @@ import {evaluateCondition, HookEngine, validateHooks} from '../../../src/hooks/e
 import type {HookConfig} from '../../../src/hooks/types.js';
 
 describe('Hook 系统', () => {
+  it('HTTP 超时与网络失败按失败策略拦截或放行', async () => {
+    const hanging: typeof fetch = async (_input, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), {once: true});
+    });
+    const hook: HookConfig = {event: 'pre_tool_use', reject: true, timeoutMs: 20, action: {type: 'http', url: 'https://example.invalid'}};
+    const closed = new HookEngine([hook], hanging);
+    await expect(closed.firePreToolHooks('write_file', {})).resolves.toMatchObject({rejected: true});
+    const open = new HookEngine([{...hook, failurePolicy: 'open'}], async () => { throw new Error('network'); });
+    await expect(open.firePreToolHooks('write_file', {})).resolves.toMatchObject({rejected: false});
+    const success = new HookEngine([hook], async () => new Response('blocked'));
+    await expect(success.firePreToolHooks('write_file', {})).resolves.toEqual({rejected: true, reason: 'blocked'});
+    const controller = new AbortController();
+    const pending = closed.firePreToolHooks('write_file', {}, controller.signal);
+    controller.abort();
+    await expect(pending).resolves.toMatchObject({rejected: true});
+    expect(validateHooks([{event: 'startup', action: {type: 'agent', prompt: 'x'}}])).toBeInstanceOf(Error);
+  });
   it('条件支持四种操作符与单一逻辑组合', () => {
     const context = {event: 'pre_tool_use' as const, toolName: 'write_file', args: {file_path: '/tmp/a.json'}};
     expect(evaluateCondition('$TOOL_NAME == write_file', context)).toBe(true);

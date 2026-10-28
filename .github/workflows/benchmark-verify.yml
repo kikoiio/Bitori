@@ -33,37 +33,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify benchmark harness
+        run: node --test benchmarks/engineering.test.mjs
+
       - name: Select tasks
         id: select
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            # PR 验证：只重跑 PR body 列出的上游 Issue 对应任务。
-            numbers="$(gh pr view "$PR_NUMBER" --json body --jq '.body' | grep -oE '#[0-9]+' | grep -oE '[0-9]+' | sort -u | tr '\n' ' ')"
-            if [ -z "$numbers" ]; then
-              echo "tasks=" >> "$GITHUB_OUTPUT"
-              echo "issues=" >> "$GITHUB_OUTPUT"
-              echo "::notice::PR 未引用 benchmark Issue，跳过定向验证"
-            else
-              task_ids=""
-              for n in $numbers; do
-                task="$(gh issue view "$n" --json title --jq '.title' | sed -n 's/^\[benchmark\] \(.*\) 未通过.*/\1/p')"
-                task_ids="$task_ids,$task"
-              done
-              echo "tasks=${task_ids#,}" >> "$GITHUB_OUTPUT"
-              echo "issues=$(echo "$numbers" | tr ' ' '\n' | paste -sd, -)" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            # 定时验证：防抖后挑出可重跑的开放 Issue。
-            plan="$(npx tsx benchmarks/verify-issues.ts plan)"
-            echo "tasks=$(node -e "console.log(JSON.parse(process.argv[1]).tasks.join(','))" "$plan")" >> "$GITHUB_OUTPUT"
-            echo "issues=$(node -e "console.log(JSON.parse(process.argv[1]).issueNumbers.join(','))" "$plan")" >> "$GITHUB_OUTPUT"
-          fi
+          plan="$(npx tsx benchmarks/verify-issues.ts plan)"
+          echo "plan=$plan" >> "$GITHUB_OUTPUT"
+          echo "tasks=$(node -e "console.log([...new Set(JSON.parse(process.argv[1]).map(x => x.taskId))].join(','))" "$plan")" >> "$GITHUB_OUTPUT"
       - name: Write model config
         if: steps.select.outputs.tasks != ''
         run: |
+          : "${LLM_MODEL:?缺少模型配置}"
+          : "${LLM_API_KEY:?缺少 API key}"
           mkdir -p "$HOME/.bitori"
           cat > "$HOME/.bitori/config.yaml" <<YAML
           profiles:
@@ -80,6 +65,17 @@ jobs:
           LLM_API_KEY: ${{ (github.event_name == 'pull_request' || inputs.provider == 'openrouter') && secrets.OPENROUTER_LLM_API_KEY || secrets.GROQ_LLM_API_KEY }}
           LLM_MODEL: ${{ (github.event_name == 'pull_request' || inputs.provider == 'openrouter') && vars.OPENROUTER_MODEL || vars.GROQ_MODEL }}
 
+      - name: Build before starting verification
+        if: steps.select.outputs.tasks != ''
+        run: npm run build
+
+      - name: Mark verification started
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.select.outputs.tasks != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BITORI_VERIFY_PLAN: ${{ steps.select.outputs.plan }}
+        run: npx tsx benchmarks/verify-issues.ts start
+
       - name: Run targeted benchmarks
         id: bench
         if: steps.select.outputs.tasks != ''
@@ -91,7 +87,7 @@ jobs:
           BITORI_BENCH_TASK_DELAY_MS: '5000'
         run: |
           set +e
-          npm run bench | tee benchmark-output.jsonl
+          npx tsx benchmarks/run.ts | tee benchmark-output.jsonl
           bench_status="${PIPESTATUS[0]}"
           set -e
           run_id="$(node -e "const line=require('fs').readFileSync('benchmark-output.jsonl','utf8').trim().split('\n').pop(); console.log(JSON.parse(line).runId)")"
@@ -100,17 +96,14 @@ jobs:
           exit "$bench_status"
 
       - name: Close verified issues
-        if: always() && steps.select.outputs.issues != '' && steps.bench.outputs.run_id != ''
+        if: always() && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.select.outputs.tasks != '' && steps.bench.outputs.run_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          outcome=fail
-          if [ "${{ steps.bench.outputs.status }}" = "0" ]; then outcome=pass; fi
-          npx tsx benchmarks/verify-issues.ts close \
-            --outcome "$outcome" \
-            --run-id "${{ steps.bench.outputs.run_id }}" \
-            --run-url "${{ github.event_name == 'pull_request' && format('{0}/checks', github.event.pull_request.html_url) || github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            $(echo "${{ steps.select.outputs.issues }}" | tr ',' ' ')
+          BITORI_VERIFY_PLAN: ${{ steps.select.outputs.plan }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BITORI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BENCH_RUN_ID: ${{ steps.bench.outputs.run_id }}
+        run: npx tsx benchmarks/verify-issues.ts finish "$BENCH_RUN_ID"
 
       - name: Upload ledger
         if: always() && steps.bench.outputs.run_id != ''

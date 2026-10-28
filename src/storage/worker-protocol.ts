@@ -1,15 +1,16 @@
-import type {FinalMessageUpdate, ToolCallRecord} from './types.js';
+import type {ContextCheckpoint, FinalMessageUpdate, ToolCallRecord} from './types.js';
 import type {AgentMode, AgentRunResult} from '../agent/types.js';
 
 /** 主线程允许发给存储 Worker 的全部命令，是一个以 type 区分的联合类型。 */
 export type StorageOperation =
-  | {type: 'initialize'}
+  | {type: 'initialize'; recover?: boolean}
   | {type: 'find_latest_session'; profileName: string}
   | {type: 'list_sessions'; profileName: string}
   | {type: 'create_session'; profileName: string}
   | {type: 'get_session'; sessionId: string}
   | {type: 'get_messages'; sessionId: string}
   | {type: 'get_conversation'; sessionId: string}
+  | {type: 'save_context_checkpoint'; sessionId: string; checkpoint: ContextCheckpoint}
   | {type: 'save_tool_batch'; records: ToolCallRecord[]}
   | {type: 'finalize_assistant_with_tool_batch'; messageId: string; update: FinalMessageUpdate; records: ToolCallRecord[]}
   | {type: 'update_tool_call'; record: ToolCallRecord}
@@ -21,6 +22,7 @@ export type StorageOperation =
   | {type: 'begin_agent_run'; runId: string; sessionId: string; displayText: string; mode: AgentMode}
   | {type: 'begin_agent_iteration'; messageId: string; runId: string; sessionId: string; iteration: number}
   | {type: 'finalize_iteration_with_tool_batch'; messageId: string; update: FinalMessageUpdate; records: ToolCallRecord[]}
+  | {type: 'abort_agent_run'; runId: string; result: AgentRunResult; message: string}
   | {type: 'finish_agent_run'; runId: string; result: AgentRunResult; latestPlanMessageId?: string}
   | {type: 'close'};
 

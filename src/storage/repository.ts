@@ -3,7 +3,7 @@ import {dirname} from 'node:path';
 import {configPaths} from '../config/loader.js';
 import {StorageError} from '../shared/errors.js';
 import {StorageWorkerClient} from './worker-client.js';
-import type {BeginTurnResult, FinalMessageUpdate, Session, SessionRepositoryContract, StoredConversation, StoredMessage, ToolCallRecord, AgentRunRecord} from './types.js';
+import type {BeginTurnResult, ContextCheckpoint, FinalMessageUpdate, Session, SessionRepositoryContract, StoredConversation, StoredMessage, ToolCallRecord, AgentRunRecord} from './types.js';
 import type {AgentMode, AgentRunResult} from '../agent/types.js';
 
 /**
@@ -19,7 +19,7 @@ export class SessionRepository implements SessionRepositoryContract {
   }
 
   // 下列方法虽然大多只是转发，但保住了“控制器不认识 Worker 协议”的架构边界。
-  public async initialize(): Promise<void> { await this.#client.request({type: 'initialize'}); }
+  public async initialize(options?: {recover?: boolean}): Promise<void> { await this.#client.request({type: 'initialize', ...(options?.recover === undefined ? {} : {recover: options.recover})}); }
   public async findLatestSession(profileName: string): Promise<Session | null> {
     return this.#client.request({type: 'find_latest_session', profileName}) as Promise<Session | null>;
   }
@@ -36,6 +36,7 @@ export class SessionRepository implements SessionRepositoryContract {
     return this.#client.request({type: 'get_messages', sessionId}) as Promise<StoredMessage[]>;
   }
   public async getConversation(sessionId: string): Promise<StoredConversation | null> { return this.#client.request({type: 'get_conversation', sessionId}) as Promise<StoredConversation | null>; }
+  public async saveContextCheckpoint(sessionId: string, checkpoint: ContextCheckpoint): Promise<void> { await this.#client.request({type: 'save_context_checkpoint', sessionId, checkpoint}); }
   public async saveToolBatch(records: ToolCallRecord[]): Promise<void> { await this.#client.request({type: 'save_tool_batch', records}); }
   public async finalizeAssistantWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void> { await this.#client.request({type: 'finalize_assistant_with_tool_batch', messageId, update, records}); }
   public async updateToolCall(record: ToolCallRecord): Promise<void> { await this.#client.request({type: 'update_tool_call', record}); }
@@ -53,6 +54,7 @@ export class SessionRepository implements SessionRepositoryContract {
   public async beginAgentRun(input: {runId: string; sessionId: string; displayText: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}> { return this.#client.request({type: 'begin_agent_run', ...input}) as Promise<{run: AgentRunRecord; userMessage: StoredMessage}>; }
   public async beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage> { return this.#client.request({type: 'begin_agent_iteration', ...input}) as Promise<StoredMessage>; }
   public async finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void> { await this.#client.request({type: 'finalize_iteration_with_tool_batch', messageId, update, records}); }
+  public async abortAgentRun(runId: string, result: AgentRunResult, message: string): Promise<void> { await this.#client.request({type: 'abort_agent_run', runId, result, message}); }
   public async finishAgentRun(runId: string, result: AgentRunResult, latestPlanMessageId?: string): Promise<void> {
     await this.#client.request(latestPlanMessageId === undefined ? {type: 'finish_agent_run', runId, result} : {type: 'finish_agent_run', runId, result, latestPlanMessageId});
   }

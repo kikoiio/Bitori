@@ -4,20 +4,20 @@ import {join} from 'node:path';
 import {parse as parseYaml} from 'yaml';
 import {z} from 'zod';
 import {validateHooks} from './engine.js';
-import type {HookConfig, HookEvent} from './types.js';
+import {hookEvents, type HookConfig} from './types.js';
 
 const actionSchema = z.union([
   z.strictObject({type: z.literal('command'), command: z.string().trim().min(1)}),
   z.strictObject({type: z.literal('prompt'), prompt: z.string().trim().min(1)}),
   z.strictObject({type: z.literal('http'), url: z.string().trim().min(1), method: z.string().trim().min(1).optional()}),
-  z.strictObject({type: z.literal('agent'), prompt: z.string().trim().min(1)}),
 ]);
 const hookSchema = z.strictObject({
   id: z.string().trim().min(1).optional(),
-  event: z.string().trim().min(1),
+  event: z.enum(hookEvents),
   condition: z.string().trim().min(1).optional(),
   action: actionSchema,
   reject: z.boolean().optional(),
+  failure_policy: z.enum(['open', 'closed']).optional(),
   once: z.boolean().optional(),
   async: z.boolean().optional(),
   timeout_ms: z.number().int().positive().optional(),
@@ -31,13 +31,25 @@ function readHooks(path: string, label: string): HookConfig[] {
     if (error instanceof z.ZodError) throw error;
     throw new Error(`${label} Hook 配置不是有效 YAML（${path}）：${error instanceof Error ? error.message : String(error)}`, {cause: error});
   }
-  let hooks: Array<Omit<HookConfig, 'event' | 'timeoutMs'> & {event: string; timeout_ms?: number}>;
-  try { hooks = z.array(hookSchema).parse(parsed) as Array<Omit<HookConfig, 'event' | 'timeoutMs'> & {event: string; timeout_ms?: number}>; }
+  let hooks: z.infer<typeof hookSchema>[];
+  try { hooks = z.array(hookSchema).parse(parsed); }
   catch (error) {
     if (!(error instanceof z.ZodError)) throw error;
     throw new Error(`${label} Hook 配置无效（${path}）：${error.issues.map(issue => `${issue.path.join('.') || 'hook'} ${issue.message}`).join('；')}`, {cause: error});
   }
-  const normalized: HookConfig[] = hooks.map(hook => ({...hook, event: hook.event as HookEvent, ...(hook.timeout_ms === undefined ? {} : {timeoutMs: hook.timeout_ms})}));
+  const normalized: HookConfig[] = hooks.map(hook => ({
+    event: hook.event,
+    action: hook.action.type === 'http'
+      ? {type: 'http', url: hook.action.url, ...(hook.action.method === undefined ? {} : {method: hook.action.method})}
+      : hook.action,
+    ...(hook.id === undefined ? {} : {id: hook.id}),
+    ...(hook.condition === undefined ? {} : {condition: hook.condition}),
+    ...(hook.reject === undefined ? {} : {reject: hook.reject}),
+    ...(hook.once === undefined ? {} : {once: hook.once}),
+    ...(hook.async === undefined ? {} : {async: hook.async}),
+    ...(hook.timeout_ms === undefined ? {} : {timeoutMs: hook.timeout_ms}),
+    ...(hook.failure_policy === undefined ? {} : {failurePolicy: hook.failure_policy}),
+  }));
   const error = validateHooks(normalized);
   if (error) throw new Error(`${label} Hook 配置无效（${path}）：${error.message}`);
   return normalized;

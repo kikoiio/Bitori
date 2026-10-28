@@ -16,6 +16,7 @@ export class StdioMcpTransport implements McpTransport {
   constructor(readonly options: StdioTransportOptions) {}
 
   async start(onMessage: (message: unknown) => void, onClose: (error?: Error) => void): Promise<void> {
+    if (this.#closing) throw new McpProtocolError('MCP stdio 连接已经关闭');
     if (this.#child) return;
     const child = spawn(this.options.command, this.options.args, {
       cwd: this.options.cwd,
@@ -64,7 +65,8 @@ export class StdioMcpTransport implements McpTransport {
           child.kill('SIGTERM');
           forceTimer = setTimeout(() => { child.kill('SIGKILL'); }, 1_000);
         }, 1_000);
-        child.once('exit', () => {
+        // spawn 失败时不会触发 exit，但仍会触发 close。
+        child.once('close', () => {
           clearTimeout(terminateTimer);
           if (forceTimer !== undefined) clearTimeout(forceTimer);
           resolve();

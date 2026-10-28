@@ -43,6 +43,7 @@ export class FileMailbox {
   #lastReadLines: number;
 
   constructor(directory: string, memberName: string) {
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(memberName)) throw new Error('邮箱成员名称无效');
     mkdirSync(directory, {recursive: true});
     this.#filePath = join(directory, `${memberName}.jsonl`);
     this.#readStatePath = join(directory, `${memberName}.read`);

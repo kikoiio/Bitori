@@ -22,7 +22,18 @@ export interface ManageContextInput {
   anchor: UsageAnchor | null;
   signal: AbortSignal;
 }
-export interface CompactResult {compacted: boolean; beforeTokens: number; afterTokens: number; summary: string | null; reason: 'auto' | 'manual' | 'below_threshold' | 'circuit_open' | 'too_few_messages'}
+export type CompactResult =
+  | {compacted: true; beforeTokens: number; afterTokens: number; summary: string; items: ModelContextItem[]; keepIndex: number; reason: 'auto' | 'manual'}
+  | {compacted: false; beforeTokens: number; afterTokens: number; summary: null; reason: 'below_threshold' | 'circuit_open' | 'too_few_messages'};
+
+/** 找到被摘要覆盖部分的最后一条可重放消息，避免检查点错误地指向保留尾部。 */
+export function compactionBoundaryMessageId(items: readonly ModelContextItem[], keepIndex: number): string {
+  for (let index = Math.min(keepIndex - 1, items.length - 1); index >= 0; index--) {
+    const item = items[index];
+    if ((item?.type === 'message' || item?.type === 'assistant_iteration') && item.messageId !== 'compact-summary') return item.messageId;
+  }
+  throw new Error('压缩检查点缺少历史边界');
+}
 
 function promptFor(items: readonly ModelContextItem[]): string {
   const dialogue = items.map(item => {
@@ -46,22 +57,28 @@ function parseSummary(text: string): string {
 export function computeKeepStartIndex(items: readonly ModelContextItem[]): number {
   let tokens = 0;
   let index = items.length;
-  const boundary = Math.max(0, items.length - RECENT_ITEM_FLOOR);
-  for (let i = items.length - 1; i >= boundary; i--) {
-    tokens += Math.ceil(Buffer.byteLength(serializedItem(items[i]!), 'utf8') / CHARS_PER_TOKEN);
-    index = i;
-    if (tokens >= RECENT_TOKEN_FLOOR) break;
+  while (index > 0 && (items.length - index < RECENT_ITEM_FLOOR || tokens < RECENT_TOKEN_FLOOR)) {
+    index--;
+    tokens += Math.ceil(Buffer.byteLength(serializedItem(items[index]!), 'utf8') / CHARS_PER_TOKEN);
   }
-  return Math.min(index, Math.max(0, items.length - RECENT_ITEM_FLOOR));
+  const first = items[index];
+  if (first?.type === 'tool_results' && index > 0) {
+    const previous = items[index - 1];
+    if (previous?.type === 'assistant_iteration' && previous.messageId === first.assistantMessageId) index--;
+  }
+  return index;
 }
 
 async function summarize(input: ManageContextInput, items: readonly ModelContextItem[]): Promise<string> {
-  const stream = input.client.streamChat({messages: [{role: 'user', content: promptFor(items)}], items: [{type: 'message', messageId: 'compact-summary', role: 'user', content: promptFor(items)}]}, input.signal);
-  let text = '';
+  const prompt = promptFor(items);
+  const stream = input.client.streamChat({messages: [{role: 'user', content: prompt}], items: [{type: 'message', messageId: 'compact-summary', role: 'user', content: prompt}]}, input.signal);
+  let text = ''; let completed = false;
   for await (const event of stream) {
     if (event.type === 'text_delta') text += event.text;
     if (event.type === 'error') throw new Error(event.error.message);
+    if (event.type === 'completed' && event.finishReason !== 'cancelled') completed = true;
   }
+  if (input.signal.aborted || !completed || !parseSummary(text)) throw new Error('摘要未正常完成');
   return parseSummary(text);
 }
 
@@ -81,9 +98,9 @@ export async function manageContext(input: ManageContextInput, options: {force?:
       {type: 'message', messageId: 'compact-summary', role: 'user', content: `${summary}\n\n${attachment}`},
       ...input.items.slice(keepStart),
     ];
-    return {compacted: true, beforeTokens: before, afterTokens: estimateContextTokens(compacted, null), summary, reason: options.force ? 'manual' : 'auto'};
+    return {compacted: true, beforeTokens: before, afterTokens: estimateContextTokens(compacted, null), summary, items: compacted, keepIndex: keepStart, reason: options.force ? 'manual' : 'auto'};
   } catch {
-    input.tracking.consecutiveFailures++;
+    if (!input.signal.aborted) input.tracking.consecutiveFailures++;
     throw new Error('上下文压缩失败');
   }
 }

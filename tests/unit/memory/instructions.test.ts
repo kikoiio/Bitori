@@ -1,13 +1,15 @@
-import {mkdtempSync, mkdirSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
 import {discoverInstructions, loadInstructions} from '../../../src/memory/instructions.js';
 
 describe('指令文件', () => {
-  it('按用户级、项目 .bitori、项目根顺序加载', () => {
+  it('按用户级、项目 .bitori、项目根顺序加载', ({onTestFinished}) => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-memory-'));
+    onTestFinished(() => rmSync(root, {recursive: true, force: true}));
     const home = mkdtempSync(join(tmpdir(), 'bitori-home-'));
+    onTestFinished(() => rmSync(home, {recursive: true, force: true}));
     mkdirSync(join(home, '.bitori'), {recursive: true});
     mkdirSync(join(root, '.bitori'), {recursive: true});
     writeFileSync(join(home, '.bitori', 'BITORI.md'), '用户级', 'utf8');
@@ -18,8 +20,9 @@ describe('指令文件', () => {
     expect(loadInstructions(root, home)).toContain('项目根');
   });
 
-  it('@include 展开并阻止环路、越界与超深嵌套', () => {
+  it('@include 展开并阻止环路、越界与超深嵌套', ({onTestFinished}) => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-memory-'));
+    onTestFinished(() => rmSync(root, {recursive: true, force: true}));
     writeFileSync(join(root, 'module.md'), '模块内容', 'utf8');
     writeFileSync(join(root, 'BITORI.md'), '@include module.md', 'utf8');
     const sources = discoverInstructions(root, root);

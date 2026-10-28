@@ -1,9 +1,12 @@
 import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+import {createAgentServices} from '../../src/agent/services.js';
+import {createToolSystem} from '../../src/tools/create-tool-system.js';
 import {ChatController} from '../../src/chat/agent-controller.js';
 import type {ProviderProfile} from '../../src/config/types.js';
+import type {ChatRequest, LLMClient, StreamEvent} from '../../src/providers/types.js';
 import {SessionRepository} from '../../src/storage/repository.js';
 import {MockLLMClient} from '../helpers/mock-llm-client.js';
 
@@ -15,6 +18,64 @@ const profile: ProviderProfile = {
 };
 
 describe('ChatController', () => {
+  it('关闭 hook 抛错仍关闭仓储', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);
+    const services = createAgentServices({workDir: root, hooks: []});
+    const tools = createToolSystem(root, {}, {services});
+    const repository = new SessionRepository(join(root, 'db.sqlite'));
+    const close = vi.spyOn(repository, 'close');
+    vi.spyOn(services.hooks, 'fire').mockImplementation(async event => { if (event === 'shutdown') throw new Error('hook failure'); return []; });
+    const controller = new ChatController(new MockLLMClient([]), repository, tools, undefined, {workspaceRoot: root});
+    await controller.initialize(profile);
+    await expect(controller.shutdown()).rejects.toThrow('hook failure');
+    expect(close).toHaveBeenCalledOnce();
+    tools.close();
+  });
+
+  for (const mode of ['manual', 'auto'] as const) {
+    it(`${mode} 压缩在下一回合及重启后保持`, async () => {
+      const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);
+      const database = join(root, 'db.sqlite');
+      const requests: ChatRequest[] = [];
+      const client: LLMClient = {async *streamChat(request): AsyncIterable<StreamEvent> {
+        requests.push(request);
+        const first = request.items?.[0];
+        const isSummary = first?.type === 'message' && first.content.startsWith('请压缩以下对话');
+        yield {type: 'text_delta', text: isSummary ? '<summary>持久摘要标记</summary>' : '回答'};
+        yield {type: 'completed', finishReason: 'stop'};
+      }};
+      const selectedProfile = mode === 'auto' ? {...profile, contextWindow: 14_000} : profile;
+      const controller = new ChatController(client, new SessionRepository(database), null, undefined, {workspaceRoot: root});
+      await controller.initialize(selectedProfile);
+      await controller.sendMessage('较早消息');
+      await controller.sendMessage('第二问');
+      await controller.sendMessage('第三问');
+      await controller.sendMessage('长'.repeat(40_000));
+      if (mode === 'manual') await controller.sendMessage('/compact');
+      await controller.sendMessage('压缩后');
+      const after = requests.at(-1)?.items ?? [];
+      expect(after.some(item => item.type === 'message' && item.content.includes('持久摘要标记'))).toBe(true);
+      expect(after.some(item => item.type === 'message' && item.content === '较早消息')).toBe(false);
+      await controller.shutdown();
+      const restored = new ChatController(client, new SessionRepository(database), null, undefined, {workspaceRoot: root});
+      await restored.initialize(selectedProfile); await restored.sendMessage('重启后');
+      const replay = requests.at(-1)?.items ?? [];
+      expect(replay.some(item => item.type === 'message' && item.content.includes('持久摘要标记'))).toBe(true);
+      expect(replay.some(item => item.type === 'message' && item.content === '较早消息')).toBe(false);
+      expect(restored.getState().messages.some(message => message.content === '较早消息')).toBe(true);
+      await restored.shutdown();
+    }, 20_000);
+  }
+
+  it('工作区选项进入系统提示', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);
+    const client = new MockLLMClient([{type: 'completed', finishReason: 'stop'}]);
+    const controller = new ChatController(client, new SessionRepository(join(root, 'db.sqlite')), null, undefined, {workspaceRoot: root});
+    await controller.initialize(profile); await controller.sendMessage('检查');
+    expect(client.requests[0]?.system?.map(block => block.text).join(' ')).toContain(root);
+    await controller.shutdown();
+  });
+
   it('流式更新、持久化并发送多轮上下文', async () => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-controller-'));
     roots.push(root);

@@ -98,4 +98,11 @@ describe('AnthropicClient', () => {
     expect(parameters).not.toHaveProperty('system');
     expect(parameters).not.toHaveProperty('tools');
   });
+  it('同时传入系统提示和消息时保留用户消息', async () => {
+    const stream = vi.fn().mockReturnValue(successful());
+    const sdk = {messages: {stream}} as unknown as Anthropic;
+    for await (const event of new AnthropicClient(profile({type: 'disabled'}), sdk).streamChat({system: [{text: 'system', cacheable: false}], messages: [{role: 'user', content: 'hello'}]}, new AbortController().signal)) { void event; }
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({messages: [{role: 'user', content: 'hello'}]}), expect.anything());
+  });
+
 });

@@ -11,11 +11,9 @@ import type {SafetyBatchScheduler} from './safety-batch-scheduler.js';
 import {ToolPolicy} from './tool-policy.js';
 import {ToolResultReplacementState} from '../toolresult/state.js';
 import {applyToolResultBudget} from '../toolresult/budget.js';
-import type {ModelContextItem} from '../providers/types.js';
-import {computeKeepStartIndex, manageContext} from '../compact/compact.js';
+import {compactionBoundaryMessageId, manageContext} from '../compact/compact.js';
 import {usageAnchorFrom, type UsageAnchor} from '../shared/token-estimate.js';
 import type {HookEngine} from '../hooks/engine.js';
-function computeKeep(items: readonly ModelContextItem[]): number { return computeKeepStartIndex(items); }
 import {RecoveryState} from '../compact/recovery.js';
 
 function callId(call: PreparedToolCall): string { return call.availability === 'available' ? call.call.internalId : call.draft.internalId; }
@@ -75,12 +73,11 @@ export class AgentRunner {
       if (input.contextManagement?.windowTokens) {
         const compact = await manageContext({items: requestItems, client: this.client, contextWindow: input.contextManagement.windowTokens, tracking, recovery, tools: policy.definitions(), anchor: usageAnchor, signal});
         if (compact.compacted) {
+          const boundaryMessageId = compactionBoundaryMessageId(requestItems, compact.keepIndex);
+          yield {...base(), type: 'context_compacted', beforeTokens: compact.beforeTokens, afterTokens: compact.afterTokens, keepIndex: compact.keepIndex, reason: 'auto', boundaryMessageId, items: compact.items.filter(item => item.type !== 'reminder')};
+          context.replaceItems(compact.items);
+          usageAnchor = null;
           await this.hooks?.fire('compact', {event: 'compact', message: `${compact.beforeTokens} -> ${compact.afterTokens}`});
-          yield {...base(), type: 'context_compacted', beforeTokens: compact.beforeTokens, afterTokens: compact.afterTokens, keepIndex: computeKeep(requestItems), reason: 'auto'};
-          context.replaceItems([
-            {type: 'message', messageId: 'compact-summary', role: 'user', content: `${compact.summary ?? ''}\n\n${recovery.buildRecoveryAttachment(policy.definitions())}`},
-            ...requestItems.slice(computeKeep(requestItems))],
-          );
           requestItems = [...context.items()];
         }
       }
@@ -95,21 +92,30 @@ export class AgentRunner {
       let response;
       let attempt = 1;
       while (true) {
+        let visible = false;
         const generator = this.collector.collect({runId: input.runId, sessionId: input.sessionId, iterationId, iteration, stream: this.client.streamChat({items: requestItems, messages: [], tools: policy.definitions(), ...(input.system ? {system: input.system} : {})}, signal), toolPolicy: policy, signal});
         while (true) {
           const step = await generator.next();
           if (step.done) { response = step.value; break; }
           const event = step.value;
+          if (event.type === 'text_delta' || event.type === 'thinking_delta' || event.type === 'tool_call_started' || event.type === 'tool_arguments_delta') visible = true;
           if (event.type === 'usage_updated') yield {...event, totalUsage: addUsage(total, event.iterationUsage)};
           else yield event;
         }
         // 429/网络/5xx 属于瞬时故障：指数退避后重发同一迭代，而不是终止整个任务。
-        if (!response.error?.retryable || signal.aborted || retriesLeft === 0) { retryDelayMs = retryBaseDelayMs; retriesLeft = 3; break; }
+        if (!response.error?.retryable || signal.aborted || retriesLeft === 0 || visible) { retryDelayMs = retryBaseDelayMs; retriesLeft = 3; break; }
         await this.hooks?.fire('error', {event: 'error', error: `第 ${iteration} 轮请求失败（${response.error.code}），${retryDelayMs / 1000} 秒后重试`});
         yield {...base(), type: 'request_retry', iterationId, iteration, attempt, delayMs: retryDelayMs, error: response.error};
         retriesLeft--;
         attempt += 1;
-        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        await new Promise<void>(resolve => {
+          if (signal.aborted) { resolve(); return; }
+          const done = () => { clearTimeout(timer); signal.removeEventListener('abort', done); resolve(); };
+          const timer = setTimeout(done, retryDelayMs);
+          signal.addEventListener('abort', done, {once: true});
+        });
+        if (signal.aborted) { response = {...response, cancelled: true}; break; }
+        total = addUsage(total, response.usage);
         retryDelayMs = Math.min(retryDelayMs * 2, 60_000);
       }
       total = addUsage(total, response.usage); usageAnchor = usageAnchorFrom(response.usage, requestItems);

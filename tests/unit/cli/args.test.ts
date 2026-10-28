@@ -40,7 +40,7 @@ describe('parseCliArgs', () => {
     });
     expect(parseCliArgs(['trace', 'tail', '--session', 'abc'])).toEqual({help: false, trace: {action: 'tail', sessionId: 'abc', json: false}});
     expect(parseCliArgs(['trace', 'export', 'abc', '--out', 'o.jsonl', '--raw'])).toEqual({help: false, trace: {action: 'export', sessionId: 'abc', out: 'o.jsonl', raw: true, json: false}});
-    expect(parseCliArgs(['trace', 'replay', 'x.jsonl', '--json'])).toEqual({help: false, trace: {action: 'replay', file: 'x.jsonl', json: true}});
+    expect(parseCliArgs(['trace', 'replay', 'x.jsonl'])).toEqual({help: false, trace: {action: 'replay', file: 'x.jsonl', json: false}});
   });
 
   it('解析 usage 与 sessions 子命令', () => {
@@ -80,5 +80,35 @@ describe('parseCliArgs', () => {
     ['exec', '--task', 'demo', '--help'],
   ])('拒绝非法参数 %#', (...args) => {
     expect(() => parseCliArgs(args)).toThrow();
+  });
+
+  it.each([
+    ['usage', 'tail', '--raw'],
+    ['trace', 'show', 'id', '--out', 'x'],
+    ['trace', 'show', 'id', '--session', 'other'],
+    ['trace', 'export', 'id', '--iteration', '2'],
+    ['trace', 'replay', 'file', 'extra'],
+    ['trace', 'replay', 'file', '--json'],
+    ['trace', 'tail', 'id', '--json'],
+    ['trace', 'export', 'id', '--json'],
+    ['usage', 'tail', '--json'],
+    ['--profile', 'a', 'usage', 'stats'],
+    ['trace', 'show', 'id', '--profile', 'a'],
+    ['--help', '--log-level', 'debug'],
+    ['usage', 'tail', 'extra'],
+    ['sessions', 'list', '--session', 'id'],
+    ['--help', 'usage', 'tail'],
+    ['--profile', 'a', 'sessions', 'list', '--profile', 'a'],
+    ['exec', '--task', 'demo', '--max-iterations', '8garbage'],
+    ['exec', '--task', 'demo', '--max-iterations', '9007199254740992'],
+    ['trace', 'show', 'id', '--iteration', '1e2'],
+  ])('拒绝未消费参数或不完整整数 %#', (...args) => {
+    expect(() => parseCliArgs(args)).toThrow();
+  });
+
+  it('保留会话 ID 的既有别名', () => {
+    expect(parseCliArgs(['trace', 'show', '--session', 'abc']).trace?.sessionId).toBe('abc');
+    expect(parseCliArgs(['trace', 'tail', 'abc']).trace?.sessionId).toBe('abc');
+    expect(parseCliArgs(['usage', 'stats', 'abc']).usage?.sessionId).toBe('abc');
   });
 });
