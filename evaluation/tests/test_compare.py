@@ -1,5 +1,9 @@
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 
 spec = importlib.util.spec_from_file_location('compare', Path(__file__).parents[1] / 'rsi' / 'compare.py')
@@ -27,6 +31,22 @@ class ComparisonTests(unittest.TestCase):
         changed['model'] = 'other'
         with self.assertRaises(ValueError):
             compare.compare({'a': row('resolved')}, {'a': changed})
+
+    def test_experiment_records_commits_and_changes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for folder, status, commit in [('base', 'unresolved', 'abc'), ('candidate', 'resolved', 'def')]:
+                directory = root / folder
+                directory.mkdir()
+                (directory / 'result.json').write_text(json.dumps({**row(status), 'instance_id': 'a', 'commit': commit}))
+            output = root / 'report.json'
+            subprocess.run([sys.executable, str(Path(__file__).parents[1] / 'rsi' / 'experiment.py'),
+                            '--hypothesis', 'test hypothesis', '--baseline', str(root / 'base'),
+                            '--candidate', str(root / 'candidate'), '--output', str(output)], check=True, capture_output=True)
+            result = json.loads(output.read_text())
+            self.assertEqual((result['baseline_commit'], result['candidate_commit']), ('abc', 'def'))
+            self.assertEqual(result['decision'], 'pending_human_review')
+            self.assertEqual(result['comparison']['candidate_resolved'], 1)
 
 
 if __name__ == '__main__':

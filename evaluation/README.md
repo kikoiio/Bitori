@@ -8,4 +8,6 @@
 
 `rsi/compare.py <baseline目录> <candidate目录>` 比较两次结果，拒绝不同任务、数据集、模型或未完成的运行。该工具是 RSI 的对比起点；尚未自动生成修改、执行候选版本、保护留出集或判断结果统计显著性。现有 `scripts/auto-improve.sh` 是独立的 draft PR 流程，尚未接入这里。更改需要人工审查，不会自动合并。
 
+`rsi/experiment.py --hypothesis '<假设>' --baseline <目录> --candidate <目录> --output <报告.json>` 在相同约束下保存两次提交、改进假设和逐题对比，并标记为等待人工审查。公开数据集 revision 与评分器顶层版本已固定；上游镜像标签和 Python 间接依赖尚未固定，当前结果还不能保证完全可复现。
+
 数据和镜像留在云端 runner；artifact 可能包含运行元数据，应按仓库权限管理。UI/UX、审批体验与跨平台验收不由该 benchmark 代替。
