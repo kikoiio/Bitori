@@ -86,7 +86,7 @@ async function run(profile: ProviderProfile, root: string): Promise<void> {
     assert(state.visibleError === null, `控制器不应报错：${state.visibleError ?? ''}`);
   } finally {
     await controller.shutdown();
-    tools.close();
+    await tools.close();
     rmSync(root, {recursive: true, force: true});
   }
 }

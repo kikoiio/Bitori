@@ -11,15 +11,11 @@ export type StorageOperation =
   | {type: 'get_messages'; sessionId: string}
   | {type: 'get_conversation'; sessionId: string}
   | {type: 'save_context_checkpoint'; sessionId: string; checkpoint: ContextCheckpoint}
-  | {type: 'save_tool_batch'; records: ToolCallRecord[]}
-  | {type: 'finalize_assistant_with_tool_batch'; messageId: string; update: FinalMessageUpdate; records: ToolCallRecord[]}
   | {type: 'update_tool_call'; record: ToolCallRecord}
-  | {type: 'begin_turn'; sessionId: string; text: string}
-  | {type: 'begin_assistant_continuation'; sessionId: string}
   | {type: 'checkpoint_assistant'; messageId: string; content: string; thinking: string}
   | {type: 'finalize_message'; messageId: string; update: FinalMessageUpdate}
   | {type: 'set_session_mode'; sessionId: string; mode: AgentMode}
-  | {type: 'begin_agent_run'; runId: string; sessionId: string; displayText: string; mode: AgentMode}
+  | {type: 'begin_agent_run'; runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}
   | {type: 'begin_agent_iteration'; messageId: string; runId: string; sessionId: string; iteration: number}
   | {type: 'finalize_iteration_with_tool_batch'; messageId: string; update: FinalMessageUpdate; records: ToolCallRecord[]}
   | {type: 'abort_agent_run'; runId: string; result: AgentRunResult; message: string}

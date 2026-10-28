@@ -15,7 +15,7 @@ function compositionLine(buckets: ContextCompositionBuckets): string {
 
 function renderIteration(iteration: TraceIteration): string[] {
   const lines: string[] = [];
-  lines.push(`── 第 ${iteration.iteration} 轮 ──`);
+  lines.push(`── Run ${iteration.runId} · 第 ${iteration.iteration} 轮 ──`);
   if (iteration.request) {
     const request = iteration.request;
     const definitions = request.toolDefinitions.length > 0 ? `${request.toolDefinitions.length} 个定义（全量记录）` : `digest ${request.toolDefinitionDigest}`;

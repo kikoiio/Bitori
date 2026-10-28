@@ -1,5 +1,6 @@
 import {existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
+import {normalizeLineEndings} from '../shared/text.js';
 
 export const MAX_MEMORY_INDEX_LINES = 200;
 export const MAX_MEMORY_INDEX_BYTES = 25_000;
@@ -11,6 +12,7 @@ export interface MemoryHeader {filename: string; filePath: string; scope: 'user'
 export interface Frontmatter {name: string; description: string; type: MemoryType}
 
 export function parseFrontmatter(text: string): Frontmatter {
+  text = normalizeLineEndings(text);
   const match = text.match(/^---\n([\s\S]*?)\n---\n?/);
   const fallback: Frontmatter = {name: '未命名记忆', description: '', type: 'project'};
   if (!match) return fallback;
@@ -51,7 +53,8 @@ export class MemoryManager {
         const path = join(directory, entry);
         const text = readFileSync(path, 'utf8');
         const meta = parseFrontmatter(text);
-        files.push({path, name: `${scope}/${meta.name}`, description: meta.description, type: meta.type, content: text.replace(/^---\n[\s\S]*?\n---\n?/, '').trim()});
+        const normalized = normalizeLineEndings(text);
+        files.push({path, name: `${scope}/${meta.name}`, description: meta.description, type: meta.type, content: normalized.replace(/^---\n[\s\S]*?\n---\n?/, '').trim()});
       }
     }
     this.#memories = files;

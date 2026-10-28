@@ -31,6 +31,10 @@ describe('config schema', () => {
     expect(() => parseConfig({profiles: [{...base, api_key: 'secret'}]})).toThrow();
   });
 
+  it('拒绝顶层未知配置字段', () => {
+    expect(() => parseConfig({profiles: [base], proflies: []})).toThrow(/Unrecognized|未知|不支持/i);
+  });
+
   it('校验两类 MCP Server 配置', () => {
     const parsed = parseConfig({profiles: [base], mcp_servers: {
       local: {transport: 'stdio', command: 'node', args: ['server.js'], env: {TOKEN: '${TOKEN}'}},

@@ -29,6 +29,7 @@ export function readTraceFile(path: string): TraceReadResult {
 }
 
 export interface TraceIteration {
+  runId: string;
   iteration: number;
   iterationId: string;
   request?: Extract<TraceEvent, {type: 'request_prepared'}>;
@@ -37,38 +38,39 @@ export interface TraceIteration {
   retries: Array<Extract<TraceEvent, {type: 'request_retry'}>>;
 }
 
-/** 按 iteration 分组，保留出现顺序。 */
+/** 按唯一 run/iteration 分组，保留文件出现顺序；数字轮次可在多个 run 中重复。 */
 export function groupByIteration(events: readonly TraceEvent[]): TraceIteration[] {
-  const map = new Map<number, TraceIteration>();
-  const ensure = (iteration: number, iterationId: string): TraceIteration => {
-    let entry = map.get(iteration);
+  const map = new Map<string, TraceIteration>();
+  const ensure = (runId: string, iteration: number, iterationId: string): TraceIteration => {
+    const key = `${runId}\u0000${iterationId}`;
+    let entry = map.get(key);
     if (entry === undefined) {
-      entry = {iteration, iterationId, retries: []};
-      map.set(iteration, entry);
+      entry = {runId, iteration, iterationId, retries: []};
+      map.set(key, entry);
     }
     return entry;
   };
   for (const event of events) {
     switch (event.type) {
       case 'request_prepared': {
-        ensure(event.iteration, event.iterationId).request = event;
+        ensure(event.runId, event.iteration, event.iterationId).request = event;
         break;
       }
       case 'response': {
-        ensure(event.iteration, event.iterationId).response = event;
+        ensure(event.runId, event.iteration, event.iterationId).response = event;
         break;
       }
       case 'context_composition': {
-        ensure(event.iteration, event.iterationId).composition = event;
+        ensure(event.runId, event.iteration, event.iterationId).composition = event;
         break;
       }
       case 'request_retry': {
-        ensure(event.iteration, event.iterationId).retries.push(event);
+        ensure(event.runId, event.iteration, event.iterationId).retries.push(event);
         break;
       }
       default:
         break;
     }
   }
-  return [...map.values()].sort((a, b) => a.iteration - b.iteration);
+  return [...map.values()];
 }

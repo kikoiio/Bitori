@@ -1,20 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type {ProviderProfile, ThinkingConfig} from '../config/types.js';
 import {isAbortError, isAdaptiveThinkingUnsupported, normalizeProviderError} from './errors.js';
-import type {ChatRequest, FinishReason, LLMClient, StreamEvent} from './types.js';
+import type {ChatRequest, FinishReason, LLMClient, ProviderState, StreamEvent} from './types.js';
+import {anthropicReplayPayloadSchema, isAnthropicReplayPayload} from './types.js';
 
-interface AnthropicEvent {
-  type?: string;
-  index?: number;
-  content_block?: {type?: string; id?: string; name?: string};
-  delta?: {type?: string; text?: string; thinking?: string; partial_json?: string; stop_reason?: string};
-  // usage 增加缓存创建/命中字段，仅 Anthropic 协议上报。
-  message?: {usage?: {input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number}};
-  usage?: {input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number};
+/** 历史可能来自旧存储或检查点，在请求边界校验后原样重放。 */
+function replayContent(state: ProviderState | undefined) {
+  return state?.protocol === 'anthropic' && isAnthropicReplayPayload(state.payload) ? state.payload : undefined;
 }
 
 /** 将 Anthropic 的 stop_reason 翻译成项目统一的 FinishReason。 */
-function stopReason(value: string | undefined): FinishReason {
+function stopReason(value: string | null | undefined): FinishReason {
   if (value === 'end_turn' || value === 'stop_sequence') return 'stop';
   if (value === 'max_tokens') return 'length';
   if (value === 'tool_use') return 'tool_calls';
@@ -74,8 +70,8 @@ export class AnthropicClient implements LLMClient {
     // 对象展开只在 thinking 存在时加入字段，避免把 thinking: undefined 发给 SDK。
     const messages: unknown[] = [];
     for (const item of request.items ?? []) {
-      if (item.type === 'message') messages.push({role: item.role, content: item.content});
-      else if (item.type === 'assistant_iteration') messages.push({role: 'assistant', content: [
+      if (item.type === 'message') messages.push({role: item.role, content: item.role === 'assistant' ? replayContent(item.providerState) ?? item.content : item.content});
+      else if (item.type === 'assistant_iteration') messages.push({role: 'assistant', content: replayContent(item.providerState) ?? [
         ...(item.content ? [{type: 'text', text: item.content}] : []),
         ...item.toolCalls.map(call => ({type: 'tool_use', id: call.providerCallId ?? call.callId, name: call.name, input: call.arguments ?? {}})),
       ]});
@@ -83,8 +79,8 @@ export class AnthropicClient implements LLMClient {
       else if (item.type === 'reminder') messages.push({role: 'user', content: item.text});
       else messages.push({role: 'user', content: item.results.map(entry => ({type: 'tool_result', tool_use_id: entry.providerCallId ?? entry.callId, content: JSON.stringify(entry.result), is_error: entry.result.status !== 'success'}))});
     }
-    if (messages.length === 0) {
-      for (const message of request.messages) messages.push({role: message.role, content: message.content});
+    if (request.items === undefined) {
+      for (const message of request.messages) messages.push({role: message.role, content: message.role === 'assistant' ? replayContent(message.providerState) ?? message.content : message.content});
     }
     const parameters = {
       model: this.#profile.model,
@@ -100,14 +96,15 @@ export class AnthropicClient implements LLMClient {
     const stream = this.#client.messages.stream(parameters as never, {signal});
     let reason: FinishReason = 'unknown';
     const toolIds = new Map<number, string>();
-    for await (const rawEvent of stream) {
-      const event = rawEvent as unknown as AnthropicEvent;
+    const signatures = new Map<number, string>();
+    for await (const event of stream) {
       if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use' && event.index !== undefined) {
         const internalId = `anthropic-${event.index}`; toolIds.set(event.index, internalId);
         yield {type: 'tool_call_start', internalId, providerCallId: event.content_block.id ?? null, position: event.index, name: event.content_block.name ?? ''};
       } else if (event.type === 'content_block_stop' && event.index !== undefined && toolIds.has(event.index)) {
         yield {type: 'tool_call_end', internalId: toolIds.get(event.index)!};
       } else if (event.type === 'content_block_delta') {
+        if (event.delta?.type === 'signature_delta' && event.index !== undefined) signatures.set(event.index, (signatures.get(event.index) ?? '') + (event.delta.signature ?? ''));
         if (event.delta?.type === 'text_delta' && event.delta.text) yield {type: 'text_delta', text: event.delta.text};
         if (event.delta?.type === 'thinking_delta' && event.delta.thinking) yield {type: 'thinking_delta', text: event.delta.thinking};
         if (event.delta?.type === 'input_json_delta' && event.index !== undefined && toolIds.has(event.index)) yield {type: 'tool_call_arguments_delta', internalId: toolIds.get(event.index)!, delta: event.delta.partial_json ?? ''};
@@ -116,10 +113,10 @@ export class AnthropicClient implements LLMClient {
         // 缓存创建/命中字段只在 message_start 上报，存在时才加入事件。
         const startUsage = event.message.usage;
         yield {type: 'usage', usage: {
-          inputTokens: startUsage.input_tokens!,
+          inputTokens: startUsage.input_tokens,
           outputTokens: startUsage.output_tokens ?? 0,
-          ...(startUsage.cache_creation_input_tokens !== undefined ? {cacheCreationInputTokens: startUsage.cache_creation_input_tokens} : {}),
-          ...(startUsage.cache_read_input_tokens !== undefined ? {cacheReadInputTokens: startUsage.cache_read_input_tokens} : {}),
+          ...(startUsage.cache_creation_input_tokens != null ? {cacheCreationInputTokens: startUsage.cache_creation_input_tokens} : {}),
+          ...(startUsage.cache_read_input_tokens != null ? {cacheReadInputTokens: startUsage.cache_read_input_tokens} : {}),
         }};
       } else if (event.type === 'message_delta') {
         reason = stopReason(event.delta?.stop_reason);
@@ -128,7 +125,12 @@ export class AnthropicClient implements LLMClient {
         }
       }
     }
-    // 正常遍历完 SDK 流后，补发统一 completed 事件。
-    yield {type: 'completed', finishReason: reason};
+    // SDK 保留完整块顺序和工具 JSON；当前版本会覆盖签名 delta，故签名单独累积。
+    const message = await stream.finalMessage();
+    const content = message.content.map((block, index) => {
+      const signature = signatures.get(index);
+      return block.type === 'thinking' && signature !== undefined ? {...block, signature} : block;
+    });
+    yield {type: 'completed', finishReason: reason, ...(content.length ? {providerState: {protocol: 'anthropic', payload: anthropicReplayPayloadSchema.parse(content)}} : {})};
   }
 }

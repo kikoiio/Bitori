@@ -3,7 +3,7 @@ import {dirname} from 'node:path';
 import {configPaths} from '../config/loader.js';
 import {StorageError} from '../shared/errors.js';
 import {StorageWorkerClient} from './worker-client.js';
-import type {BeginTurnResult, ContextCheckpoint, FinalMessageUpdate, Session, SessionRepositoryContract, StoredConversation, StoredMessage, ToolCallRecord, AgentRunRecord} from './types.js';
+import type {ContextCheckpoint, FinalMessageUpdate, Session, SessionRepositoryContract, StoredConversation, StoredMessage, ToolCallRecord, AgentRunRecord} from './types.js';
 import type {AgentMode, AgentRunResult} from '../agent/types.js';
 
 /**
@@ -37,13 +37,7 @@ export class SessionRepository implements SessionRepositoryContract {
   }
   public async getConversation(sessionId: string): Promise<StoredConversation | null> { return this.#client.request({type: 'get_conversation', sessionId}) as Promise<StoredConversation | null>; }
   public async saveContextCheckpoint(sessionId: string, checkpoint: ContextCheckpoint): Promise<void> { await this.#client.request({type: 'save_context_checkpoint', sessionId, checkpoint}); }
-  public async saveToolBatch(records: ToolCallRecord[]): Promise<void> { await this.#client.request({type: 'save_tool_batch', records}); }
-  public async finalizeAssistantWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void> { await this.#client.request({type: 'finalize_assistant_with_tool_batch', messageId, update, records}); }
   public async updateToolCall(record: ToolCallRecord): Promise<void> { await this.#client.request({type: 'update_tool_call', record}); }
-  public async beginTurn(sessionId: string, text: string): Promise<BeginTurnResult> {
-    return this.#client.request({type: 'begin_turn', sessionId, text}) as Promise<BeginTurnResult>;
-  }
-  public async beginAssistantContinuation(sessionId: string): Promise<StoredMessage> { return this.#client.request({type: 'begin_assistant_continuation', sessionId}) as Promise<StoredMessage>; }
   public async checkpointAssistant(messageId: string, content: string, thinking: string): Promise<void> {
     await this.#client.request({type: 'checkpoint_assistant', messageId, content, thinking});
   }
@@ -51,7 +45,7 @@ export class SessionRepository implements SessionRepositoryContract {
     await this.#client.request({type: 'finalize_message', messageId, update});
   }
   public async setSessionMode(sessionId: string, mode: AgentMode): Promise<Session> { return this.#client.request({type: 'set_session_mode', sessionId, mode}) as Promise<Session>; }
-  public async beginAgentRun(input: {runId: string; sessionId: string; displayText: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}> { return this.#client.request({type: 'begin_agent_run', ...input}) as Promise<{run: AgentRunRecord; userMessage: StoredMessage}>; }
+  public async beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}> { return this.#client.request({type: 'begin_agent_run', ...input}) as Promise<{run: AgentRunRecord; userMessage: StoredMessage}>; }
   public async beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage> { return this.#client.request({type: 'begin_agent_iteration', ...input}) as Promise<StoredMessage>; }
   public async finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void> { await this.#client.request({type: 'finalize_iteration_with_tool_batch', messageId, update, records}); }
   public async abortAgentRun(runId: string, result: AgentRunResult, message: string): Promise<void> { await this.#client.request({type: 'abort_agent_run', runId, result, message}); }

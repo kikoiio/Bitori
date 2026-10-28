@@ -5,6 +5,7 @@ import {describe, expect, it} from 'vitest';
 import {parseSkillText} from '../../../src/skills/parser.js';
 import {SkillLoader} from '../../../src/skills/loader.js';
 import {ActiveSkills, SkillExecutor} from '../../../src/skills/executor.js';
+import {LoadSkillTool} from '../../../src/tools/implementations/skill-tools.js';
 
 describe('Skill 系统', () => {
   it('解析 frontmatter 并记录不支持的执行选项', () => {
@@ -45,5 +46,28 @@ describe('Skill 系统', () => {
     const skill = {meta: {name: 'commit', description: ''}, body: '提交 $ARGUMENTS', sourcePath: '/tmp/SKILL.md', source: 'project' as const};
     expect(executor.executeInline(skill)).toBe('提交 ');
     expect(active.render()).toContain('### Skill: commit');
+  });
+
+  it('拒绝未执行的元数据并撤销已激活的旧版本', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'bitori-skill-contract-'));
+    try {
+      const directory = join(work, '.bitori', 'skills');
+      mkdirSync(directory, {recursive: true});
+      const path = join(directory, 'demo.md');
+      const write = (field: string) => writeFileSync(path, `---\nname: demo\n${field}\n---\n正文`, 'utf8');
+      write('mode: inline');
+      const loader = new SkillLoader(work, join(work, 'home'));
+      loader.loadAll();
+      const active = new ActiveSkills();
+      const tool = new LoadSkillTool(loader, new SkillExecutor(active));
+      expect(await tool.execute({name: 'demo'})).toMatchObject({status: 'success'});
+      for (const field of ['allowed-tools: read_file', 'allowed-tools:', 'mode: fork', 'mode: typo', 'fork-context: none', 'model: low']) {
+        write(field);
+        expect(await tool.execute({name: 'demo'})).toMatchObject({status: 'error', error: {code: 'tool_unavailable_in_mode'}});
+        expect(active.list()).toEqual([]);
+      }
+      write('mode: inline');
+      expect(await tool.execute({name: 'demo'})).toMatchObject({status: 'success'});
+    } finally { rmSync(work, {recursive: true, force: true}); }
   });
 });

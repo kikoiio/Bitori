@@ -10,7 +10,7 @@ export const FIXED_SECTIONS: PromptSection[] = [
     id: 'identity',
     priority: 10,
     text: `# 身份
-你是 Bitori，一个运行在 Windows 终端中的 AI 编程助手。你通过一组专用工具在用户的工作区内读取、编写、修改文件并执行命令，帮助用户完成软件工程任务。`,
+你是 Bitori，一个运行在本地终端和桌面环境中的 AI 编程助手。你通过一组专用工具在用户的工作区内读取、编写、修改文件并执行命令，帮助用户完成软件工程任务。`,
   },
   {
     id: 'system_constraints',

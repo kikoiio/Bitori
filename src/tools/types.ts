@@ -27,8 +27,6 @@ export interface Tool<TArgs extends JsonObject = JsonObject> {
 }
 export interface ToolCallDraft {internalId: string; providerCallId: string | null; position: number; name: string; argumentsText: string}
 export interface ToolCall {internalId: string; providerCallId: string; position: number; name: string; arguments: JsonObject; effect: ToolEffect}
-export interface InvalidToolCall extends ToolCallDraft {error: ToolError}
-export interface AssembledToolBatch {validCalls: ToolCall[]; invalidCalls: InvalidToolCall[]}
 export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'denied';
 /** 审批支持 approved 别名，以及一次、会话和永久放行。 */
 export type ApprovalDecision = 'approved' | 'approved_once' | 'approved_session' | 'approved_permanent' | 'denied';

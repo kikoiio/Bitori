@@ -33,6 +33,21 @@ describe('SubAgent', () => {
     expect(parseAgentDefinition('---\ndescription: x\n---\n正文')).toBeNull();
   });
 
+  it('任何类型的未实现字段都不能绕过咨询拒绝', async () => {
+    let calls = 0;
+    const client: LLMClient = {async *streamChat() { calls++; yield {type: 'completed', finishReason: 'stop'}; }};
+    const context = {workspaceRoot: '.', signal: new AbortController().signal, limits: {timeoutMs: 1000, maxResultBytes: 1000, maxMatches: 10}};
+    for (const field of ['tools', 'disallowed_tools', 'max_turns', 'permission_mode', 'background']) {
+      for (const value of ['null', 'invalid', 'false', '[]']) {
+        const definition = parseAgentDefinition(`---\nname: test\n${field}: ${value}\n---\n正文`);
+        expect(definition).not.toBeNull();
+        const tool = new AgentTool([definition!], () => client);
+        await expect(tool.execute({agent: 'test', prompt: 'x'}, context)).resolves.toMatchObject({status: 'error', error: {code: 'tool_unavailable_in_mode'}});
+      }
+    }
+    expect(calls).toBe(0);
+  });
+
   it('三级加载，项目级覆盖内置', ({onTestFinished}) => {
     const work = mkdtempSync(join(tmpdir(), 'bitori-agents-'));
     onTestFinished(() => rmSync(work, {recursive: true, force: true}));

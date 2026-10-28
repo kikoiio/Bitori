@@ -14,7 +14,8 @@ const MAX_ENTRIES = 4096;
 const MAX_LINE_BYTES = 4096;
 export class SearchTextTool implements Tool<SearchTextArguments> {
   readonly name = 'search_text'; readonly description = '在工作区 UTF-8 文件中搜索普通文本；定位代码或内容前先用本工具查证，不要猜测位置'; readonly effect = 'read' as const;
-  readonly inputSchema = {type: 'object', properties: {query: {type: 'string'}, filePattern: {type: 'string'}}, required: ['query'], additionalProperties: false};
+  readonly inputSchema = z.toJSONSchema(schema, {io: 'input'});
+  readonly strict = false;
   parseArguments(input: unknown) { return schema.parse(input); }
   async execute(args: SearchTextArguments, context: ToolContext): Promise<ToolExecutionResult> {
     try { return await withTextBudget(context.signal, async () => {

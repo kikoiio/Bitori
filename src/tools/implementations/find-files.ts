@@ -8,7 +8,7 @@ import type {Tool, ToolContext, ToolExecutionResult} from '../types.js';
 const schema = z.object({pattern: z.string().min(1)}).strict();
 export class FindFilesTool implements Tool<{pattern: string}> {
   readonly name = 'find_files'; readonly description = '使用 glob 模式查找工作区内的普通文件；确定文件路径前先用本工具查证，不要猜测'; readonly effect = 'read' as const;
-  readonly inputSchema = {type: 'object', properties: {pattern: {type: 'string'}}, required: ['pattern'], additionalProperties: false};
+  readonly inputSchema = z.toJSONSchema(schema, {io: 'input'});
   parseArguments(input: unknown) { return schema.parse(input); }
   async execute(args: {pattern: string}, context: ToolContext): Promise<ToolExecutionResult> {
     try { return await withTextBudget(context.signal, async () => {

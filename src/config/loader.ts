@@ -141,7 +141,10 @@ export function readEnvironmentSecrets(homeDirectory = homedir()): string[] {
 
 /** 在解析 profile 的同时收集全部已解析密钥值，供 Redactor 与 trace 使用。 */
 export function collectSecretValues(config: AppConfig, homeDirectory = homedir()): string[] {
-  return [...readEnvironmentSecrets(homeDirectory), ...config.profiles.map(profile => profile.apiKey).filter(key => key.length > 0)];
+  const mcpValues = Object.values(config.mcpServers).flatMap(server => server.transport === 'http'
+    ? [server.url, ...Object.values(server.headers)]
+    : [server.command, ...server.args, ...Object.values(server.env)]);
+  return [...readEnvironmentSecrets(homeDirectory), ...config.profiles.map(profile => profile.apiKey), ...mcpValues].filter(value => value.length > 0);
 }
 
 export function resolveProfile(config: AppConfig, requestedName?: string): ProviderProfile | null {

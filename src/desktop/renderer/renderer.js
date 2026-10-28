@@ -144,7 +144,7 @@ function renderMessages() {
     if (messageStatus) heading.append(element('span', 'message-meta', messageStatus));
     article.append(heading);
     if (message.thinking) article.append(details('思考过程', message.thinking, 'thinking:' + message.id));
-    if (message.content) article.append(element('div', 'message-body', message.content));
+    if (message.displayContent ?? message.content) article.append(element('div', 'message-body', message.displayContent ?? message.content));
     else if (message.status === 'streaming' && !message.thinking) article.append(element('div', 'message-meta', '正在生成…'));
     if (message.errorMessage) article.append(element('div', 'message-error', message.errorMessage));
     for (const call of calls) {

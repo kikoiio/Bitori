@@ -26,7 +26,6 @@ export const fixedToolLimits = {
 
 /** 组合根只需调用一次，三个 Provider 共享同一注册集合。 */
 export function createToolSystem(workspaceRoot: string, mcpServers: Record<string, McpServerConfig> = {}, options: {services?: AgentServices; clientFor?: (model: string | null) => LLMClient; memoryClient?: LLMClient} = {}) {
-  const permissions = new PermissionEngine({workspaceRoot});
   const services = options.services ?? createAgentServices({workDir: workspaceRoot});
   const enterWorktree = new EnterWorktreeTool();
   const registry = new ToolRegistry();
@@ -39,6 +38,7 @@ export function createToolSystem(workspaceRoot: string, mcpServers: Record<strin
   ];
   if (options.clientFor) coreTools.push(new AgentTool(services.agents, options.clientFor));
   for (const tool of coreTools) registry.register(tool);
+  const permissions = new PermissionEngine({workspaceRoot, tools: registry.entries().map(tool => tool.name)});
   const mcp = new McpManager(registry, mcpServers, workspaceRoot);
-  return {registry, executor: new ToolExecutor(registry, {workspaceRoot, limits: fixedToolLimits, permissions}), approvals: new ApprovalCoordinator(), permissions, mcp, services, memoryClient: options.memoryClient ?? null, close: () => {services.close(); void mcp.close().catch(() => undefined); }};
+  return {registry, executor: new ToolExecutor(registry, {workspaceRoot, limits: fixedToolLimits, permissions}), approvals: new ApprovalCoordinator(), permissions, mcp, services, memoryClient: options.memoryClient ?? null, close: async () => { await Promise.all([services.close(), mcp.close()]); }};
 }

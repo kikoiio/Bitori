@@ -73,13 +73,19 @@ export class SafetyBatchScheduler {
         let decision: ApprovalDecision;
         let hookRejected: string | null = null;
         if (this.#hooks) {
-          const guard = await this.#hooks.firePreToolHooks(call.name, call.arguments, input.signal);
+          const guard = await this.#hooks.guard('pre_tool_use', call.name, call.arguments, input.signal);
+          if (guard.rejected) hookRejected = guard.reason;
+        }
+        if (needsApproval && hookRejected === null && !input.signal.aborted && this.#hooks) {
+          const guard = await this.#hooks.guard('permission_request', call.name, call.arguments, input.signal);
           if (guard.rejected) hookRejected = guard.reason;
         }
         let result: ToolExecutionResult;
         if (input.signal.aborted) {
+          if (needsApproval) yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision: 'denied'};
           result = interrupted();
         } else if (hookRejected !== null) {
+          if (needsApproval) yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision: 'denied'};
           result = {status: 'denied', error: {code: 'hook_rejected', message: hookRejected, retryable: false}};
         } else if (needsApproval) {
           await this.#hooks?.fire('permission_request', {event: 'permission_request', toolName: call.name, args: call.arguments});
@@ -116,7 +122,7 @@ export class SafetyBatchScheduler {
 
   async #executeWithReadGuard(call: ToolCall, signal: AbortSignal): Promise<ToolExecutionResult> {
     if (this.#hooks) {
-      const guard = await this.#hooks.firePreToolHooks(call.name, call.arguments, signal);
+      const guard = await this.#hooks.guard('pre_tool_use', call.name, call.arguments, signal);
       if (guard.rejected) return {status: 'denied', error: {code: 'hook_rejected', message: guard.reason, retryable: false}};
     }
     return signal.aborted ? interrupted() : this.#executeChecked(call, signal);

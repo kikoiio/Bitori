@@ -2,10 +2,12 @@ import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
 import {CommandRegistry} from './registry.js';
+import {normalizeLineEndings} from '../shared/text.js';
 
 export interface UserCommandFrontmatter {description: string; argumentHint: string}
 
 function frontmatter(text: string): {meta: UserCommandFrontmatter; body: string} {
+  text = normalizeLineEndings(text);
   const match = text.match(/^---\n([\s\S]*?)\n---\n?/);
   const values = new Map<string, string>();
   if (match) for (const line of match[1]!.split('\n')) {

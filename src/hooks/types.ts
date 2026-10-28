@@ -9,6 +9,7 @@ export type HookActionType = 'command' | 'prompt' | 'http' | 'agent';
 export interface HookAction {
   type: HookActionType;
   command?: string;
+  args?: string[];
   url?: string;
   method?: string;
   prompt?: string;

@@ -59,7 +59,7 @@ export async function createApplicationRuntime(options: {
       const failures: unknown[] = [];
       try { if (controller) await controller.shutdown(); else await repository?.close(); }
       catch (error) { failures.push(error); }
-      try { tools.close(); await tools.mcp.close(); }
+      try { await tools.close(); }
       catch (error) { failures.push(error); }
       if (failures.length) throw failures[0];
     })();

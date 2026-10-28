@@ -175,7 +175,7 @@ export class ChatController {
     const session = this.#state.session; if (!session) return; const runId = createId();
     try {
     if (signal.aborted) return;
-    const begun = await this.#repository.beginAgentRun({runId, sessionId: session.id, displayText, mode: this.#state.agentMode});
+    const begun = await this.#repository.beginAgentRun({runId, sessionId: session.id, displayText, instruction, mode: this.#state.agentMode});
     // run 元信息入 trace：模型/协议/模式/触发方式。
     this.#tap?.runHeader(session.id, runId, this.#state.agentMode, trigger);
     this.#publish({...this.#state, messages: [...this.#state.messages, begun.userMessage], requestStatus: 'streaming', latestUsage: null, runUsage: {inputTokens: 0, outputTokens: 0}, visibleError: null});

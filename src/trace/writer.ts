@@ -54,7 +54,12 @@ export class TraceWriter {
       });
     };
     const previous = this.#chains.get(sessionId) ?? Promise.resolve();
-    const next = previous.then(line, line);
+    const next = previous.then(line, line).finally(() => {
+      if (this.#chains.get(sessionId) === next) {
+        this.#chains.delete(sessionId);
+        this.#pending.delete(sessionId);
+      }
+    });
     this.#chains.set(sessionId, next);
   }
 

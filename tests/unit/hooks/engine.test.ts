@@ -9,13 +9,13 @@ describe('Hook 系统', () => {
     });
     const hook: HookConfig = {event: 'pre_tool_use', reject: true, timeoutMs: 20, action: {type: 'http', url: 'https://example.invalid'}};
     const closed = new HookEngine([hook], hanging);
-    await expect(closed.firePreToolHooks('write_file', {})).resolves.toMatchObject({rejected: true});
+    await expect(closed.guard('pre_tool_use', 'write_file', {})).resolves.toMatchObject({rejected: true});
     const open = new HookEngine([{...hook, failurePolicy: 'open'}], async () => { throw new Error('network'); });
-    await expect(open.firePreToolHooks('write_file', {})).resolves.toMatchObject({rejected: false});
+    await expect(open.guard('pre_tool_use', 'write_file', {})).resolves.toMatchObject({rejected: false});
     const success = new HookEngine([hook], async () => new Response('blocked'));
-    await expect(success.firePreToolHooks('write_file', {})).resolves.toEqual({rejected: true, reason: 'blocked'});
+    await expect(success.guard('pre_tool_use', 'write_file', {})).resolves.toEqual({rejected: true, reason: 'blocked'});
     const controller = new AbortController();
-    const pending = closed.firePreToolHooks('write_file', {}, controller.signal);
+    const pending = closed.guard('pre_tool_use', 'write_file', {}, controller.signal);
     controller.abort();
     await expect(pending).resolves.toMatchObject({rejected: true});
     expect(validateHooks([{event: 'startup', action: {type: 'agent', prompt: 'x'}}])).toBeInstanceOf(Error);
@@ -35,17 +35,20 @@ describe('Hook 系统', () => {
     expect(validateHooks([{...hook, event: 'bad' as never}])).toBeInstanceOf(Error);
     expect(validateHooks([{event: 'startup', action: {type: 'command'}}])).toBeInstanceOf(Error);
     expect(validateHooks([{event: 'pre_tool_use', action: {type: 'prompt', prompt: 'x'}, async: true}])).toBeInstanceOf(Error);
+    expect(validateHooks([{event: 'permission_request', action: {type: 'prompt', prompt: 'x'}, async: true}])).toBeInstanceOf(Error);
+    expect(validateHooks([{event: 'pre_tool_use', action: {type: 'command', command: 'echo $TOOL_ARGS.path'}}])).toBeInstanceOf(Error);
   });
 
-  it('执行 command、变量替换、once 与拦截', async () => {
+  it('执行结构化 command，动态上下文只通过环境变量传递，支持 once 与拦截', async () => {
     const engine = new HookEngine([
-      {id: 'once', event: 'startup', once: true, action: {type: 'command', command: 'echo $EVENT'}},
-      {event: 'pre_tool_use', condition: '$TOOL_ARGS.file_path =~ /[.]json$/', reject: true, action: {type: 'command', command: 'echo blocked $TOOL_ARGS.file_path'}},
+      {id: 'once', event: 'startup', once: true, action: {type: 'command', command: process.execPath, args: ['-e', 'process.stdout.write(JSON.parse(process.env.BITORI_HOOK_CONTEXT).event)']}},
+      {event: 'pre_tool_use', condition: '$TOOL_ARGS.file_path =~ /[.]json$/', reject: true, action: {type: 'command', command: process.execPath, args: ['-e', 'process.stdout.write("blocked " + JSON.parse(process.env.BITORI_HOOK_CONTEXT).args.file_path)']}},
     ]);
     await expect(engine.fire('startup')).resolves.toHaveLength(1);
     await expect(engine.fire('startup')).resolves.toEqual([]);
-    await expect(engine.firePreToolHooks('write_file', {file_path: '/tmp/a.json'})).resolves.toEqual({rejected: true, reason: 'blocked /tmp/a.json'});
-    await expect(engine.firePreToolHooks('write_file', {file_path: '/tmp/a.ts'})).resolves.toMatchObject({rejected: false});
+    const path = '/tmp/a & echo injected.json';
+    await expect(engine.guard('pre_tool_use', 'write_file', {file_path: path})).resolves.toEqual({rejected: true, reason: `blocked ${path}`});
+    await expect(engine.guard('pre_tool_use', 'write_file', {file_path: '/tmp/a.ts'})).resolves.toMatchObject({rejected: false});
   });
 
   it('prompt 动作进入通知队列', async () => {

@@ -125,4 +125,11 @@ describe('AgentRunner', () => {
     expect(value.events.some(event => event.type === 'tool_result' && event.result.status === 'denied' && event.result.error.code === 'hook_rejected')).toBe(true);
     expect(value.client.requests[1]?.items?.some(item => item.type === 'tool_results' && item.results.some(entry => entry.result.status === 'denied' && entry.result.error.code === 'hook_rejected'))).toBe(true);
   });
+
+  it('permission_request Hook 拒绝时不会发布人工审批或执行工具', async () => {
+    const hooks = new HookEngine([{event: 'permission_request', reject: true, action: {type: 'prompt', prompt: '策略拒绝'}}]);
+    const value = await run([toolCall('write_file', '{"path":"blocked.txt","content":"x"}'), [{type: 'completed', finishReason: 'stop'}]], undefined, {hooks});
+    expect(value.events.some(event => event.type === 'approval_requested')).toBe(false);
+    expect(value.events.some(event => event.type === 'tool_result' && event.result.status === 'denied' && event.result.error.code === 'hook_rejected')).toBe(true);
+  });
 });

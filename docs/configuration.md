@@ -14,7 +14,19 @@
 - Skill 从用户和项目的 `.bitori/skills/` 加载，支持直接放 `.md` 文件，或放在子目录的 `SKILL.md`。frontmatter 至少需要 `name`，可填 `description` 和 `mode: inline`。当前只支持内联激活：声明 `allowed-tools`、`fork-context`、`model` 或其他 `mode` 值时激活会报错，并移除该名称已激活的旧内容；这些配置不能限制工具、派生会话或切换模型。同名项目 Skill 覆盖用户 Skill。正文支持 `$ARGUMENTS` 替换，但目前模型的 `load_skill` 工具没有参数输入，会用空字符串替换。
 - Slash Command 从用户和项目的 `.bitori/commands/` 加载 `.md` 文件，一级子目录构成命名空间。内置命令先注册，用户级先于项目级；同名项不会覆盖已注册命令。正文中的 `$ARGUMENTS` 被参数替换，缺少占位符时参数追加到正文。
 - SubAgent 从用户和项目的 `.bitori/agents/` 加载 `.md` 文件；frontmatter 需要 `name`，可设置 `description`、`model` 和 `system_prompt`，正文作为默认提示，`system_prompt` 存在时优先使用。当前仅支持基于提供内容的一次文本咨询，不能使用工具、读取工作区或后台运行；声明 `tools`、`disallowed_tools`、`max_turns`、`permission_mode` 或 `background` 的角色会被拒绝，空值和错误类型也不例外。项目级同名定义覆盖用户级，用户级覆盖内置定义。
-- Hook 从用户级和项目级 `.bitori/hooks.yaml` 按顺序追加加载；动作支持 `command`、`prompt` 和 `http`；`agent` 动作尚不支持。HTTP Hook 支持 `timeout_ms` 和取消；`reject: true` 的失败默认拦截，`failure_policy: open` 可显式选择失败时放行。`command` 可执行本地程序，`http` 可向外发送事件上下文；启用前审查来源和目标。事件、条件和限制见 [`src/hooks/types.ts`](../src/hooks/types.ts) 与 [`src/hooks/engine.ts`](../src/hooks/engine.ts)。
+- Hook 从用户级和项目级 `.bitori/hooks.yaml` 按顺序追加加载；动作支持 `command`、`prompt` 和 `http`；`agent` 动作尚不支持。`pre_tool_use` 与 `permission_request` 均消费拒绝结果且不允许 `async`；配置 `reject: true` 时失败默认拦截，`failure_policy: open` 可显式选择失败时放行。HTTP Hook 支持 `timeout_ms` 和取消，会向目标发送事件上下文。事件、条件和限制见 [`src/hooks/types.ts`](../src/hooks/types.ts) 与 [`src/hooks/engine.ts`](../src/hooks/engine.ts)。
+
+command Hook 的 `command` 是可执行文件，`args` 是独立参数数组，全平台均不经过 shell。不再拆分 `command: "程序 参数"`，也不允许将 `$TOOL_ARGS.path`、`$MESSAGE` 等动态上下文插入命令或参数；从旧配置迁移时需要拆开固定参数，并在所调用程序中读取 `BITORI_HOOK_CONTEXT` 环境变量（完整事件的 JSON）。例如：
+
+```yaml
+- event: pre_tool_use
+  action:
+    type: command
+    command: node
+    args: [/absolute/path/to/hook.mjs]
+```
+
+脚本可用 `JSON.parse(process.env.BITORI_HOOK_CONTEXT)` 读取数据。脚本路径须替换为真实路径；若明确调用 bash/PowerShell 等解释器，只传可信的固定脚本，不把事件数据再拼接为待执行源码。
 
 例如，将以下内容保存为项目 `.bitori/skills/review/SKILL.md`，模型调用该 Skill 时会载入正文：
 
@@ -50,7 +62,7 @@ rules:
     decision: deny
 ```
 
-规则支持六个基础工具及 `mcp__<server>__<tool>` 名称；匹配值分别来自文件路径、搜索模式、完整命令，或 MCP 参数的 JSON 字符串。`*`、`**`、`?` 按 glob 匹配，普通匹配不区分大小写；`exact: true` 则按原文精确比较。规则不是 shell 解析器，匹配完整命令字符串，不能将示例当作全面的命令安全策略。其他扩展工具不能通过上述名称规则单独配置，仍按工具 effect 和权限档判断。
+规则支持当前注册的基础工具、扩展工具及 `mcp__<server>__<tool>`。匹配值为文件工具的路径、`find_files` 的 pattern、`run_command` 的完整命令；`search_text` 提供 filePattern 时匹配它，否则匹配完整参数 JSON。MCP 和其他扩展工具匹配完整参数 JSON。`*`、`**`、`?` 按 glob 匹配，普通匹配不区分大小写；`exact: true` 则按原文精确比较。自动生成的会话/永久批准使用 exact 规则，扩展工具的不同参数需要重新批准。规则不是 shell 解析器，不能将示例当作全面的命令安全策略。
 
 判断先检查危险命令黑名单和基础文件工具的工作区路径，再检查所有匹配规则：`deny` 优先于 `ask`，`ask` 优先于 `allow`。`default` 默认放行只读调用，其他调用需审批；`strict` 不采纳 `allow`，未被拒绝的调用需审批；`bypass` 放行 `ask` 和无规则调用，但不会覆盖 `deny`、黑名单或路径检查。命令与 MCP 不受文件工具路径检查约束，这些机制均不是操作系统沙箱。
 

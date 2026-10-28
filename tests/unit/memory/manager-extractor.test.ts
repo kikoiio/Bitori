@@ -42,4 +42,43 @@ describe('长期记忆', () => {
   it('frontmatter 无元数据时回退项目知识', () => {
     expect(parseFrontmatter('正文')).toEqual({name: '未命名记忆', description: '', type: 'project'});
   });
+
+  it('一次提取失败后仍执行已排队的提取', async ({onTestFinished}) => {
+    const work = mkdtempSync(join(tmpdir(), 'bitori-memory-'));
+    onTestFinished(() => rmSync(work, {recursive: true, force: true}));
+    let calls = 0;
+    const model: LLMClient = {async *streamChat() {
+      if (++calls === 1) throw new Error('失败');
+      yield {type: 'text_delta', text: 'NONE'};
+    }};
+    const extractor = new MemoryExtractor(new MemoryManager(work, work), model);
+    const first = extractor.extract('first');
+    const second = extractor.extract('second');
+    await expect(first).rejects.toThrow('失败');
+    await expect(second).resolves.toBeUndefined();
+    expect(calls).toBe(2);
+  });
+
+  it('关闭时取消运行中的提取，等待其结束并丢弃排队工作', async ({onTestFinished}) => {
+    const work = mkdtempSync(join(tmpdir(), 'bitori-memory-'));
+    onTestFinished(() => rmSync(work, {recursive: true, force: true}));
+    let started!: () => void;
+    const startedPromise = new Promise<void>(resolve => { started = resolve; });
+    let calls = 0;
+    const model: LLMClient = {async *streamChat(_request, signal) {
+      calls++; started();
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), {once: true}));
+      yield {type: 'text_delta', text: 'MEMORY_PROJECT_KNOWLEDGE|x|x|x'};
+    }};
+    const manager = new MemoryManager(work, work);
+    const extractor = new MemoryExtractor(manager, model);
+    const first = extractor.extract('first');
+    await startedPromise;
+    const second = extractor.extract('second');
+    await extractor.close();
+    await Promise.all([first, second]);
+    expect(calls).toBe(1);
+    expect(manager.getMemories()).toEqual([]);
+    await expect(extractor.extract('third')).rejects.toThrow('关闭');
+  });
 });

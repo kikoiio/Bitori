@@ -6,10 +6,12 @@ import type {ProviderProfile} from '../../../src/config/types.js';
 function profile(thinking: ProviderProfile['thinking']): ProviderProfile {
   return {name: 'claude', protocol: 'anthropic', model: 'm', baseUrl: 'https://x', apiKey: 'k', thinking};
 }
-async function* successful() {
+function successful() {
+  return Object.assign((async function* () {
   yield {type: 'content_block_delta', delta: {type: 'thinking_delta', thinking: '想'}};
   yield {type: 'content_block_delta', delta: {type: 'text_delta', text: '答'}};
   yield {type: 'message_delta', delta: {stop_reason: 'end_turn'}, usage: {output_tokens: 2}};
+  })(), {finalMessage: async () => ({content: []})});
 }
 
 describe('AnthropicClient', () => {
@@ -75,7 +77,7 @@ describe('AnthropicClient', () => {
       yield {type: 'message_start', message: {usage: {input_tokens: 100, output_tokens: 0, cache_creation_input_tokens: 80, cache_read_input_tokens: 20}}};
       yield {type: 'message_delta', delta: {stop_reason: 'end_turn'}, usage: {output_tokens: 2}};
     }
-    const sdk = {messages: {stream: vi.fn().mockReturnValue(withCacheUsage())}} as unknown as Anthropic;
+    const sdk = {messages: {stream: vi.fn().mockReturnValue(Object.assign(withCacheUsage(), {finalMessage: async () => ({content: []})}))}} as unknown as Anthropic;
     const events = [];
     for await (const event of new AnthropicClient(profile({type: 'disabled'}), sdk).streamChat({messages: []}, new AbortController().signal)) events.push(event);
     expect(events).toContainEqual({type: 'usage', usage: {inputTokens: 100, outputTokens: 0, cacheCreationInputTokens: 80, cacheReadInputTokens: 20}});

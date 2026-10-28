@@ -3,9 +3,11 @@ import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {parse as parseYaml} from 'yaml';
 import {BUILTIN_AGENTS, type AgentDefinition} from './types.js';
+import {normalizeLineEndings} from '../shared/text.js';
 
 export function parseAgentDefinition(content: string): AgentDefinition | null {
   try {
+    content = normalizeLineEndings(content);
     const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
     if (!match) return null;
     const raw = parseYaml(match[1]!) as Record<string, unknown>;

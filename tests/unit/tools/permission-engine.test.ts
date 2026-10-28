@@ -7,13 +7,13 @@ import type {ToolCall} from '../../../src/tools/types.js';
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
 function call(name: ToolCall['name'], effect: ToolCall['effect'], argumentsValue: Record<string, unknown>): ToolCall { return {internalId: `${name}-1`, providerCallId: `${name}-provider`, position: 0, name, effect, arguments: argumentsValue}; }
-function engine(root: string, text: {user?: string; project?: string; local?: string} = {}): PermissionEngine {
+function engine(root: string, text: {user?: string; project?: string; local?: string} = {}, tools?: string[]): PermissionEngine {
   const config = join(root, 'config'); mkdirSync(config, {recursive: true});
   const paths = {userRulesPath: join(config, 'user.yaml'), projectRulesPath: join(config, 'project.yaml'), localRulesPath: join(config, 'local.yaml')};
   if (text.user !== undefined) writeFileSync(paths.userRulesPath, text.user, 'utf8');
   if (text.project !== undefined) writeFileSync(paths.projectRulesPath, text.project, 'utf8');
   if (text.local !== undefined) writeFileSync(paths.localRulesPath, text.local, 'utf8');
-  return new PermissionEngine({workspaceRoot: root, ...paths});
+  return new PermissionEngine({workspaceRoot: root, ...paths, ...(tools ? {tools} : {})});
 }
 
 describe('PermissionEngine', () => {
@@ -61,5 +61,22 @@ describe('PermissionEngine', () => {
     permissions.addSessionAllow(remote);
     await expect(permissions.evaluate(remote)).resolves.toMatchObject({decision: 'allow'});
     await expect(permissions.evaluate(call('mcp__demo__search', 'command', {query: 'other'}))).resolves.toMatchObject({decision: 'ask'});
+  });
+
+  it('扩展工具长效批准绑定完整参数并可从文件回读', async () => {
+    const root = mkdtempSync('bitori-permission-'); roots.push(root);
+    const registered = ['exit_worktree', 'search_text'];
+    const permissions = engine(root, {}, registered);
+    const first = call('exit_worktree', 'write', {slug: 'first', force: false});
+    const changed = call('exit_worktree', 'write', {slug: 'first', force: true});
+    permissions.addSessionAllow(first);
+    await expect(permissions.evaluate(first)).resolves.toMatchObject({decision: 'allow'});
+    await expect(permissions.evaluate(changed)).resolves.toMatchObject({decision: 'ask'});
+    permissions.addPermanentAllow(first);
+    permissions.addPermanentAllow(call('search_text', 'read', {query: 'needle'}));
+    const restored = engine(root, {}, registered);
+    await expect(restored.evaluate(first)).resolves.toMatchObject({decision: 'allow'});
+    await expect(restored.evaluate(changed)).resolves.toMatchObject({decision: 'ask'});
+    expect(restored.allRules().every(rule => rule.pattern.length > 0)).toBe(true);
   });
 });

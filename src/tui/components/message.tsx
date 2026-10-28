@@ -16,7 +16,7 @@ export function Message({message, selected, thinkingExpanded}: MessageProps) {
     <Text bold color={message.role === 'user' ? 'cyan' : 'green'}>{marker} {label}{suffix}</Text>
     {/* 正在流式生成时强制展开 thinking；完成后才遵循用户的展开选择。 */}
     <ThinkingBlock content={message.thinking} expanded={thinkingExpanded || message.status === 'streaming'} streaming={message.status === 'streaming'} />
-    {message.content.length > 0 ? <Text wrap="wrap">{message.content}</Text> : null}
+    {(message.displayContent ?? message.content).length > 0 ? <Text wrap="wrap">{message.displayContent ?? message.content}</Text> : null}
     {message.errorMessage ? <Text color="red">{message.errorMessage}</Text> : null}
   </Box>;
 }

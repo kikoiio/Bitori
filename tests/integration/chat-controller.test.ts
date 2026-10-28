@@ -29,7 +29,7 @@ describe('ChatController', () => {
     await controller.initialize(profile);
     await expect(controller.shutdown()).rejects.toThrow('hook failure');
     expect(close).toHaveBeenCalledOnce();
-    tools.close();
+    await tools.close();
   });
 
   for (const mode of ['manual', 'auto'] as const) {
@@ -76,13 +76,22 @@ describe('ChatController', () => {
     mkdirSync(join(root, '.bitori', 'commands'), {recursive: true});
     writeFileSync(join(root, '.bitori', 'commands', 'explain.md'), '解释 $ARGUMENTS 并说明调用者');
     const client = new MockLLMClient([{type: 'completed', finishReason: 'stop'}]);
-    const controller = new ChatController(client, new SessionRepository(join(root, 'db.sqlite')), null, undefined, {workspaceRoot: root});
+    const database = join(root, 'db.sqlite');
+    const workerUrl = new URL('../fixtures/anthropic-storage-worker.ts', import.meta.url);
+    const controller = new ChatController(client, new SessionRepository(database, workerUrl), null, undefined, {workspaceRoot: root});
     try {
       await controller.initialize(profile);
       await controller.sendMessage('/explain\t  note.ts');
       expect(client.requests[0]?.items).toContainEqual(expect.objectContaining({type: 'message', role: 'user', content: '解释 note.ts 并说明调用者'}));
-      expect(controller.getState().messages[0]?.content).toBe('/explain\t  note.ts');
-    } finally { await controller.shutdown(); }
+      expect(controller.getState().messages[0]?.content).toBe('解释 note.ts 并说明调用者');
+      expect(controller.getState().messages[0]?.displayContent).toBe('/explain\t  note.ts');
+      await controller.shutdown();
+      const restored = new ChatController(client, new SessionRepository(database, workerUrl), null, undefined, {workspaceRoot: root});
+      await restored.initialize(profile);
+      await restored.sendMessage('继续');
+      expect(client.requests.at(-1)?.items).toContainEqual(expect.objectContaining({type: 'message', role: 'user', content: '解释 note.ts 并说明调用者'}));
+      await restored.shutdown();
+    } finally { await controller.shutdown().catch(() => undefined); }
   });
 
   it('兼容旧检查点中已保存的保留尾部，不重复回放', async () => {

@@ -35,10 +35,17 @@ describe('trace reader/render/export', () => {
     const parsed = sampleEvents().map(line => JSON.parse(JSON.stringify(line)) as TraceEvent);
     const iterations = groupByIteration(parsed);
     expect(iterations).toHaveLength(1);
-    expect(iterations[0]).toMatchObject({iteration: 1, iterationId: 'it1'});
+    expect(iterations[0]).toMatchObject({runId: 'r1', iteration: 1, iterationId: 'it1'});
     expect(iterations[0]!.retries).toHaveLength(1);
     expect(iterations[0]!.response?.text).toBe('done');
     expect(iterations[0]!.composition?.estimatedTotal).toBe(15);
+  });
+
+  it('同一会话不同 run 的相同轮次分别保留', () => {
+    const first = sampleEvents().map(event => ({...event, runId: 'r1', iterationId: 'it1'})) as TraceEvent[];
+    const second = first.map(event => ({...event, runId: 'r2', iterationId: 'it2', at: event.at + 10}));
+    const iterations = groupByIteration([...first, ...second]);
+    expect(iterations.map(item => [item.runId, item.iterationId])).toEqual([['r1', 'it1'], ['r2', 'it2']]);
   });
 
   it('renderTraceShow 输出头部、重试与组成行', () => {

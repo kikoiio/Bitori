@@ -69,23 +69,21 @@ export function validateHooks(hooks: readonly HookConfig[]): Error | null {
   for (const [index, hook] of hooks.entries()) {
     if (!hookEvents.includes(hook.event)) return new Error(`Hook ${index} 事件无效：${String(hook.event)}`);
     if (hook.action.type === 'command' && !hook.action.command) return new Error(`Hook ${index} command 动作缺少 command`);
+    if (hook.action.type === 'command' && [hook.action.command ?? '', ...(hook.action.args ?? [])].some(value => /\$(?:EVENT|TOOL_NAME|TOOL_ARGS\.|FILE_PATH|MESSAGE|ERROR)/.test(value))) return new Error(`Hook ${index} command 不允许插入动态上下文，请在程序中读取 BITORI_HOOK_CONTEXT 环境变量`);
     if (hook.action.type === 'prompt' && !hook.action.prompt) return new Error(`Hook ${index} prompt 动作缺少 prompt`);
     if (hook.action.type === 'http' && !hook.action.url) return new Error(`Hook ${index} http 动作缺少 url`);
     if (hook.action.type === 'agent') return new Error(`Hook ${index} agent 动作尚不支持`);
     if (hook.timeoutMs !== undefined && (!Number.isInteger(hook.timeoutMs) || hook.timeoutMs <= 0)) return new Error(`Hook ${index} timeoutMs 必须是正整数`);
-    if (hook.event === 'pre_tool_use' && hook.async) return new Error('pre_tool_use Hook 不允许 async');
-    if ((hook.reject || hook.async) && hook.event !== 'pre_tool_use' && hook.event !== 'permission_request') return new Error('reject/async 只能用于拦截类事件');
+    const guard = hook.event === 'pre_tool_use' || hook.event === 'permission_request';
+    if (guard && hook.async) return new Error(`${hook.event} Hook 不允许 async`);
+    if (hook.reject && !guard) return new Error('reject 只能用于拦截类事件');
   }
   return null;
 }
 
-function run(command: string, context: HookContext, timeoutMs: number, signal?: AbortSignal): Promise<HookResult> {
+function run(command: string, args: string[], context: HookContext, timeoutMs: number, signal?: AbortSignal): Promise<HookResult> {
   return new Promise(resolve => {
-    const expanded = expand(command, context);
-    const space = expanded.indexOf(' ');
-    const file = space === -1 ? expanded : expanded.slice(0, space);
-    const args = space === -1 ? [] : [expanded.slice(space + 1)];
-    execFile(file, args, {timeout: timeoutMs, shell: process.platform === 'win32', ...(signal ? {signal} : {})}, (error, stdout, stderr) => {
+    execFile(command, args, {timeout: timeoutMs, shell: false, env: {...process.env, BITORI_HOOK_CONTEXT: JSON.stringify(context)}, ...(signal ? {signal} : {})}, (error, stdout, stderr) => {
       const output = `${stdout}${stderr}`.trim();
       resolve({output, success: error === null, reject: false});
     });
@@ -127,8 +125,8 @@ export class HookEngine {
     return results;
   }
 
-  async firePreToolHooks(toolName: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{rejected: boolean; reason: string}> {
-    const results = await this.fire('pre_tool_use', {event: 'pre_tool_use', toolName, args}, signal);
+  async guard(event: 'pre_tool_use' | 'permission_request', toolName: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{rejected: boolean; reason: string}> {
+    const results = await this.fire(event, {event, toolName, args}, signal);
     const rejected = results.find(result => result.reject);
     return rejected ? {rejected: true, reason: rejected.output} : {rejected: false, reason: ''};
   }
@@ -138,7 +136,7 @@ export class HookEngine {
     const rejected = (success: boolean) => hook.reject === true && (success || hook.failurePolicy !== 'open');
     try {
       if (hook.action.type === 'command') {
-        const result = await run(hook.action.command!, context, hook.timeoutMs ?? 10_000, signal);
+        const result = await run(hook.action.command!, hook.action.args ?? [], context, hook.timeoutMs ?? 10_000, signal);
         return {...result, reject: rejected(result.success)};
       }
       if (hook.action.type === 'prompt') {

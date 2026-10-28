@@ -2,6 +2,7 @@ import type {ProviderError} from './errors.js';
 import type {ToolDefinition} from '../tools/types.js';
 import type {JsonObject, ToolExecutionResult} from '../tools/types.js';
 import type {PromptBlock} from '../prompt/builder.js';
+import {z} from 'zod';
 
 /**
  * Provider 层的核心抽象。
@@ -9,11 +10,20 @@ import type {PromptBlock} from '../prompt/builder.js';
  */
 export type MessageRole = 'user' | 'assistant';
 
-/** 某些协议需要保存的不透明重放数据；当前只有 Responses API 使用。 */
-export interface ProviderState {
-  protocol: 'openai-responses';
-  payload: unknown;
-}
+const anthropicBlockTypes = ['text', 'thinking', 'redacted_thinking', 'tool_use'];
+/** 保留额外协议字段和后续 SDK 支持的块，已知块则校验其必需字段。 */
+export const anthropicReplayPayloadSchema = z.array(z.union([
+  z.looseObject({type: z.literal('text'), text: z.string()}),
+  z.looseObject({type: z.literal('thinking'), thinking: z.string(), signature: z.string().min(1)}),
+  z.looseObject({type: z.literal('redacted_thinking'), data: z.string().min(1)}),
+  z.looseObject({type: z.literal('tool_use'), id: z.string().min(1), name: z.string().min(1), input: z.record(z.string(), z.unknown())}),
+  z.looseObject({type: z.string().min(1).refine(type => !anthropicBlockTypes.includes(type))}),
+])).min(1);
+
+/** 展示文本与供应商的不透明、有序重放载荷分开保存。 */
+export type ProviderState =
+  | {protocol: 'openai-responses'; payload: unknown}
+  | {protocol: 'anthropic'; payload: z.infer<typeof anthropicReplayPayloadSchema>};
 
 export interface ChatMessage {
   role: MessageRole;
@@ -63,11 +73,11 @@ export interface ModelReminderItem {
 export type ModelContextItem = ModelMessageItem | ModelAssistantIterationItem | ModelToolResultsItem | ModelReminderItem;
 
 export interface ChatRequest {
-  /** Agent 主流程的严格有序上下文；工具循环必须使用 items。 */
+  /** Agent 主流程的严格有序上下文；工具循环必须使用 items。提供时（包括空数组）优先于 messages。 */
   items?: ModelContextItem[];
   /** 结构化系统提示；缺省时不发送系统提示。 */
   system?: PromptBlock[];
-  /** 纯文本摘要等无工具请求仍可使用消息形态。 */
+  /** 未提供 items 时使用的兼容消息形态。 */
   messages: ChatMessage[];
   tools?: ToolDefinition[];
 }
@@ -100,8 +110,13 @@ export interface LLMClient {
 /** 从数据库 JSON 恢复后校验 ProviderState 的结构。 */
 export function isProviderState(value: unknown): value is ProviderState {
   return typeof value === 'object' && value !== null
-    && 'protocol' in value && value.protocol === 'openai-responses'
-    && 'payload' in value;
+    && 'protocol' in value && 'payload' in value
+    && (value.protocol === 'openai-responses'
+      || (value.protocol === 'anthropic' && isAnthropicReplayPayload(value.payload)));
+}
+
+export function isAnthropicReplayPayload(value: unknown): value is z.infer<typeof anthropicReplayPayloadSchema> {
+  return anthropicReplayPayloadSchema.safeParse(value).success;
 }
 
 /** Responses 的 replay payload 至少必须是“对象数组”，否则退回普通文本上下文。 */

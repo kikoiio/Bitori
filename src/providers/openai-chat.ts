@@ -38,7 +38,7 @@ export class OpenAIChatClient implements LLMClient {
         } else if (item.type === 'reminder') messages.push({role: 'user', content: item.text});
         else for (const entry of item.results) messages.push({role: 'tool', tool_call_id: entry.providerCallId ?? entry.callId, content: JSON.stringify(entry.result)});
       }
-      if (messages.length === 0) for (const message of request.messages) messages.push({role: message.role, content: message.content});
+      if (request.items === undefined) for (const message of request.messages) messages.push({role: message.role, content: message.content});
       // 系统提示全文放在首条 system 消息；该协议无显式缓存标记，依赖服务端自动前缀缓存。
       if (request.system?.length) messages.unshift({role: 'system', content: request.system.map(block => block.text).join('\n\n')});
       const stream = await this.#client.chat.completions.create({

@@ -29,6 +29,8 @@ export interface StoredMessage {
   sessionId: string;
   role: MessageRole;
   content: string;
+  /** 用户界面显示文本；缺省时回退到模型正文，助手消息通常为空。 */
+  displayContent?: string;
   thinking: string;
   status: MessageStatus;
   errorCode: ProviderErrorCode | null;
@@ -76,7 +78,7 @@ export interface SessionRepositoryContract {
   checkpointAssistant(messageId: string, content: string, thinking: string): Promise<void>;
   finalizeMessage(messageId: string, update: FinalMessageUpdate): Promise<void>;
   setSessionMode(sessionId: string, mode: AgentMode): Promise<Session>;
-  beginAgentRun(input: {runId: string; sessionId: string; displayText: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}>;
+  beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}>;
   beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage>;
   finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void>;
   abortAgentRun(runId: string, result: AgentRunResult, message: string): Promise<void>;

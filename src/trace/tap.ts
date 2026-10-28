@@ -123,6 +123,7 @@ export class AgentTraceTap {
         }
         this.#writer.append({v: TRACE_VERSION, at: event.at, sessionId: event.sessionId, type: 'agent_event', event});
         this.#debugPush(`工具完成 ${entry?.name ?? event.callId}`);
+        this.#calls.delete(event.callId);
         return;
       }
       case 'approval_resolved': {

@@ -2,12 +2,12 @@ import {z} from 'zod';
 import type {LLMClient} from '../../providers/types.js';
 import type {AgentDefinition} from '../../subagents/types.js';
 import {spawnSubAgent} from '../../subagents/spawn.js';
-import type {JsonObject, Tool, ToolContext, ToolExecutionResult} from '../types.js';
+import type {Tool, ToolContext, ToolExecutionResult} from '../types.js';
 
 const schema = z.object({
-  agent: z.string().trim().min(1),
-  prompt: z.string().trim().min(1),
-  context: z.string().optional(),
+  agent: z.string().trim().min(1).describe('SubAgent 名称'),
+  prompt: z.string().trim().min(1).describe('给子 Agent 的完整任务说明'),
+  context: z.string().describe('供咨询使用的背景材料').optional(),
 }).strict();
 
 /** 把 SubAgent 派发暴露为模型可用工具；内置角色和用户自定义角色共用同一入口。 */
@@ -15,16 +15,8 @@ export class AgentTool implements Tool<z.infer<typeof schema>> {
   readonly name = 'agent';
   readonly description = '进行一次文本咨询：仅依据提供的内容回答，不具备工具、文件或工作区访问能力';
   readonly effect = 'read' as const;
-  readonly inputSchema: JsonObject = {
-    type: 'object',
-    properties: {
-      agent: {type: 'string', description: 'SubAgent 名称'},
-      prompt: {type: 'string', description: '给子 Agent 的完整任务说明'},
-      context: {type: 'string', description: '供咨询使用的背景材料'},
-    },
-    required: ['agent', 'prompt'],
-    additionalProperties: false,
-  };
+  readonly inputSchema = z.toJSONSchema(schema, {io: 'input'});
+  readonly strict = false;
 
   constructor(
     private readonly definitions: readonly AgentDefinition[],

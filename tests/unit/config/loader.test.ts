@@ -2,7 +2,7 @@ import {mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync} from 'node:f
 import {tmpdir} from 'node:os';
 import {join, relative} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
-import {loadConfig, resolveProfile, resolveProfileWithApiKey} from '../../../src/config/loader.js';
+import {collectSecretValues, loadConfig, resolveProfile, resolveProfileWithApiKey} from '../../../src/config/loader.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -170,6 +170,7 @@ mcp_servers:
     const config = loadConfig(root, workspace, {MCP_TOKEN: 'secret-token', NODE_COMMAND: 'node-project'});
     expect(config.mcpServers.shared).toEqual({transport: 'stdio', command: 'node-project', args: ['server.js'], env: {}});
     expect(config.mcpServers['user-only']).toMatchObject({headers: {Authorization: 'Bearer secret-token'}});
+    expect(collectSecretValues(config, root)).toContain('Bearer secret-token');
   });
 
   it('MCP 配置引用缺失变量时显错但不泄漏其他值', () => {

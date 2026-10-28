@@ -15,7 +15,9 @@ export class TeamTools implements Tool<z.infer<typeof schema>> {
   readonly name = 'team';
   readonly description = '团队协作工具：创建团队、发送消息、读取成员邮箱';
   readonly effect = 'write' as const;
-  readonly inputSchema: JsonObject = z.toJSONSchema(schema, {io: 'input'});
+  // Zod 的 discriminatedUnion 顶层只生成 oneOf；Anthropic 要求根 schema 明确声明 object。
+  readonly inputSchema: JsonObject = {type: 'object', ...z.toJSONSchema(schema, {io: 'input'})};
+  readonly strict = false;
 
   constructor(private readonly teams: TeamManager) {}
 

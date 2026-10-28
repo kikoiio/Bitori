@@ -7,7 +7,7 @@ import {runMigrations} from './migrations/index.js';
 import type {MigrationDatabase} from './migrations/index.js';
 import {serializeWorkerError} from './worker-client.js';
 import type {StorageOperation, StorageRequest, StorageResponse} from './worker-protocol.js';
-import type {AgentRunRecord, BeginTurnResult, ContextCheckpoint, FinalMessageUpdate, Session, StoredConversation, StoredMessage, ToolCallRecord} from './types.js';
+import type {AgentRunRecord, ContextCheckpoint, FinalMessageUpdate, Session, StoredConversation, StoredMessage, ToolCallRecord} from './types.js';
 
 const logger = getLogger('storage');
 
@@ -16,6 +16,7 @@ interface WorkerData {databasePath: string}
 interface SessionRow {id: string; profile_name: string; title: string; created_at: number; updated_at: number; agent_mode: Session['agentMode']; latest_plan_message_id: string | null}
 interface MessageRow {
   id: string; session_id: string; role: 'user' | 'assistant'; content: string; thinking: string;
+  display_content: string | null;
   status: 'streaming' | 'completed' | 'cancelled' | 'failed'; error_code: StoredMessage['errorCode'];
   error_message: string | null; input_tokens: number | null; output_tokens: number | null;
   provider_state: string | null; agent_run_id: string | null; iteration: number | null; created_at: number; updated_at: number;
@@ -70,7 +71,7 @@ function message(row: MessageRow): StoredMessage {
   const usage = row.input_tokens === null || row.output_tokens === null
     ? null : {inputTokens: row.input_tokens, outputTokens: row.output_tokens};
   return {
-    id: row.id, sessionId: row.session_id, role: row.role, content: row.content, thinking: row.thinking,
+    id: row.id, sessionId: row.session_id, role: row.role, content: row.content, ...(row.display_content === null ? {} : {displayContent: row.display_content}), thinking: row.thinking,
     status: row.status, errorCode: row.error_code, errorMessage: row.error_message, usage, providerState, agentRunId: row.agent_run_id, iteration: row.iteration,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
@@ -168,40 +169,7 @@ function execute(operation: StorageOperation): unknown {
       if (previous && previous.rowid > boundary.rowid) throw new Error('压缩检查点已被更新');
       database.prepare('INSERT INTO context_checkpoints(session_id,boundary_message_id,items_json) VALUES(?,?,?) ON CONFLICT(session_id) DO UPDATE SET boundary_message_id=excluded.boundary_message_id,items_json=excluded.items_json').run(operation.sessionId, operation.checkpoint.boundaryMessageId, JSON.stringify(operation.checkpoint.items));
     }); return null;
-    case 'save_tool_batch': transaction(() => insertToolBatch(operation.records)); return null;
-    case 'finalize_assistant_with_tool_batch': transaction(() => { finalizeMessage(operation.messageId, operation.update); insertToolBatch(operation.records); }); return null;
     case 'update_tool_call': { const record = operation.record; database.prepare(`UPDATE tool_calls SET approval_status=?, execution_status=?, result_json=?, updated_at=? WHERE id=?`).run(record.approvalStatus, record.executionStatus, record.result === null ? null : JSON.stringify(record.result), record.updatedAt, record.id); return null; }
-    case 'begin_turn': {
-      // user 消息和空的 assistant 草稿必须原子创建，不能留下“半个对话轮次”。
-      const begin = (): BeginTurnResult => transaction(() => {
-        const timestamp = now();
-        const userId = createId();
-        const assistantId = createId();
-        const count = (database.prepare('SELECT COUNT(*) AS count FROM messages WHERE session_id = ?').get(operation.sessionId) as {count: number}).count;
-        const insert = database.prepare(`INSERT INTO messages(
-          id, session_id, role, content, thinking, status, error_code, error_message,
-          input_tokens, output_tokens, provider_state, created_at, updated_at, owner_id, owner_pid
-        ) VALUES (?, ?, ?, ?, '', ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`);
-        insert.run(userId, operation.sessionId, 'user', operation.text, 'completed', timestamp, timestamp, ownerId, process.pid);
-        // +1 保证同一毫秒创建的 assistant 在 user 之后排序。
-        insert.run(assistantId, operation.sessionId, 'assistant', '', 'streaming', timestamp + 1, timestamp + 1, ownerId, process.pid);
-        const title = operation.text.trim().replace(/\s+/g, ' ').slice(0, 60) || '新会话';
-        // 只有会话首轮用用户输入生成标题，以后发送消息只更新时间。
-        database.prepare(`UPDATE sessions SET updated_at = ?, title = CASE WHEN ? = 0 THEN ? ELSE title END WHERE id = ?`)
-          .run(timestamp, count, title, operation.sessionId);
-        const userRow = database.prepare('SELECT * FROM messages WHERE id = ?').get(userId) as unknown as MessageRow;
-        const assistantRow = database.prepare('SELECT * FROM messages WHERE id = ?').get(assistantId) as unknown as MessageRow;
-        return {userMessage: message(userRow), assistantMessage: message(assistantRow)};
-      });
-      return begin();
-    }
-    case 'begin_assistant_continuation': {
-      const timestamp = now();
-      const id = createId();
-      database.prepare(`INSERT INTO messages(id, session_id, role, content, thinking, status, error_code, error_message, input_tokens, output_tokens, provider_state, created_at, updated_at, owner_id, owner_pid) VALUES (?, ?, 'assistant', '', '', 'streaming', NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`)
-        .run(id, operation.sessionId, timestamp, timestamp, ownerId, process.pid);
-      return message(database.prepare('SELECT * FROM messages WHERE id = ?').get(id) as unknown as MessageRow);
-    }
     case 'checkpoint_assistant':
       // 流式过程中只更新仍处于 streaming 的草稿，终态消息不会被迟到的 checkpoint 覆盖。
       database.prepare(`UPDATE messages SET content = ?, thinking = ?, updated_at = ? WHERE id = ? AND status = 'streaming'`)
@@ -222,7 +190,7 @@ function execute(operation: StorageOperation): unknown {
       if (!current) throw new Error('会话不存在');
       const timestamp = now(); const userId = createId();
       const count = (database.prepare('SELECT COUNT(*) AS count FROM messages WHERE session_id=?').get(operation.sessionId) as {count: number}).count;
-      database.prepare(`INSERT INTO messages(id,session_id,role,content,thinking,status,error_code,error_message,input_tokens,output_tokens,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?, 'user',?,'','completed',NULL,NULL,NULL,NULL,NULL,?,NULL,?,?,?,?)`).run(userId, operation.sessionId, operation.displayText, operation.runId, timestamp, timestamp, ownerId, process.pid);
+      database.prepare(`INSERT INTO messages(id,session_id,role,content,display_content,thinking,status,error_code,error_message,input_tokens,output_tokens,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?, 'user',?,?,'','completed',NULL,NULL,NULL,NULL,NULL,?,NULL,?,?,?,?)`).run(userId, operation.sessionId, operation.instruction ?? operation.displayText, operation.displayText, operation.runId, timestamp, timestamp, ownerId, process.pid);
       database.prepare(`INSERT INTO agent_runs(id,session_id,user_message_id,mode,status,stop_reason,iteration_count,input_tokens,output_tokens,started_at,finished_at,updated_at,owner_id,owner_pid) VALUES(?,?,?,?,'running',NULL,0,0,0,?,NULL,?,?,?)`).run(operation.runId, operation.sessionId, userId, operation.mode, timestamp, timestamp, ownerId, process.pid);
       const title = operation.displayText.trim().replace(/\s+/g, ' ').slice(0, 60) || '新会话';
       database.prepare(`UPDATE sessions SET updated_at=?, title=CASE WHEN ?=0 THEN ? ELSE title END WHERE id=?`).run(timestamp, count, title, operation.sessionId);
@@ -244,8 +212,8 @@ function execute(operation: StorageOperation): unknown {
     }); return null;
     case 'finish_agent_run': transaction(() => {
       const timestamp = now();
-      database.prepare(`UPDATE agent_runs SET status=?,stop_reason=?,iteration_count=?,input_tokens=?,output_tokens=?,finished_at=?,updated_at=? WHERE id=?`).run(operation.result.status, operation.result.stopReason, operation.result.iterationCount, operation.result.usage.inputTokens, operation.result.usage.outputTokens, timestamp, timestamp, operation.runId);
-      if (operation.latestPlanMessageId !== undefined) database.prepare(`UPDATE sessions SET latest_plan_message_id=?,updated_at=? WHERE id=(SELECT session_id FROM agent_runs WHERE id=?)`).run(operation.latestPlanMessageId, timestamp, operation.runId);
+      const updated = database.prepare(`UPDATE agent_runs SET status=?,stop_reason=?,iteration_count=?,input_tokens=?,output_tokens=?,finished_at=?,updated_at=? WHERE id=? AND status='running'`).run(operation.result.status, operation.result.stopReason, operation.result.iterationCount, operation.result.usage.inputTokens, operation.result.usage.outputTokens, timestamp, timestamp, operation.runId);
+      if (updated.changes > 0 && operation.latestPlanMessageId !== undefined) database.prepare(`UPDATE sessions SET latest_plan_message_id=?,updated_at=? WHERE id=(SELECT session_id FROM agent_runs WHERE id=?)`).run(operation.latestPlanMessageId, timestamp, operation.runId);
     }); return null;
     case 'close':
       if (!closed) {

@@ -14,6 +14,7 @@ const TAG_TYPES: Record<MemoryTag, MemoryType> = {
 export class MemoryExtractor {
   readonly #manager: MemoryManager;
   readonly #client: LLMClient;
+  readonly #shutdown = new AbortController();
   #inProgress: Promise<void> | null = null;
 
   constructor(manager: MemoryManager, client: LLMClient) {
@@ -22,25 +23,37 @@ export class MemoryExtractor {
   }
 
   extract(dialogue: string, signal?: globalThis.AbortSignal): Promise<void> {
-    const cancellation = signal ?? new AbortController().signal;
-    const next = this.#run(dialogue, cancellation).finally(() => { if (this.#inProgress === next) this.#inProgress = null; });
-    this.#inProgress = this.#inProgress ? Promise.all([this.#inProgress, next]).then(() => undefined) : next;
-    return this.#inProgress;
+    const cancellation = signal ? AbortSignal.any([signal, this.#shutdown.signal]) : this.#shutdown.signal;
+    if (this.#shutdown.signal.aborted) return Promise.reject(new Error('记忆提取器已经关闭'));
+    const queued = (this.#inProgress ?? Promise.resolve()).catch(() => undefined).then(() => this.#run(dialogue, cancellation)).finally(() => {
+      if (this.#inProgress === queued) this.#inProgress = null;
+    });
+    this.#inProgress = queued;
+    return queued;
+  }
+
+  async close(): Promise<void> {
+    this.#shutdown.abort();
+    await this.#inProgress?.catch(() => undefined);
   }
 
   async #run(dialogue: string, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
     const prompt = [
       '从以下对话提取值得跨会话记住的信息。不要调用工具。',
       `可用标记：${MEMORY_TAGS.join(', ')}；没有值得记住的信息时只输出 NONE。`,
       '每条格式：`<TAG>|<标题>|<描述>|<正文>`，每条一行。由你判断与已有记忆去重。',
+      `已有记忆：${this.#manager.buildSystemReminder() || '无'}`,
       dialogue,
     ].join('\n');
     const stream = this.#client.streamChat({messages: [{role: 'user', content: prompt}], items: [{type: 'message', messageId: 'memory-extract', role: 'user', content: prompt}]}, signal);
     let text = '';
     for await (const event of stream) {
+      if (signal.aborted) return;
       if (event.type === 'text_delta') text += event.text;
       if (event.type === 'error') return;
     }
+    if (signal.aborted) return;
     if (text.trim() === 'NONE') return;
     let changed = false;
     for (const line of text.split('\n')) {

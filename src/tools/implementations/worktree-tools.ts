@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {buildWorktreeNotice, createAgentWorktree, hasWorktreeChanges, removeAgentWorktree, worktreeRelativePath} from '../../worktree/worktree.js';
-import type {JsonObject, Tool, ToolContext, ToolExecutionResult} from '../types.js';
+import type {Tool, ToolContext, ToolExecutionResult} from '../types.js';
 
 const enterSchema = z.object({slug: z.string().trim().min(1)}).strict();
 const exitSchema = z.object({slug: z.string().trim().min(1), force: z.boolean().default(false)}).strict();
@@ -12,7 +12,7 @@ export class EnterWorktreeTool implements Tool<{slug: string}> {
   readonly name = 'enter_worktree';
   readonly description = '创建或恢复 Git Worktree；文件和命令工具仍从原工作区执行';
   readonly effect = 'write' as const;
-  readonly inputSchema: JsonObject = {type: 'object', properties: {slug: {type: 'string'}}, required: ['slug'], additionalProperties: false};
+  readonly inputSchema = z.toJSONSchema(enterSchema, {io: 'input'});
   readonly #sessions = new Map<string, WorktreeSession>();
 
   parseArguments(input: unknown) { return enterSchema.parse(input); }
@@ -37,7 +37,8 @@ export class ExitWorktreeTool implements Tool<{slug: string; force: boolean}> {
   readonly name = 'exit_worktree';
   readonly description = '移除 Worktree 并保留分支；存在未提交文件或独有提交时需 force=true';
   readonly effect = 'write' as const;
-  readonly inputSchema: JsonObject = {type: 'object', properties: {slug: {type: 'string'}, force: {type: 'boolean', default: false}}, required: ['slug'], additionalProperties: false};
+  readonly inputSchema = z.toJSONSchema(exitSchema, {io: 'input'});
+  readonly strict = false;
 
   constructor(private readonly enter: EnterWorktreeTool) {}
 

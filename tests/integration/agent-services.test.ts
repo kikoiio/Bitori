@@ -33,13 +33,13 @@ describe('Agent services integration', () => {
     expect(names).toContain('exit_worktree');
     expect(names).toContain('team');
     expect(names).toContain('agent');
-    tools.close();
+    await tools.close();
   });
 
   it('Skill 目录进入系统提示并可由 load_skill 激活', async () => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-skill-')); roots.push(root);
     mkdirSync(join(root, '.bitori', 'skills'), {recursive: true});
-    writeFileSync(join(root, '.bitori', 'skills', 'demo.md'), '---\nname: demo\ndescription: 演示技能\nallowed-tools: ""\nmode: inline\n---\n\nDo the demo.', 'utf8');
+    writeFileSync(join(root, '.bitori', 'skills', 'demo.md'), '---\nname: demo\ndescription: 演示技能\nmode: inline\n---\n\nDo the demo.', 'utf8');
     const services = createAgentServices({workDir: root});
     const tools = createToolSystem(root, {}, {services});
     const client = new EchoClient();
@@ -80,6 +80,6 @@ describe('Agent services integration', () => {
     const agentTool = tools.registry.get('agent')!;
     const result = await agentTool.execute({agent: 'explore', prompt: '查找入口文件'}, {workspaceRoot: root, signal: new AbortController().signal, limits: {timeoutMs: 5000, maxResultBytes: 10240, maxMatches: 10}});
     expect(result).toMatchObject({status: 'success', output: {agent: 'explore', output: '子代理完成研究'}});
-    tools.close();
+    await tools.close();
   });
 });

@@ -7,7 +7,7 @@ import {validateHooks} from './engine.js';
 import {hookEvents, type HookConfig} from './types.js';
 
 const actionSchema = z.union([
-  z.strictObject({type: z.literal('command'), command: z.string().trim().min(1)}),
+  z.strictObject({type: z.literal('command'), command: z.string().trim().min(1), args: z.array(z.string()).optional()}),
   z.strictObject({type: z.literal('prompt'), prompt: z.string().trim().min(1)}),
   z.strictObject({type: z.literal('http'), url: z.string().trim().min(1), method: z.string().trim().min(1).optional()}),
 ]);
@@ -41,7 +41,9 @@ function readHooks(path: string, label: string): HookConfig[] {
     event: hook.event,
     action: hook.action.type === 'http'
       ? {type: 'http', url: hook.action.url, ...(hook.action.method === undefined ? {} : {method: hook.action.method})}
-      : hook.action,
+      : hook.action.type === 'command'
+        ? {type: 'command', command: hook.action.command, ...(hook.action.args === undefined ? {} : {args: hook.action.args})}
+        : hook.action,
     ...(hook.id === undefined ? {} : {id: hook.id}),
     ...(hook.condition === undefined ? {} : {condition: hook.condition}),
     ...(hook.reject === undefined ? {} : {reject: hook.reject}),

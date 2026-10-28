@@ -59,7 +59,7 @@ const traceSchema = z.strictObject({
 });
 
 export const configSchema = z
-  .object({
+  .strictObject({
     profiles: z.array(profileSchema).min(1, '至少需要一个 profile'),
     mcp_servers: mcpServersSchema.optional(),
     models: modelAliasesSchema.optional(),

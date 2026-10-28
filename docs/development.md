@@ -1,5 +1,9 @@
 # 开发、测试与发布
 
+## 文档维护
+
+`docs/` 只保留四个规范来源：`product.md` 说明目标与状态，`architecture.md` 描述当前模块与数据路径，`configuration.md` 定义配置与扩展用法，`development.md` 记录开发、验证和贡献流程。文件名采用小写英文主题名，需要分词时使用连字符；日期和验收状态写在正文。新主题先考虑归入现有文档，不为一篇短文或两个模板创建分类目录；导航只链接规范来源，不复制整份内容。根目录 `AGENTS.md` 是唯一代理工作约定，配置模板放在根目录，README 负责安装与导航。
+
 ## 本地开发
 
 使用 Node.js 24 和 npm，在仓库根目录执行 `npm ci` 后，以 `npm run dev -- --profile <name>` 启动；配置见 [README](../README.md#配置)。`npm run build` 输出 `dist/`，`npm start` 运行编译结果。生成目录与本地密钥不应提交。Linux Electron 开发入口为 `npm run desktop`；`npm run desktop:package` 构建 Linux AppImage 和 deb。两者均需 Electron 依赖、图形环境及适当资源；启动后须选择并信任工作区。
