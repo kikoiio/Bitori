@@ -113,10 +113,10 @@ def main():
             raise RuntimeError('Bitori 未返回有效 JSON') from None
         result['agent'] = {key: summary.get(key) for key in ('status', 'stopReason', 'iterations', 'inputTokens', 'outputTokens')}
         if run.returncode != 0:
-            result['status'] = 'agent_error'
             result['agent']['errorCode'] = summary.get('errorCode')
             message = str(summary.get('errorMessage') or summary.get('error') or '')
             result['agent']['errorMessage'] = message.replace(os.environ['BITORI_API_KEY'], '[redacted]')[:500]
+            result['status'] = 'provider_error' if summary.get('errorCode') in ('authentication', 'rate_limit') or message.startswith(('401 ', '403 ', '413 ', '429 ')) else 'agent_error'
             raise RuntimeError('Bitori 执行失败；请检查模型和任务运行状态')
         # Include new files in the patch but never include Bitori's own workspace data.
         command(['docker', 'exec', '-w', '/testbed', container, 'git', 'add', '-N', '--', '.', ':(exclude).bitori'])
@@ -136,7 +136,7 @@ def main():
         result['duration_seconds'] = round(time.monotonic() - started, 2)
         (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(result))
-    if result['status'] in ('infrastructure_error', 'agent_error'):
+    if result['status'] in ('infrastructure_error', 'agent_error', 'provider_error'):
         sys.exit(1)
 
 
