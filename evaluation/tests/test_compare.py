@@ -9,6 +9,9 @@ import unittest
 spec = importlib.util.spec_from_file_location('compare', Path(__file__).parents[1] / 'rsi' / 'compare.py')
 compare = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(compare)
+aggregate_spec = importlib.util.spec_from_file_location('aggregate', Path(__file__).parents[1] / 'rsi' / 'aggregate.py')
+aggregate = importlib.util.module_from_spec(aggregate_spec)
+aggregate_spec.loader.exec_module(aggregate)
 
 
 def row(status):
@@ -47,6 +50,17 @@ class ComparisonTests(unittest.TestCase):
             self.assertEqual((result['baseline_commit'], result['candidate_commit']), ('abc', 'def'))
             self.assertEqual(result['decision'], 'pending_human_review')
             self.assertEqual(result['comparison']['candidate_resolved'], 1)
+
+    def test_aggregate_marks_missing_and_duplicate_tasks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for index in (0, 1):
+                directory = root / f'swe-lite-dev-{index}'
+                directory.mkdir()
+                (directory / 'result.json').write_text(json.dumps({'instance_id': 'same', 'status': 'resolved'}))
+            result = aggregate.aggregate(root, [0, 1, 2])
+            self.assertEqual(result['missing_indices'], [2])
+            self.assertEqual(result['duplicate_instances'], ['same'])
 
 
 if __name__ == '__main__':

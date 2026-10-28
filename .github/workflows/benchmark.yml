@@ -71,3 +71,24 @@ jobs:
           path: evaluation-output/result.json
           if-no-files-found: warn
           retention-days: 7
+  aggregate:
+    if: always() && needs.plan.result == 'success'
+    needs: [plan, run]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: swe-lite-dev-*
+          path: evaluation-artifacts
+      - name: Summarize task outcomes
+        env:
+          INDICES: ${{ needs.plan.outputs.indices }}
+        run: python3 evaluation/rsi/aggregate.py evaluation-artifacts --indices "$INDICES" --output evaluation-report/summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: swe-lite-summary
+          path: evaluation-report/summary.json
+          if-no-files-found: warn
+          retention-days: 7
