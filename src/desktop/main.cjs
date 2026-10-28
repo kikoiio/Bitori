@@ -10,9 +10,10 @@ let controller;
 let toolSystem;
 let config;
 let unsubscribe;
-let workspace = app.isPackaged ? homedir() : process.cwd();
+let workspace = '';
 let closing = false;
 let switching = false;
+let pendingSwitch = Promise.resolve();
 let core;
 let startupError;
 
@@ -33,7 +34,14 @@ async function dispose() {
   const previous = controller;
   controller = undefined;
   try { if (previous) await previous.shutdown(); }
-  finally { toolSystem?.close(); toolSystem = undefined; }
+  finally {
+    const previousTools = toolSystem;
+    toolSystem = undefined;
+    if (previousTools) {
+      previousTools.close();
+      await previousTools.mcp.close().catch(() => {});
+    }
+  }
 }
 
 function snapshot(error) {
@@ -112,6 +120,7 @@ async function initialize() {
 }
 
 function activeController() {
+  if (closing || switching) throw new Error('正在切换或关闭');
   if (!controller) throw new Error('请先选择模型配置');
   return controller;
 }
@@ -130,36 +139,40 @@ function handle(channel, fn) {
   });
 }
 
+async function changeContext(operation) {
+  requireIdle();
+  if (closing || switching) throw new Error('正在切换或关闭');
+  switching = true;
+  const operationPromise = operation();
+  pendingSwitch = operationPromise.catch(() => {});
+  try { return await operationPromise; }
+  finally { switching = false; }
+}
+
 function registerHandlers() {
   handle('bitori:init', () => currentSnapshot(startupError));
-  handle('bitori:profile', async name => {
-    requireIdle();
-    if (switching) throw new Error('正在切换配置');
-    switching = true;
+  handle('bitori:profile', name => changeContext(async () => {
     try { return await selectProfile(checkedText(name, '配置名称', 200)); }
-    finally { switching = false; }
-  });
-  handle('bitori:workspace', async () => {
-    requireIdle();
-    if (switching) throw new Error('正在切换工作区');
-    switching = true;
-    try {
-      const result = await dialog.showOpenDialog(window, {title: '选择工作区', defaultPath: workspace, properties: ['openDirectory']});
-      if (result.canceled || !result.filePaths[0]) return null;
-      const choice = await dialog.showMessageBox(window, {type: 'warning', buttons: ['取消', '信任并打开'], defaultId: 0, cancelId: 0, message: '确认信任此工作区？', detail: '工作区配置可能在启动时运行 MCP 命令，工具也可以读取此目录。'});
-      if (choice.response !== 1) return null;
-      workspace = result.filePaths[0];
-      return await initialize();
-    } finally { switching = false; }
-  });
+    catch (error) { return currentSnapshot(error instanceof Error ? error.message : String(error)); }
+  }));
+  handle('bitori:workspace', () => changeContext(async () => {
+    const result = await dialog.showOpenDialog(window, {title: '选择工作区', defaultPath: workspace || homedir(), properties: ['openDirectory']});
+    if (result.canceled || !result.filePaths[0] || closing) return null;
+    const choice = await dialog.showMessageBox(window, {type: 'warning', buttons: ['取消', '信任并打开'], defaultId: 0, cancelId: 0, message: '确认信任此工作区？', detail: '工作区配置和 Hook 可能在启动时运行命令，工具也可以读取此目录。'});
+    if (choice.response !== 1 || closing) return null;
+    workspace = result.filePaths[0];
+    return initialize();
+  }));
   handle('bitori:send', text => activeController().sendMessage(checkedText(text, '消息')));
   handle('bitori:cancel', () => activeController().cancelActiveRequest());
   handle('bitori:new-session', () => activeController().createSession());
   handle('bitori:switch-session', id => activeController().switchSession(checkedText(id, '会话 ID', 200)));
   handle('bitori:sessions', () => activeController().listSessions());
-  handle('bitori:approval', decision => {
+  handle('bitori:approval', (decision, callId) => {
     if (decision !== 'allow' && decision !== 'deny') throw new Error('审批决定无效');
-    activeController().resolveToolApproval(decision === 'allow' ? 'approved_once' : 'denied');
+    const active = activeController();
+    if (active.getState().approvalPrompt?.callId !== checkedText(callId, '工具调用 ID', 200)) throw new Error('审批已过期，请重新确认');
+    active.resolveToolApproval(decision === 'allow' ? 'approved_once' : 'denied');
   });
 }
 
@@ -173,9 +186,8 @@ async function start() {
     if (closing) return;
     event.preventDefault();
     closing = true;
-    void dispose().finally(() => app.quit());
+    void pendingSwitch.then(dispose).finally(() => app.quit());
   });
-  await initialize();
   await window.loadFile(join(__dirname, 'renderer/index.html'));
   window.show();
 }

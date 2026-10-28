@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('bitori', {
   newSession: () => ipcRenderer.invoke('bitori:new-session'),
   switchSession: id => ipcRenderer.invoke('bitori:switch-session', id),
   listSessions: () => ipcRenderer.invoke('bitori:sessions'),
-  decideApproval: decision => ipcRenderer.invoke('bitori:approval', decision),
+  decideApproval: (decision, callId) => ipcRenderer.invoke('bitori:approval', decision, callId),
   onState: callback => {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on('bitori:state', listener);

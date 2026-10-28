@@ -1,6 +1,6 @@
 # Bitori
 
-Bitori 是面向软件工作区的跨平台终端 AI 助手，提供流式对话、工具调用和本地会话存储。当前主要入口是 Node.js 命令行程序及全屏终端界面；仓库正在开发 Electron 桌面端，已有初步代码和 Linux 打包配置，尚需验证和发布。产品目标与状态见 [产品与路线图](docs/product.md)，源码入口见 [架构](docs/architecture.md)。
+Bitori 是面向软件工作区的 AI 助手，提供流式对话、工具调用和本地会话存储。项目提供终端入口，以及正在开发的 Linux 桌面客户端。产品目标与状态见 [产品与路线图](docs/product.md)，源码入口见 [架构](docs/architecture.md)。
 
 ## 能力
 
@@ -24,7 +24,16 @@ bitori --help
 bitori --profile claude-main
 ```
 
-开发时可用 `npm run dev -- --profile claude-main`。无头单任务也可用 `bitori exec --profile claude-main --task "检查项目" --workspace . --json`；无审批界面时，需要审批的副作用调用会被拒绝，已由规则或权限档放行的调用仍会执行。
+Linux 桌面端开发入口：
+
+```sh
+npm ci
+npm run desktop
+```
+
+启动后选择并信任工作区，再选择模型配置。桌面端沿用相同的用户配置和会话数据库；工作区的 MCP 配置与 Hook 可能执行命令，只应打开可信目录。需要中文字体以正常显示中文界面。构建 Linux AppImage 和 deb 使用 `npm run desktop:package`，产物位于 `release/`；当前尚未发布安装包。
+
+终端开发可用 `npm run dev -- --profile claude-main`。无头单任务也可用 `bitori exec --profile claude-main --task "检查项目" --workspace . --json`；无审批界面时，需要审批的副作用调用会被拒绝，已由规则或权限档放行的调用仍会执行。
 
 ## 配置
 
@@ -91,7 +100,7 @@ MCP 使用 `2025-06-18` 协议版本，以 `initialize` / `notifications/initial
 
 项目级 stdio 配置会在启动时执行其中的 `command`，因此只应在可信工作区中启用或提交 `.bitori/config.yaml`。
 
-## 快捷键
+## 终端快捷键
 
 | 键位 | 行为 |
 |---|---|

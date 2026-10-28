@@ -2,7 +2,7 @@
 
 ## 本地开发
 
-使用 Node.js 24 和 npm，在仓库根目录执行 `npm ci` 后，以 `npm run dev -- --profile <name>` 启动；配置见 [README](../README.md#配置)。`npm run build` 输出 `dist/`，`npm start` 运行编译结果。生成目录与本地密钥不应提交。开发中的 Electron 入口为 `npm run desktop`；`npm run desktop:package` 配置构建 Linux AppImage 和 deb。两者均需 Electron 依赖、图形环境及适当资源，本次文档核对未运行。
+使用 Node.js 24 和 npm，在仓库根目录执行 `npm ci` 后，以 `npm run dev -- --profile <name>` 启动；配置见 [README](../README.md#配置)。`npm run build` 输出 `dist/`，`npm start` 运行编译结果。生成目录与本地密钥不应提交。开发中的 Electron 入口为 `npm run desktop`；`npm run desktop:package` 配置构建 Linux AppImage 和 deb。两者均需 Electron 依赖、图形环境及适当资源；启动后须选择并信任工作区。
 
 ## 验证
 
@@ -19,6 +19,8 @@ node dist/bin/bitori.js --help
 ```
 
 `npm test` 的 `pretest` 会先构建；`npm run check` 包含 `npm test` 和再次构建。自动测试使用模拟客户端、临时 SQLite 或本地服务；真实模型验收依赖凭据、网络及供应商配额，结果应单独记录，不能由模拟测试推断。`tests/acceptance/e2e-openrouter.ts` 是现有真实端点测试入口。
+
+[Linux 桌面工作流](../.github/workflows/desktop.yml) 在 Linux 图形环境中运行模拟服务的聊天、审批及会话测试，并构建和启动桌面包；不调用真实模型。
 
 [Check 工作流](../.github/workflows/check.yml) 在向 `master` 推送、PR 和手动触发时于 Ubuntu、Windows、macOS 运行 `npm run check`。E2E 工作流手动运行并依赖仓库 secrets/vars；benchmark 有定时和手动任务，可能访问供应商、创建或关闭 issue；auto-improve 手动运行并可写入仓库和 PR。启用这些工作流前应核实凭据、权限、配额及数据外发范围。
 

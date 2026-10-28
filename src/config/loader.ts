@@ -1,6 +1,6 @@
 import {existsSync, readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
-import {join} from 'node:path';
+import {join, resolve} from 'node:path';
 import {parse as parseEnv} from 'dotenv';
 import {parse as parseYaml} from 'yaml';
 import {ZodError} from 'zod';
@@ -97,7 +97,8 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     // YAML 解析只负责“语法”，parseConfig 再负责“结构和业务规则”。
     const parsed = parseConfig(parseYaml(yamlText));
     const projectPath = join(workspaceRoot, '.bitori', 'config.yaml');
-    const project = readProjectConfig(projectPath);
+    // 工作区为主目录时，同一文件只按用户配置解析，避免项目级严格校验重复读取。
+    const project = resolve(projectPath) === resolve(paths.config) ? {} : readProjectConfig(projectPath);
     const profiles: ProviderProfile[] = parsed.profiles.map(source => {
       // `${NAME}` 去掉前后两个字符，得到 .env 中真正的变量名 NAME。
       const variable = source.api_key.slice(2, -1);

@@ -1,6 +1,6 @@
 import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join, relative} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {loadConfig, resolveProfile, resolveProfileWithApiKey} from '../../../src/config/loader.js';
 
@@ -29,6 +29,36 @@ afterEach(() => {
 });
 
 describe('loadConfig', () => {
+  it('工作区为用户主目录时只按用户配置解析，即使路径写法不同', () => {
+    const root = home(`profiles:
+  - name: one
+    protocol: openai-chat
+    model: gpt
+    base_url: https://example.com/v1
+    api_key: \${API_KEY}
+mcp_servers:
+  local:
+    transport: stdio
+    command: node
+`);
+    for (const workspace of [root, relative(process.cwd(), root), `${root}/./`]) {
+      const config = loadConfig(root, workspace, {});
+      expect(config.profiles[0]).toMatchObject({name: 'one', apiKey: 'test-secret'});
+      expect(config.mcpServers.local).toEqual({transport: 'stdio', command: 'node', args: [], env: {}});
+    }
+  });
+
+  it('独立项目配置仍使用严格校验', () => {
+    const root = home(`profiles:
+  - name: one
+    protocol: openai-chat
+    model: gpt
+    base_url: https://example.com/v1
+    api_key: \${API_KEY}
+`);
+    expect(() => loadConfig(root, project('profiles: []'), {})).toThrow(/项目级配置无效/);
+  });
+
   it('只从固定目录加载多个 profile', () => {
     const root = home(`profiles:
   - name: one

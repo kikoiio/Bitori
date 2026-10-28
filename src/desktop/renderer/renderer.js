@@ -131,7 +131,7 @@ function renderMessages() {
   if (!messages.length && !calls.length) {
     const empty = element('div', 'empty');
     empty.append(element('strong', '', state && state.profile ? '开始新对话' : '选择配置开始聊天'));
-    empty.append(element('span', '', state && state.profile ? '在下方输入消息，开始与模型交流。' : '选择左侧配置，或先选择工作区。'));
+    empty.append(element('span', '', state && state.profile ? '在下方输入消息，开始与模型交流。' : '请选择并信任工作区，再选择配置。'));
     ui.messageList.append(empty);
   }
   const usedCalls = new Set();
@@ -257,7 +257,7 @@ async function decide(decision) {
   approvalPending = true;
   clearActionError();
   renderControls();
-  try { await window.bitori.decideApproval(decision); }
+  try { await window.bitori.decideApproval(decision, state.approvalPrompt.callId); }
   catch (error) { setActionError(error); }
   finally { approvalPending = false; renderControls(); }
 }
