@@ -382,10 +382,32 @@ function DiffView({oldContent, newContent}: Props) {
 3. 文件树导航
 4. Slash 命令
 
-## 下一步行动
+## 实际体验进行中
 
-1. 实现阶段 1.1：工具调用实时可视化
-2. 实现阶段 1.2：分屏布局
-3. 实现阶段 1.3：Diff 展示
-4. 用户测试和反馈
-5. 迭代优化
+### Claude Code 体验（进行中）
+已在 Orca worktree 中启动 Claude agent 实际分析 Claude Code TUI：
+- Worktree: `/home/neo/orca/workspaces/Bitori/uiux-research`
+- Agent: Claude (Fable 5.1)
+- 任务：分析 Claude Code TUI 的工具调用显示、分屏布局、快捷键和 Diff 视图
+- 状态：正在分析中（已读取 docs/PLAN.md 和 git log，计划深入研究）
+- 进度：正在读取分支研究计划和提交历史
+
+### Devin 体验（进行中）
+已在 Orca worktree 中启动 Devin agent：
+- Worktree: `/home/neo/orca/workspaces/Bitori/uiux-research-devin`
+- Agent: Devin
+- 任务：分析 Devin TUI 的工具调用显示、命令历史、状态监控和快捷键
+- 状态：思考中
+
+### 内存状况（检查时间：当前）
+- MemAvailable: 6.3GB（充足）
+- Swap: 4GB 已满（但无持续换页）
+- si/so: 0（无持续换页压力）
+- 两个 agent 可以继续并行运行
+
+### 下一步行动
+
+1. 等待 Claude 和 Devin agent 完成分析
+2. 记录实际体验发现到 docs/uiux-research.md
+3. 基于实际体验调整改进计划
+4. 继续实现剩余阶段 2 和阶段 3 的改进
