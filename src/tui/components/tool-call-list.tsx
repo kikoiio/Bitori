@@ -1,4 +1,35 @@
 import {Box} from 'ink';
+import {useState} from 'react';
 import type {ToolCallRecord} from '../../storage/types.js';
 import {ToolCallCard} from './tool-call-card.js';
-export function ToolCallList({records}: {records: ToolCallRecord[]}) { return <Box flexDirection="column">{records.map(record => <ToolCallCard key={record.id} record={record} />)}</Box>; }
+
+interface ToolCallListProps {
+  records: ToolCallRecord[];
+}
+
+export function ToolCallList({records}: ToolCallListProps) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  
+  const toggleExpand = (id: string) => {
+    const newSet = new Set(expandedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setExpandedIds(newSet);
+  };
+
+  return (
+    <Box flexDirection="column">
+      {records.map(record => (
+        <ToolCallCard
+          key={record.id}
+          record={record}
+          expanded={expandedIds.has(record.id)}
+          onToggle={() => toggleExpand(record.id)}
+        />
+      ))}
+    </Box>
+  );
+}

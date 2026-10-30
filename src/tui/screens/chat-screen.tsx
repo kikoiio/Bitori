@@ -10,11 +10,12 @@ import {PromptInput} from '../components/prompt-input.js';
 import {SessionList} from '../components/session-list.js';
 import {StatusBar} from '../components/status-bar.js';
 import {ToolApprovalPanel} from '../components/tool-approval-panel.js';
+import {SplitLayout} from '../components/split-layout.js';
 
-export interface ChatScreenProps {state: AppState; controller: ChatController; height: number; onExit: () => void}
+export interface ChatScreenProps {state: AppState; controller: ChatController; height: number; onExit: () => void; useSplitLayout?: boolean}
 
 /** 聊天页负责把键盘/粘贴事件翻译成 controller 操作，并组合各展示组件。 */
-export function ChatScreen({state, controller, height, onExit}: ChatScreenProps) {
+export function ChatScreen({state, controller, height, onExit, useSplitLayout = false}: ChatScreenProps) {
   const [draft, setDraft] = useState('');
   const [focus, setFocus] = useState<'input' | 'messages'>('input');
   const [offset, setOffset] = useState(0);
@@ -105,6 +106,12 @@ export function ChatScreen({state, controller, height, onExit}: ChatScreenProps)
   const debugHeight = state.debugOpen ? Math.max(8, Math.floor(height / 3)) : 0;
   const visibleError = operationError ?? state.visibleError;
   const messageHeight = Math.max(5, height - 7 - (visibleError === null ? 0 : 3) - debugHeight);
+  
+  // 使用分屏布局或传统布局
+  if (useSplitLayout) {
+    return <SplitLayout state={state} height={height} onExit={onExit} controller={controller} />;
+  }
+  
   return <Box flexDirection="column" height={height}>
     <StatusBar state={state} />
     <ErrorBanner message={visibleError} />
