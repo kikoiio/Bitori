@@ -5,9 +5,10 @@ import {ToolCallCard} from './tool-call-card.js';
 
 interface ToolCallListProps {
   records: ToolCallRecord[];
+  forceExpanded?: boolean;
 }
 
-export function ToolCallList({records}: ToolCallListProps) {
+export function ToolCallList({records, forceExpanded = false}: ToolCallListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   
   const toggleExpand = (id: string) => {
@@ -26,7 +27,7 @@ export function ToolCallList({records}: ToolCallListProps) {
         <ToolCallCard
           key={record.id}
           record={record}
-          expanded={expandedIds.has(record.id)}
+          expanded={forceExpanded || expandedIds.has(record.id)}
           onToggle={() => toggleExpand(record.id)}
         />
       ))}

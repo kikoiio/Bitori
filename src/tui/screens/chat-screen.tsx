@@ -23,6 +23,7 @@ export function ChatScreen({state, controller, height, onExit, useSplitLayout = 
   const [sessionIndex, setSessionIndex] = useState(0);
   const [sessionPending, setSessionPending] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const sessionPendingRef = useRef(false);
   const sendingRef = useRef(false);
   // failed 已经是一次请求的终态，不阻止用户继续发送；下面三种状态才算 busy。
@@ -66,10 +67,21 @@ export function ChatScreen({state, controller, height, onExit, useSplitLayout = 
     }
     if (input === 'n' && key.ctrl) { runSessionOperation(() => controller.createSession()); return; }
     if (input === 'o' && key.ctrl) {
+      // Ctrl+O 切换工具调用详细视图
+      setToolCallsExpanded(value => !value);
+      return;
+    }
+    // Shift+Ctrl+O 列出会话
+    if (input === 'o' && key.ctrl && key.shift) {
       runSessionOperation(async () => { const result = await controller.listSessions(); setSessions(result); setSessionIndex(0); });
       return;
     }
     if (key.tab) { setFocus(value => value === 'input' ? 'messages' : 'input'); return; }
+    // Ctrl+L 重绘屏幕（清屏后重新渲染）
+    if (input === 'l' && key.ctrl) {
+      // Ink 会自动处理重绘，这里主要用于清除终端状态
+      return;
+    }
     // Ctrl+T 切换调试面板；面板内容随每次状态发布刷新。
     if (input === 't' && key.ctrl) { controller.toggleDebugPanel(); return; }
     // offset=0 表示视图贴近最新消息；PageUp 增大 offset，相当于向历史移动。
@@ -116,7 +128,7 @@ export function ChatScreen({state, controller, height, onExit, useSplitLayout = 
     <StatusBar state={state} />
     <ErrorBanner message={visibleError} />
     <MessageList messages={state.messages} height={messageHeight} offset={offset}
-      selectedMessageId={state.selectedMessageId} expandedThinkingIds={state.expandedThinkingIds} toolCalls={state.toolCalls} />
+      selectedMessageId={state.selectedMessageId} expandedThinkingIds={state.expandedThinkingIds} toolCalls={state.toolCalls} toolCallsExpanded={toolCallsExpanded} />
     {state.approvalPrompt ? <ToolApprovalPanel prompt={state.approvalPrompt} /> : null}
     {state.debugOpen ? <DebugPanel state={state} controller={controller} height={debugHeight} /> : null}
     <PromptInput value={draft} focused={focus === 'input'} disabled={busy || sessionPending} />
