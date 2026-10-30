@@ -57,13 +57,14 @@
     "productName": "Bitori",
     "asar": false,
     "directories": {
-      "output": "release"
+      "output": "out/desktop"
     },
     "files": [
       "dist/**/*",
       "src/desktop/**/*",
       "package.json"
     ],
+    "publish": null,
     "linux": {
       "target": [
         "AppImage",

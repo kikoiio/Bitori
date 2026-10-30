@@ -45,7 +45,7 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 | 多轮工具、Plan/Do、权限、MCP | 已实现 | `src/agent/`、`src/tools/`、`src/mcp/`；命令和 MCP 不构成操作系统沙箱。 |
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
 | 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。 |
-| 桌面图形应用 | Linux 初版 | `src/desktop/` 提供 Electron 界面；Linux 云端验证开发入口、会话与审批流程及打包后启动。AppImage/deb 可用于开发验证，其他桌面平台和真实模型需另行验收。 |
+| 桌面图形应用 | Linux 初版 | `src/desktop/` 提供 Electron 界面；Linux CI 验证开发入口、会话与审批及打包后启动。其他桌面平台和真实模型需另行验收。打包路径见 [开发与测试](reference/development.md)。 |
 | 多模态、云同步、会话导入、自动断点续跑 | 当前不支持 | 是否纳入后续版本尚未确定。 |
 
 状态依据 2026-10-27 的代码和验证记录，其中终端工具展示于 2026-10-30 更新；真实端点与平台验收须单独核实。

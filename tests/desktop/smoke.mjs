@@ -42,7 +42,7 @@ try {
   await writeFile(join(configDir, 'config.yaml'), `profiles:\n  - name: test\n    protocol: openai-chat\n    model: test-model\n    base_url: http://127.0.0.1:${port}/v1\n    api_key: \${TEST_KEY}\n`);
   await writeFile(join(configDir, '.env'), 'TEST_KEY=desktop-test\n');
   const packaged = process.env.BITORI_PACKAGED === '1';
-  const executablePath = packaged ? resolve('release/linux-unpacked/bitori') : require('electron');
+  const executablePath = packaged ? resolve('out/desktop/linux-unpacked/bitori') : require('electron');
   const args = packaged ? ['--disable-gpu', '--no-sandbox'] : [resolve('src/desktop/main.cjs'), '--disable-gpu', '--no-sandbox'];
   application = await electron.launch({executablePath, args, cwd: workspace, timeout: 30000});
   const page = await application.firstWindow();
