@@ -17,7 +17,7 @@ flowchart LR
   Runner --> Trace["追踪: src/trace"]
 ```
 
-入口 `src/bin/bitori.ts` 解析参数，`src/cli/bootstrap.ts` 加载配置、设置日志与脱敏，选择终端、`exec` 或观察子命令。终端使用 Ink/React 渲染；Linux Electron 入口通过 preload 和 IPC 连接界面与同一会话控制器。`src/app/runtime.ts` 是 CLI 与桌面端共用的组合根，统一创建模型客户端、工具系统、MCP、Hook、仓储和控制器。`ChatController` 管理会话状态和事件投影，`session-prompt.ts` 负责会话提示的组装，`AgentRunner` 驱动模型请求、工具执行和回写。`src/prompt/` 组装提示，`src/compact/` 处理上下文压缩。不同供应商通过 `src/providers/` 适配。
+入口 `src/bin/bitori.ts` 解析参数，`src/cli/bootstrap.ts` 加载配置、设置日志与脱敏，选择终端、`exec` 或观察子命令。终端使用 Ink/React 渲染，默认 alternate screen。工具调用按密度折叠：连续成功的 `read_file` / `search_text` / `find_files` 合成摘要，写操作在结果下内联双行号 diff；`Ctrl+O` 展开全部参数与输出，`Ctrl+S` 打开会话列表，`/diff` 打开本会话改动侧栏。界面参照见 [Claude Code TUI 调研](research/2026-10-30-claude-code-tui.md)。Linux Electron 入口通过 preload 和 IPC 连接界面与同一会话控制器。`src/app/runtime.ts` 是 CLI 与桌面端共用的组合根，统一创建模型客户端、工具系统、MCP、Hook、仓储和控制器。`ChatController` 管理会话状态和事件投影，`session-prompt.ts` 负责会话提示的组装，`AgentRunner` 驱动模型请求、工具执行和回写。`src/prompt/` 组装提示，`src/compact/` 处理上下文压缩。不同供应商通过 `src/providers/` 适配。
 
 Provider 请求提供 `items` 时始终使用该有序上下文，即使它为空或渲染后为空；只有未提供 `items` 才使用兼容字段 `messages`。流中的工具调用由 `StreamCollector` 汇集，再由 `ToolPolicy` 校验和分类。
 
@@ -41,11 +41,11 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 
 | 方向 | 状态 | 依据与后续 |
 |---|---|---|
-| 终端交互、三种模型协议、会话 | 已实现 | `src/tui/`、`src/providers/`、`src/storage/`；供应商和平台实际表现仍需分别验收。 |
+| 终端交互、三种模型协议、会话 | 已实现 | `src/tui/`、`src/providers/`、`src/storage/`；工具行密度折叠、内联 diff、`Ctrl+O` 详情、`Ctrl+S` 会话、`/diff` 侧栏已落地。供应商和真实终端观感仍需分别验收。 |
 | 多轮工具、Plan/Do、权限、MCP | 已实现 | `src/agent/`、`src/tools/`、`src/mcp/`；命令和 MCP 不构成操作系统沙箱。 |
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
 | 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。 |
 | 桌面图形应用 | Linux 初版 | `src/desktop/` 提供 Electron 界面；Linux 云端验证开发入口、会话与审批流程及打包后启动。AppImage/deb 可用于开发验证，其他桌面平台和真实模型需另行验收。 |
 | 多模态、云同步、会话导入、自动断点续跑 | 当前不支持 | 是否纳入后续版本尚未确定。 |
 
-状态依据 2026-10-27 的代码和验证记录；真实端点与平台验收须单独核实。
+状态依据 2026-10-27 的代码和验证记录，其中终端工具展示于 2026-10-30 更新；真实端点与平台验收须单独核实。

@@ -22,7 +22,7 @@ describe('Message', () => {
 });
 
 describe('ChatScreen 工具审批键盘优先级', () => {
-  it.each([['y', 'approved'], ['n', 'denied']] as const)('%s 只解析为审批决定，不进入普通输入', async (key, decision) => { const resolveToolApproval = vi.fn(); const sendMessage = vi.fn(); const cancelActiveRequest = vi.fn(); const controller = {resolveToolApproval, sendMessage, cancelActiveRequest} as unknown as ChatController; const state = {...initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'}), requestStatus: 'approving' as const, approvalPrompt: {callId: 'c', toolName: 'run_command', effect: 'command' as const, argumentSummary: '{"command":"echo x"}', riskMessage: '批准的命令可能访问网络、启动子进程或影响工作区外资源。'}}; const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={vi.fn()} />); view.stdin.write(key); await new Promise(resolve => setTimeout(resolve, 20)); expect(resolveToolApproval).toHaveBeenCalledWith(decision); expect(sendMessage).not.toHaveBeenCalled(); expect(view.lastFrame()).toContain('访问网络'); view.unmount(); });
+  it.each([['y', 'approved'], ['n', 'denied'], ['1', 'approved'], ['4', 'denied']] as const)('%s 只解析为审批决定，不进入普通输入', async (key, decision) => { const resolveToolApproval = vi.fn(); const sendMessage = vi.fn(); const cancelActiveRequest = vi.fn(); const controller = {resolveToolApproval, sendMessage, cancelActiveRequest} as unknown as ChatController; const state = {...initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'}), requestStatus: 'approving' as const, approvalPrompt: {callId: 'c', toolName: 'run_command', effect: 'command' as const, argumentSummary: '{"command":"echo x"}', riskMessage: '批准的命令可能访问网络、启动子进程或影响工作区外资源。'}}; const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={vi.fn()} />); view.stdin.write(key); await new Promise(resolve => setTimeout(resolve, 20)); expect(resolveToolApproval).toHaveBeenCalledWith(decision); expect(sendMessage).not.toHaveBeenCalled(); expect(view.lastFrame()).toContain('访问网络'); view.unmount(); });
   it('Ctrl+C 在审批/执行状态取消回合而不退出', async () => { const cancelActiveRequest = vi.fn().mockResolvedValue(undefined); const onExit = vi.fn(); const controller = {cancelActiveRequest} as unknown as ChatController; const state = {...initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'}), requestStatus: 'executing_tools' as const}; const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={onExit} />); view.stdin.write('\x03'); await new Promise(resolve => setTimeout(resolve, 20)); expect(cancelActiveRequest).toHaveBeenCalledOnce(); expect(onExit).not.toHaveBeenCalled(); view.unmount(); });
 });
 
@@ -41,7 +41,7 @@ describe('ChatScreen 异步操作', () => {
     view.stdin.write('\x0e');
     await tick();
     view.stdin.write('\x0e');
-    view.stdin.write('\x0f');
+    view.stdin.write('\x13');
     await tick();
     expect(createSession).toHaveBeenCalledTimes(1);
     expect(listSessions).not.toHaveBeenCalled();
@@ -61,10 +61,10 @@ describe('ChatScreen 异步操作', () => {
     const switchSession = vi.fn().mockRejectedValueOnce(new Error('切换失败')).mockResolvedValue(undefined);
     const controller = {listSessions, switchSession} as unknown as ChatController;
     const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={vi.fn()} />);
-    view.stdin.write('\x0f');
+    view.stdin.write('\x13');
     await tick();
     expect(view.lastFrame()).toContain('列表失败');
-    view.stdin.write('\x0f');
+    view.stdin.write('\x13');
     await tick();
     expect(view.lastFrame()).toContain('会话一');
     view.stdin.write('\r');
@@ -103,7 +103,7 @@ describe('ChatScreen 异步操作', () => {
     const listSessions = vi.fn().mockResolvedValue([{id: 'one', title: '会话一', updatedAt: 1}]);
     const controller = {listSessions, switchSession, createSession} as unknown as ChatController;
     const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={vi.fn()} />);
-    view.stdin.write('\x0f');
+    view.stdin.write('\x13');
     await tick();
     view.stdin.write('\r');
     await tick();
@@ -117,6 +117,35 @@ describe('ChatScreen 异步操作', () => {
     view.stdin.write('\x0e');
     await tick();
     expect(createSession).toHaveBeenCalledOnce();
+    view.unmount();
+  });
+});
+
+describe('ChatScreen 工具视图', () => {
+  const tick = () => new Promise(resolve => setTimeout(resolve, 25));
+
+  it('Ctrl+O 切换详细工具记录提示', async () => {
+    const view = render(<ChatScreen state={initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'})} controller={{} as ChatController} height={24} onExit={vi.fn()} />);
+    expect(view.lastFrame()).not.toContain('详细工具记录');
+    view.stdin.write('\x0f');
+    await tick();
+    expect(view.lastFrame()).toContain('详细工具记录 · Ctrl+O 切换');
+    view.stdin.write('\x0f');
+    await tick();
+    expect(view.lastFrame()).not.toContain('详细工具记录');
+    view.unmount();
+  });
+
+  it('/diff 打开侧栏且不发给模型', async () => {
+    const sendMessage = vi.fn();
+    const view = render(<ChatScreen state={initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'})} controller={{sendMessage} as unknown as ChatController} height={24} onExit={vi.fn()} />);
+    view.stdin.write('/diff');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(view.lastFrame()).toContain('来源: 本次会话');
+    expect(view.lastFrame()).toContain('本次没有改动');
     view.unmount();
   });
 });

@@ -20,7 +20,9 @@ describe('TUI', () => {
     const state = {...initialAppState({name: 'main', protocol: 'anthropic', model: 'model'}),
       latestUsage: {inputTokens: 100, outputTokens: 5, cacheReadInputTokens: 80, cacheCreationInputTokens: 100}};
     const view = render(<StatusBar state={state} />);
-    expect(view.lastFrame()).toContain('tokens 100↓ 5↑ · cache 80');
+    const frame = view.lastFrame() ?? '';
+    expect(frame).toContain('tokens 100↓ 5↑');
+    expect(frame).toContain('cache 80');
     view.unmount();
   });
 });

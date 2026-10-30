@@ -1,10 +1,5 @@
 import {Box, Text} from 'ink';
-
-interface DiffLine {
-  type: 'add' | 'remove' | 'context';
-  content: string;
-  lineNumber?: number;
-}
+import {diffLines, diffWords, formatLineNumber, gutterWidth, type LineChange} from '../diff.js';
 
 interface DiffViewProps {
   oldContent: string;
@@ -13,57 +8,58 @@ interface DiffViewProps {
   maxHeight?: number;
 }
 
-/** 简单的 unified diff 视图，显示文件修改。 */
+/** 双行号 gutter 的行级 diff；成对替换行再做词级高亮。 */
 export function DiffView({oldContent, newContent, filename, maxHeight = 20}: DiffViewProps) {
-  const lines = computeDiff(oldContent, newContent);
-  const visibleLines = lines.slice(0, maxHeight);
-  
-  return (
-    <Box flexDirection="column" borderStyle="single" borderColor="blue" paddingX={1}>
-      {filename && <Box><Text bold color="blue">📄 {filename}</Text></Box>}
-      <Box flexDirection="column">
-        {visibleLines.map((line, index) => {
-          const color = line.type === 'add' ? 'green' : line.type === 'remove' ? 'red' : 'gray';
-          const prefix = line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' ';
-          return (
-            <Box key={index}>
-              <Text color={color}>{prefix} {line.content}</Text>
-            </Box>
-          );
-        })}
-        {lines.length > maxHeight && (
-          <Text dimColor>... 还有 {lines.length - maxHeight} 行未显示</Text>
-        )}
-      </Box>
-    </Box>
-  );
+  const changes = diffLines(oldContent, newContent);
+  const width = gutterWidth(changes);
+  const visible = changes.slice(0, maxHeight);
+  const pairs = pairReplacements(visible);
+  return <Box flexDirection="column">
+    {filename ? <Text bold color="blue">{filename}</Text> : null}
+    {pairs.map((pair, index) => <DiffPair key={index} pair={pair} width={width} />)}
+    {changes.length > maxHeight ? <Text dimColor>… 还有 {changes.length - maxHeight} 行未显示</Text> : null}
+  </Box>;
 }
 
-/** 简单的逐行 diff 计算（简化版，实际应使用 diff 库）。 */
-function computeDiff(oldContent: string, newContent: string): DiffLine[] {
-  const oldLines = oldContent.split('\n');
-  const newLines = newContent.split('\n');
-  const result: DiffLine[] = [];
-  
-  // 简化实现：逐行比较
-  const maxLines = Math.max(oldLines.length, newLines.length);
-  for (let i = 0; i < maxLines; i++) {
-    const oldLine = oldLines[i];
-    const newLine = newLines[i];
-    
-    if (oldLine === newLine) {
-      if (oldLine !== undefined) {
-        result.push({type: 'context', content: oldLine});
-      }
+type RenderPair =
+  | {kind: 'line'; change: LineChange}
+  | {kind: 'replace'; removed: LineChange; added: LineChange};
+
+function pairReplacements(changes: readonly LineChange[]): RenderPair[] {
+  const pairs: RenderPair[] = [];
+  for (let index = 0; index < changes.length; index++) {
+    const current = changes[index]!;
+    const next = changes[index + 1];
+    if (current.kind === 'remove' && next?.kind === 'add') {
+      pairs.push({kind: 'replace', removed: current, added: next});
+      index += 1;
     } else {
-      if (oldLine !== undefined) {
-        result.push({type: 'remove', content: oldLine});
-      }
-      if (newLine !== undefined) {
-        result.push({type: 'add', content: newLine});
-      }
+      pairs.push({kind: 'line', change: current});
     }
   }
-  
-  return result;
+  return pairs;
+}
+
+function DiffPair({pair, width}: {pair: RenderPair; width: number}) {
+  if (pair.kind === 'line') return <DiffLine change={pair.change} width={width} />;
+  const words = diffWords(pair.removed.text, pair.added.text);
+  return <Box flexDirection="column">
+    <WordLine change={pair.removed} width={width} segments={words.old} />
+    <WordLine change={pair.added} width={width} segments={words.new} />
+  </Box>;
+}
+
+function DiffLine({change, width}: {change: LineChange; width: number}) {
+  const color = change.kind === 'add' ? 'green' : change.kind === 'remove' ? 'red' : 'gray';
+  const marker = change.kind === 'add' ? '+' : change.kind === 'remove' ? '-' : ' ';
+  return <Text color={color}>{formatLineNumber(change, width)} {marker}{change.text}</Text>;
+}
+
+function WordLine({change, width, segments}: {change: LineChange; width: number; segments: ReturnType<typeof diffWords>['old']}) {
+  const color = change.kind === 'add' ? 'green' : 'red';
+  const marker = change.kind === 'add' ? '+' : '-';
+  return <Box>
+    <Text color={color}>{formatLineNumber(change, width)} {marker}</Text>
+    {segments.map((segment, index) => <Text key={index} color={color} inverse={segment.changed}>{segment.text}</Text>)}
+  </Box>;
 }

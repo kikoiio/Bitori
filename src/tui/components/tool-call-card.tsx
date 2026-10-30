@@ -1,39 +1,42 @@
 import {Box, Text} from 'ink';
 import type {ToolCallRecord} from '../../storage/types.js';
+import {callHeadline, editHunk, resultLine} from '../tool-display.js';
+import {DiffView} from './diff-view.js';
 
 interface ToolCallCardProps {
   record: ToolCallRecord;
   expanded?: boolean;
-  onToggle?: () => void;
-  streamingOutput?: string;
 }
 
-/** 工具卡片显示稳定名称、关键参数、审批和执行终态。支持展开/折叠和流式输出。 */
-export function ToolCallCard({record, expanded = false, onToggle, streamingOutput}: ToolCallCardProps) {
-  const color = record.executionStatus === 'succeeded' ? 'green' : record.executionStatus === 'failed' || record.executionStatus === 'timed_out' || record.executionStatus === 'interrupted' ? 'red' : 'yellow';
-  const statusIcon = record.executionStatus === 'running' ? '⟳' : record.executionStatus === 'succeeded' ? '✓' : record.executionStatus === 'failed' ? '✗' : '⚙';
-  
-  // 格式化参数（摘要）
-  const argsSummary = JSON.stringify(record.arguments).slice(0, 160);
-  
-  // 格式化输出（如果有）
-  const output = streamingOutput || (record.result ? JSON.stringify(record.result).slice(0, 200) : '');
-  const outputPreview = output ? output.slice(0, 200) : '';
+/** 一行圆点标题 + ⎿ 结果；写操作在折叠视图也内联 diff。 */
+export function ToolCallCard({record, expanded = false}: ToolCallCardProps) {
+  const color = statusColor(record.executionStatus);
+  const headline = callHeadline(record);
+  const result = resultLine(record, expanded);
+  const hunk = showHunk(record) ? editHunk(record.arguments) : null;
+  return <Box flexDirection="column" marginLeft={1}>
+    <Text color={color}>● {headline}</Text>
+    {result === null ? null : <Text dimColor>  ⎿  {result}</Text>}
+    {hunk === null ? null : <Box marginLeft={4}><DiffView oldContent={hunk.oldText} newContent={hunk.newText} maxHeight={expanded ? 24 : 8} /></Box>}
+    {expanded ? <VerboseExtras record={record} /> : null}
+  </Box>;
+}
 
-  return (
-    <Box flexDirection="column" marginLeft={2} borderStyle="single" borderColor={color} paddingX={1}>
-      <Box>
-        <Text color={color}>{statusIcon} {record.toolName}</Text>
-        <Text dimColor> · {record.approvalStatus} · {record.executionStatus}</Text>
-        {onToggle && <Text dimColor> [↕ 展开]</Text>}
-      </Box>
-      <Text dimColor>参数: {argsSummary}</Text>
-      {expanded && outputPreview && (
-        <Box flexDirection="column">
-          <Text dimColor>输出:</Text>
-          <Text dimColor>{outputPreview}</Text>
-        </Box>
-      )}
-    </Box>
-  );
+function showHunk(record: ToolCallRecord): boolean {
+  return (record.toolName === 'edit_file' || record.toolName === 'write_file') && record.executionStatus === 'succeeded';
+}
+
+function VerboseExtras({record}: {record: ToolCallRecord}) {
+  const args = JSON.stringify(record.arguments);
+  return <Box flexDirection="column" marginLeft={4}>
+    <Text dimColor>参数 {args.length > 240 ? `${args.slice(0, 239)}…` : args}</Text>
+    {record.approvalStatus === 'approved' ? <Text dimColor>已批准</Text> : null}
+  </Box>;
+}
+
+function statusColor(status: ToolCallRecord['executionStatus']): 'green' | 'red' | 'yellow' | 'gray' {
+  if (status === 'succeeded') return 'green';
+  if (status === 'failed' || status === 'timed_out' || status === 'interrupted') return 'red';
+  if (status === 'running' || status === 'queued') return 'yellow';
+  return 'gray';
 }

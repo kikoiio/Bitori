@@ -13,6 +13,6 @@ export function StatusBar({state}: {state: AppState}) {
   return <Box justifyContent="space-between">
     <Text inverse> Bitori </Text>
     <Text>{state.profile?.name ?? '-'} · {state.profile?.model ?? '-'} · {state.agentMode === 'plan' ? 'PLAN' : 'DO'} · {state.requestStatus} · 权限:{permission}{progress}{usage}</Text>
-    <Text color="gray">Ctrl+N 新建 · Ctrl+O 历史</Text>
+    <Text color="gray">^N 新建  ^S 会话  ^O 详情</Text>
   </Box>;
 }

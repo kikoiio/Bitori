@@ -1,21 +1,22 @@
-import {Box, useInput, usePaste} from 'ink';
+import {Box, Text, useInput, usePaste, useWindowSize} from 'ink';
 import {useRef, useState} from 'react';
 import type {ChatController} from '../../chat/agent-controller.js';
 import type {AppState} from '../../chat/state.js';
 import type {Session} from '../../storage/types.js';
 import {DebugPanel} from '../components/debug-panel.js';
+import {DiffPanel} from '../components/diff-panel.js';
 import {ErrorBanner} from '../components/error-banner.js';
 import {MessageList} from '../components/message-list.js';
 import {PromptInput} from '../components/prompt-input.js';
 import {SessionList} from '../components/session-list.js';
 import {StatusBar} from '../components/status-bar.js';
 import {ToolApprovalPanel} from '../components/tool-approval-panel.js';
-import {SplitLayout} from '../components/split-layout.js';
 
-export interface ChatScreenProps {state: AppState; controller: ChatController; height: number; onExit: () => void; useSplitLayout?: boolean}
+export interface ChatScreenProps {state: AppState; controller: ChatController; height: number; onExit: () => void}
 
 /** 聊天页负责把键盘/粘贴事件翻译成 controller 操作，并组合各展示组件。 */
-export function ChatScreen({state, controller, height, onExit, useSplitLayout = false}: ChatScreenProps) {
+export function ChatScreen({state, controller, height, onExit}: ChatScreenProps) {
+  const {columns} = useWindowSize();
   const [draft, setDraft] = useState('');
   const [focus, setFocus] = useState<'input' | 'messages'>('input');
   const [offset, setOffset] = useState(0);
@@ -24,12 +25,12 @@ export function ChatScreen({state, controller, height, onExit, useSplitLayout = 
   const [sessionPending, setSessionPending] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
+  const [diffPanelOpen, setDiffPanelOpen] = useState(false);
   const sessionPendingRef = useRef(false);
   const sendingRef = useRef(false);
   // failed 已经是一次请求的终态，不阻止用户继续发送；下面三种状态才算 busy。
   const busy = state.requestStatus !== 'idle' && state.requestStatus !== 'failed';
 
-  // 粘贴可能一次带来多行 Unicode 文本，单独使用 usePaste 避免被逐键逻辑破坏。
   const runSessionOperation = (operation: () => Promise<void>) => {
     if (sessionPendingRef.current || sendingRef.current || busy) return;
     sessionPendingRef.current = true;
@@ -47,10 +48,10 @@ export function ChatScreen({state, controller, height, onExit, useSplitLayout = 
       return;
     }
     if (state.approvalPrompt) {
-      if (input.toLowerCase() === 'y') controller.resolveToolApproval('approved');
-      else if (input.toLowerCase() === 's') controller.resolveToolApproval('approved_session');
-      else if (input.toLowerCase() === 'p') controller.resolveToolApproval('approved_permanent');
-      else if (input.toLowerCase() === 'n') controller.resolveToolApproval('denied');
+      if (input.toLowerCase() === 'y' || input === '1') controller.resolveToolApproval('approved');
+      else if (input.toLowerCase() === 's' || input === '2') controller.resolveToolApproval('approved_session');
+      else if (input.toLowerCase() === 'p' || input === '3') controller.resolveToolApproval('approved_permanent');
+      else if (input.toLowerCase() === 'n' || input === '4') controller.resolveToolApproval('denied');
       return;
     }
     if (sessionPendingRef.current) return;
@@ -65,26 +66,16 @@ export function ChatScreen({state, controller, height, onExit, useSplitLayout = 
       }
       return;
     }
+    if (key.escape && diffPanelOpen) { setDiffPanelOpen(false); return; }
     if (input === 'n' && key.ctrl) { runSessionOperation(() => controller.createSession()); return; }
-    if (input === 'o' && key.ctrl) {
-      // Ctrl+O 切换工具调用详细视图
-      setToolCallsExpanded(value => !value);
-      return;
-    }
-    // Shift+Ctrl+O 列出会话
-    if (input === 'o' && key.ctrl && key.shift) {
+    if (input === 's' && key.ctrl) {
       runSessionOperation(async () => { const result = await controller.listSessions(); setSessions(result); setSessionIndex(0); });
       return;
     }
+    if (input === 'o' && key.ctrl) { setToolCallsExpanded(value => !value); return; }
     if (key.tab) { setFocus(value => value === 'input' ? 'messages' : 'input'); return; }
-    // Ctrl+L 重绘屏幕（清屏后重新渲染）
-    if (input === 'l' && key.ctrl) {
-      // Ink 会自动处理重绘，这里主要用于清除终端状态
-      return;
-    }
-    // Ctrl+T 切换调试面板；面板内容随每次状态发布刷新。
+    if (input === 'l' && key.ctrl) return;
     if (input === 't' && key.ctrl) { controller.toggleDebugPanel(); return; }
-    // offset=0 表示视图贴近最新消息；PageUp 增大 offset，相当于向历史移动。
     if (key.pageUp) { setOffset(value => Math.min(state.messages.length - 1, value + 1)); return; }
     if (key.pageDown) { setOffset(value => Math.max(0, value - 1)); return; }
     if (focus === 'messages') {
@@ -95,6 +86,11 @@ export function ChatScreen({state, controller, height, onExit, useSplitLayout = 
       return;
     }
     if (key.return) {
+      if (draft.trim() === '/diff') {
+        setDraft('');
+        setDiffPanelOpen(value => !value);
+        return;
+      }
       if (!busy && !sendingRef.current && draft.trim().length > 0) {
         const message = draft;
         setDraft('');
@@ -114,25 +110,25 @@ export function ChatScreen({state, controller, height, onExit, useSplitLayout = 
     }
   });
 
-  // 为状态栏、错误框和输入框预留高度，其余空间交给消息区，且至少保留 5 行。
   const debugHeight = state.debugOpen ? Math.max(8, Math.floor(height / 3)) : 0;
   const visibleError = operationError ?? state.visibleError;
-  const messageHeight = Math.max(5, height - 7 - (visibleError === null ? 0 : 3) - debugHeight);
-  
-  // 使用分屏布局或传统布局
-  if (useSplitLayout) {
-    return <SplitLayout state={state} height={height} onExit={onExit} controller={controller} />;
-  }
-  
-  return <Box flexDirection="column" height={height}>
-    <StatusBar state={state} />
-    <ErrorBanner message={visibleError} />
-    <MessageList messages={state.messages} height={messageHeight} offset={offset}
-      selectedMessageId={state.selectedMessageId} expandedThinkingIds={state.expandedThinkingIds} toolCalls={state.toolCalls} toolCallsExpanded={toolCallsExpanded} />
-    {state.approvalPrompt ? <ToolApprovalPanel prompt={state.approvalPrompt} /> : null}
-    {state.debugOpen ? <DebugPanel state={state} controller={controller} height={debugHeight} /> : null}
-    <PromptInput value={draft} focused={focus === 'input'} disabled={busy || sessionPending} />
-    {sessions === null ? null : <SessionList sessions={sessions} selectedIndex={sessionIndex} />}
-    {sessions !== null && operationError !== null ? <Box position="absolute" marginTop={6}><ErrorBanner message={operationError} /></Box> : null}
+  const verboseHint = toolCallsExpanded ? 1 : 0;
+  const messageHeight = Math.max(5, height - 7 - (visibleError === null ? 0 : 3) - debugHeight - verboseHint);
+  const panelWidth = diffPanelOpen ? Math.max(24, Math.min(42, Math.floor(Math.max(columns, 80) / 4))) : 0;
+
+  return <Box flexDirection="row" height={height}>
+    <Box flexDirection="column" height={height} flexGrow={1}>
+      <StatusBar state={state} />
+      <ErrorBanner message={visibleError} />
+      <MessageList messages={state.messages} height={messageHeight} offset={offset}
+        selectedMessageId={state.selectedMessageId} expandedThinkingIds={state.expandedThinkingIds} toolCalls={state.toolCalls} toolCallsExpanded={toolCallsExpanded} />
+      {state.approvalPrompt ? <ToolApprovalPanel prompt={state.approvalPrompt} /> : null}
+      {state.debugOpen ? <DebugPanel state={state} controller={controller} height={debugHeight} /> : null}
+      {toolCallsExpanded ? <Text dimColor>详细工具记录 · Ctrl+O 切换</Text> : null}
+      <PromptInput value={draft} focused={focus === 'input'} disabled={busy || sessionPending} />
+      {sessions === null ? null : <SessionList sessions={sessions} selectedIndex={sessionIndex} />}
+      {sessions !== null && operationError !== null ? <Box position="absolute" marginTop={6}><ErrorBanner message={operationError} /></Box> : null}
+    </Box>
+    {diffPanelOpen ? <DiffPanel records={state.toolCalls} width={panelWidth} /> : null}
   </Box>;
 }
