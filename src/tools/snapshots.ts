@@ -1,6 +1,7 @@
 import {createHash, randomUUID} from 'node:crypto';
+import {realpathSync} from 'node:fs';
 import {mkdir, open, readFile, readdir, rename, rm, stat, unlink, writeFile} from 'node:fs/promises';
-import {dirname, join, resolve, sep} from 'node:path';
+import {dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 import {basename} from 'node:path/posix';
 
 /** edit_file/write_file 提交前的可验证快照;撤销只恢复 Bitori 自己写过的内容。 */
@@ -41,7 +42,7 @@ export class SnapshotStore {
   constructor(readonly directory: string, readonly workspaceRoot: string, private readonly maxKeep = 200) {}
 
   static forWorkspace(workspaceRoot: string): SnapshotStore {
-    const root = resolve(workspaceRoot);
+    const root = canonicalRoot(workspaceRoot);
     const hash = createHash('sha256').update(root).digest('hex').slice(0, 16);
     return new SnapshotStore(join(root, '.bitori', 'snapshots', hash), root);
   }
@@ -127,9 +128,19 @@ export class SnapshotStore {
   }
 }
 
+/**
+ * 与 WorkspacePaths 一致地用真实路径界定工作区。临时目录在 macOS 上是 /var 符号链接、
+ * 在 Windows 上是 8.3 短路径，realpath 展开后与原字符串不同；两边不统一，
+ * 合法快照会被当成"工作区之外"而丢弃，撤销就找不到任何修改。
+ */
+function canonicalRoot(workspaceRoot: string): string {
+  try { return realpathSync(resolve(workspaceRoot)); } catch { return resolve(workspaceRoot); }
+}
+
 function isSafeTarget(snapshot: FileSnapshot, workspaceRoot: string): boolean {
   const target = resolve(snapshot.absolutePath);
-  return target === workspaceRoot || target.startsWith(workspaceRoot + sep);
+  const rel = relative(workspaceRoot, target);
+  return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
 }
 
 export function normalizeRelative(path: string): string {

@@ -1,0 +1,14 @@
+# 仓库文本一律以 LF 存储与检出：Windows 检出时若被转成 CRLF，
+# 模板常量（源码里的 \n 转义）与仓库里的实体文件会不一致，夹具的 SSE 分帧也会失效。
+* text=auto eol=lf
+
+# 二进制文件不做行尾转换。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.AppImage binary
+*.deb binary
+*.db binary

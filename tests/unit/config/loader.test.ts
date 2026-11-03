@@ -205,7 +205,8 @@ mcp_servers:
     const parsed = parseConfig(parseYaml(defaultUserConfigYaml));
     expect(parsed.profiles).toHaveLength(1);
     expect(parsed.profiles[0]).toMatchObject({name: 'default', protocol: 'openai-chat', model: '${LLM_MODEL}', base_url: '${LLM_BASE_URL}', api_key: '${LLM_API_KEY}'});
-    expect(readFileSync('.env.example', 'utf8')).toBe(defaultUserEnv);
+    // 比较内容而不是字节：Windows 检出若被转成 CRLF，实体文件与源码里的 \n 转义就不一致。
+    expect(readFileSync('.env.example', 'utf8').replace(/\r\n/g, '\n')).toBe(defaultUserEnv);
   });
 
   it('缺失文件、变量和未知 profile 给出安全错误', () => {

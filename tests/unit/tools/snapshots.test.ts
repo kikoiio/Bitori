@@ -1,5 +1,5 @@
 import {describe, expect, it, beforeAll, afterAll} from 'vitest';
-import {mkdtemp, mkdir, readFile, writeFile, rm, stat} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, symlink, writeFile, rm, stat} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -70,18 +70,52 @@ describe('SnapshotStore 文件修改快照与撤销', () => {
     expect(await readFile(file, 'utf8')).toBe('v0');
   });
 
+  it('工作区根是符号链接时仍然能记录并撤销', async () => {
+    // macOS 的 /var 是符号链接、Windows 的临时目录是 8.3 短名，真实路径与原路径不同；
+    // 快照边界必须按真实路径判断，否则合法快照会被当成工作区之外而丢弃。
+    const real = await mkdtemp(join(tmpdir(), 'bitori-snap-real-'));
+    const link = join(real, 'link');
+    await symlink(real, link, 'junction');
+    const workspaceRoot = join(link, 'ws');
+    await mkdir(workspaceRoot, {recursive: true});
+    await writeFile(join(workspaceRoot, 'a.txt'), 'one two three', 'utf8');
+    const linkStore = SnapshotStore.forWorkspace(workspaceRoot);
+    const edit = new EditFileTool(undefined, linkStore);
+    const context = {workspaceRoot, signal: new AbortController().signal, limits};
+    expect(await edit.execute({path: 'a.txt', oldText: 'two', newText: '2'}, context)).toMatchObject({status: 'success'});
+    expect(await linkStore.undo()).toMatchObject({ok: true});
+    expect(await readFile(join(workspaceRoot, 'a.txt'), 'utf8')).toBe('one two three');
+    await rm(real, {recursive: true, force: true});
+  });
+
   it('同一时间戳的快照按写入顺序撤销最近一次', async () => {
     const directory = join(root, 'tie');
     const tieStore = new SnapshotStore(directory, root);
     const file = join(root, 'tie.txt');
-    await writeFile(file, 'v2', 'utf8');
+    await writeFile(file, 'v4', 'utf8');
     await mkdir(directory, {recursive: true});
-    const base = {workspaceRoot: root, path: 'tie.txt', absolutePath: file, preContent: 'v0', toolName: 'edit_file', createdAt: 1000};
-    await writeFile(join(directory, 'first.json'), JSON.stringify({...base, id: 'first', postHash: sha256Text('v1'), order: 1}));
-    await writeFile(join(directory, 'second.json'), JSON.stringify({...base, id: 'second', postHash: sha256Text('v2'), order: 2}));
+    const base = {workspaceRoot: root, path: 'tie.txt', absolutePath: file, toolName: 'edit_file', createdAt: 1000};
+    // 四条快照时间戳完全相同，只有写入顺序能区分；顺序若不生效，撤销会挑错那一条。
+    for (let order = 1; order <= 4; order += 1) {
+      const snapshot = {...base, id: `s${order}`, preContent: `v${order - 1}`, postHash: sha256Text(`v${order}`), order};
+      await writeFile(join(directory, `s${order}.json`), JSON.stringify(snapshot));
+    }
+    const listed = await tieStore.list();
+    expect(listed.map(snapshot => snapshot.id)).toEqual(['s4', 's3', 's2', 's1']);
+    expect(listed[0]?.order).toBe(4);
     const result = await tieStore.undo('tie.txt');
     expect(result.ok).toBe(true);
-    expect(await readFile(file, 'utf8')).toBe('v0');
+    expect(await readFile(file, 'utf8')).toBe('v3');
+  });
+
+  it('连续记录的时间戳严格递增', async () => {
+    const file = join(root, 'seq.txt');
+    await writeFile(file, 'v0', 'utf8');
+    const first = await store.record({path: 'seq.txt', absolutePath: file, preContent: 'v0', postContent: 'v1', toolName: 'edit_file'});
+    const second = await store.record({path: 'seq.txt', absolutePath: file, preContent: 'v1', postContent: 'v2', toolName: 'edit_file'});
+    expect(second?.order).toBeGreaterThan(first?.order ?? 0);
+    expect(second?.createdAt).toBeGreaterThan(first?.createdAt ?? 0);
+    await store.undo('seq.txt');
   });
 
   it('工作区之外的快照路径被忽略', async () => {

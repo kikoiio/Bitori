@@ -7,6 +7,7 @@ import {buildDoctorChecks} from '../../../src/cli/commands/doctor.js';
 let home = '';
 let workspace = '';
 const savedHome = process.env['HOME'];
+const savedUserProfile = process.env['USERPROFILE'];
 
 function writeUserConfig(configYaml: string, envText: string): void {
   mkdirSync(join(home, '.bitori'), {recursive: true});
@@ -20,9 +21,12 @@ beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'bitori-doctor-home-'));
   workspace = mkdtempSync(join(tmpdir(), 'bitori-doctor-ws-'));
   process.env['HOME'] = home;
+  // os.homedir() 在 Windows 上只认 USERPROFILE，不看 HOME；两个都设，避免读到真实用户目录。
+  process.env['USERPROFILE'] = home;
 });
 afterEach(() => {
   if (savedHome === undefined) delete process.env['HOME']; else process.env['HOME'] = savedHome;
+  if (savedUserProfile === undefined) delete process.env['USERPROFILE']; else process.env['USERPROFILE'] = savedUserProfile;
   rmSync(home, {recursive: true, force: true});
   rmSync(workspace, {recursive: true, force: true});
   delete process.env['PROBE_KEY'];

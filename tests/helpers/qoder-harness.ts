@@ -37,7 +37,7 @@ export function streamResponse(body: string, options: {errorAfterFrames?: number
   if (errorAfterFrames === undefined && holdOpenAfterFrames === undefined) {
     return new Response(body, {status: 200, headers: {'Content-Type': 'text/event-stream'}});
   }
-  const remaining = body.split('\n\n').filter(chunk => chunk.trim() !== '');
+  const remaining = body.replace(/\r\n/g, '\n').split('\n\n').filter(chunk => chunk.trim() !== '');
   const encoder = new TextEncoder();
   let delivered = 0;
   const stream = new ReadableStream<Uint8Array>({
