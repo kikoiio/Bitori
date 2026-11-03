@@ -131,6 +131,11 @@ export class AnthropicClient implements LLMClient {
       const signature = signatures.get(index);
       return block.type === 'thinking' && signature !== undefined ? {...block, signature} : block;
     });
-    yield {type: 'completed', finishReason: reason, ...(content.length ? {providerState: {protocol: 'anthropic', payload: anthropicReplayPayloadSchema.parse(content)}} : {})};
+    // thinking 块要靠签名才能被接口接受后回放；部分网关不签发签名，这种块无法回放，
+    // 丢掉它而不是让一次不匹配的响应把整轮打断。
+    const replayable = content.filter(block => block.type !== 'thinking' || (typeof block.signature === 'string' && block.signature.length > 0));
+    // 载荷校验失配同样不致命：退回按文本与工具调用回放，保留对话可继续。
+    const payload = anthropicReplayPayloadSchema.safeParse(replayable);
+    yield {type: 'completed', finishReason: reason, ...(payload.success && payload.data.length ? {providerState: {protocol: 'anthropic', payload: payload.data}} : {})};
   }
 }

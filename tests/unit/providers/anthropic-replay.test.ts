@@ -85,6 +85,29 @@ describe('Anthropic thinking 协议重放', () => {
     ]});
   });
 
+  it('网关不签发签名时丢掉 thinking 块，回合照常完成', async () => {
+    const requests: unknown[] = [];
+    // 有些网关返回 thinking 块但签名是空串：这种块无法回放，必须丢掉而不是让整轮失败。
+    const unsigned = [
+      {type: 'thinking', thinking: '思考内容', signature: ''},
+      {type: 'text', text: '准备读取。', citations: null},
+      {type: 'tool_use', id: 'tool-1', name: 'read_file', input: {path: 'a.txt'}},
+    ] satisfies Anthropic.ContentBlockParam[];
+    const sdk = new Anthropic({apiKey: 'test', maxRetries: 0, fetch: async (_url, init) => {
+      requests.push(parseRequestBody(init));
+      return sse(unsigned, 'tool_use');
+    }});
+    const client = new AnthropicClient({name: 'test', protocol: 'anthropic', model: 'm', baseUrl: 'https://unused.invalid', apiKey: 'test', thinking: {type: 'disabled'}}, sdk);
+    const events = await collect(client, {messages: [{role: 'user', content: '读取文件'}]});
+    expect(events.filter(event => event.type === 'error')).toEqual([]);
+    const completed = events.find(event => event.type === 'completed');
+    if (completed?.type !== 'completed') throw new Error('回合没有完成');
+    expect(completed.providerState).toEqual({protocol: 'anthropic', payload: [
+      {type: 'text', text: '准备读取。', citations: null},
+      {type: 'tool_use', id: 'tool-1', name: 'read_file', input: {path: 'a.txt'}},
+    ]});
+  });
+
   it('兼容 messages 历史也重放助手完整块，用户与其他协议状态不参与重放', async () => {
     const requests: unknown[] = [];
     const sdk = new Anthropic({apiKey: 'test', fetch: async (_url, init) => {
