@@ -32,6 +32,7 @@ import type {AgentServices} from '../agent/services.js';
 import type {AgentRunResult, AgentStopReason} from '../agent/types.js';
 import {createDefaultRegistry, parseCommand, permissionTierArgument, type CommandRegistry} from '../commands/registry.js';
 import {loadUserCommands} from '../commands/loader.js';
+import {createSessionArchive, parseSessionArchive} from '../storage/archive.js';
 
 type StateListener = (state: AppState) => void;
 export interface CommandSummary {
@@ -502,8 +503,13 @@ export class ChatController {
     if (this.#active !== null) throw new Error('当前会话正在处理中，暂不能导入');
     const profile = this.#profile;
     if (profile === null) throw new Error('模型配置尚未就绪');
+    // exportSession returns the full storage record, including local recovery
+    // checkpoints. Route it through the portable archive allowlist so direct
+    // controller imports have the same validation and credential boundary as
+    // file imports, without persisting non-portable provider/recovery state.
+    const portableConversation = parseSessionArchive(createSessionArchive(conversation));
     await this.#changeSession(async signal => {
-      const session = await this.#repository.importConversation(profile.name, conversation);
+      const session = await this.#repository.importConversation(profile.name, portableConversation);
       if (signal.aborted) return;
       this.#rebuildSystemPrompt();
       const imported = await this.#repository.getConversation(session.id);
