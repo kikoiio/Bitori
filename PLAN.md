@@ -1,7 +1,7 @@
 # Bitori 项目级待办执行计划
 
 更新时间：2026-11-03
-基线：`master`，`a354503bc75633091943b0818abe47beb7d25d8e`。本轮产品及 caret 修正提交：`f66f293fb2b0aa7939288c2aae446166ac90ba74`；三平台 Check 与 Linux 桌面/打包验收均通过。计划/文档提交 `42e1f1c` 的 [run 41681394512](https://github.com/kikoiio/Bitori/actions/runs/41681394512) 在 Ubuntu/macOS 通过，Windows 因 Unicode shell 用例的 10 秒执行限时失败；已放宽该 Windows 测试限时，待重新跑三平台 Check。
+基线：`master`，`a354503bc75633091943b0818abe47beb7d25d8e`。产品及 caret 修正提交 `f66f293` 的三平台 Check、Linux 桌面/打包验收均通过；Windows 测试限时修正及最终文档提交 `fb6741e` 的 [run 41682368460](https://github.com/kikoiio/Bitori/actions/runs/41682368460) 三平台全部通过。项目待办范围已完成；真实终端像素级光标观感仍明确标为 `INCONCLUSIVE`，RSI 暂停、云同步取消。
 
 ## 当前优先级（用户最新决定）
 
@@ -74,7 +74,7 @@
 - [桌面复验 run 41677917237](https://github.com/kikoiio/Bitori/actions/runs/41677917237) 证明仅记忆输入/selectionchange 尚未恢复实际 caret，重绘后仍为 `0–5`。现追加 keyup/mouseup 同步，并由 smoke 通过 Home/方向键/Shift+方向键实际设置选区，再触发状态刷新。
 - 提交 `14188d1` 的三平台 Check [run 41678421743](https://github.com/kikoiio/Bitori/actions/runs/41678421743) 通过；桌面 run 41678459201 的键盘 smoke 前置实际得到 `5–5`，证明该输入法合成没有建立 `1–3` 选区。切回确定性的选区前置后，提交 `7c0e6bb` 的桌面 run 41679609440 仍观察到 `1–3` 被稍后改成 `0–5`，且输入框节点未替换。
 - 查阅 run 41679609440 日志后，根因定位到新建重命名框使用 `setTimeout` 延迟聚焦并全选，异步 `.select()` 会覆盖之后的 caret。提交 `f66f293` 改为插入节点后同步聚焦/全选，并在编辑框仍聚焦时跳过列表重建、复用原节点。
-- 提交 `f66f293fb2b0aa7939288c2aae446166ac90ba74` 的三平台 `Check` [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 全部通过。前一轮 `7c0e6bb` 的 run 41679539550 有 Windows `run-command` Unicode 用例偶发 timeout（730 passed / 1 failed）；修复提交的当前 Check 在 Windows、macOS、Ubuntu 全部通过。
+- 提交 `f66f293` 的三平台 `Check` [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 全部通过。此前 Windows `run-command` Unicode 用例在 10 秒限时内偶发 timeout；对应测试限时调整和最终文档提交 `fb6741e` 的 [run 41682368460](https://github.com/kikoiio/Bitori/actions/runs/41682368460) 三平台全部通过。
 - Linux desktop [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 在同一 `f66f293` 上通过开发版 smoke、Linux 打包、打包版启动、AppImage 启动及解包 deb 启动；caret smoke 确认编辑框保持焦点且 `1–3` 选区不变。只读 artifact 查询确认 `desktop-packaged-linux`（236,896,325 bytes）与 `desktop-screenshots`（962,896 bytes）已上传，保留至 2026-11-10。
 - 提交 `417bb35f23920c74fa681302c3abb6b2b268f377` 的三平台 Check [run 41676188537](https://github.com/kikoiio/Bitori/actions/runs/41676188537)：Ubuntu 与 macOS 通过；Windows 的 4 个 `run-command` 用例因 timeout 失败，`tool-turn` 临时目录清理另报 `EPERM`。较早 Windows 完整 Check 通过；随当前重命名 smoke 修正提交再复验。
 - 当前 caret smoke 提交 `4fb3f07d58241b09b7bce9d245eb59b599c591fa` 的三平台 Check [run 41677079394](https://github.com/kikoiio/Bitori/actions/runs/41677079394) 全部通过。桌面 run 41677114497 则复现并确认 renderer 重绘真实丢选区；已在 `renderer.js` 保存并恢复 caret，待新提交验证。
@@ -93,7 +93,7 @@
 
 | 项目 | 当前状态 | 完成证据或门槛 |
 |---|---|---|
-| 当前三平台代码检查 | 已通过 | 提交 `f66f293fb2b0aa7939288c2aae446166ac90ba74`；[run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) Ubuntu/Windows/macOS 全通过；Ubuntu 111 files、737 tests |
+| 当前三平台代码检查 | 已通过 | 产品提交 `f66f293` 的 [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 全通过；Windows 测试限时稳定性与最终文档提交 `fb6741e` 的 [run 41682368460](https://github.com/kikoiio/Bitori/actions/runs/41682368460) 也在 Ubuntu/Windows/macOS 全通过 |
 | Linux 桌面 GUI/打包 | 已通过 | [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 的开发版、打包版、AppImage、解包 deb smoke 全通过；`desktop-packaged-linux` 236,896,325 bytes 与 `desktop-screenshots` 962,896 bytes 已核实上传，保留至 2026-11-10 |
 | 本机定向检查 | 已验证 | caret 修正涉及的 renderer 与 desktop smoke ESLint、Node.js 语法检查、`git diff --check` 通过；重型 build/full tests/GUI 均在 Actions 执行 |
 | 多模态 | 实现及验收通过 | 本地 PNG/JPEG/GIF/WebP，单图 4 MiB、最多 4 张且合计 8 MiB；桌面选图/粘贴、终端 `/attach`；四种 Provider adapter 离线测试和 Linux 桌面 smoke 通过。真实图片端点验收不在本轮 |
@@ -101,7 +101,7 @@
 | 自动断点续跑 | 实现及验收通过 | 恢复沿用 run 和检查点，保留已完成工具结果且不直接重放；不确定写入/命令要求显式确认；未落盘完成的轮次重试同一轮，已落盘最终回答不再次请求模型；预算、SQLite 集成和桌面恢复入口通过对应检查 |
 | TUI 缺陷与产品入口 | 已实现，三平台全量 Check 通过 | 会话草稿隔离、过渡期排队、附件/归档/恢复入口；Check 含光标/输入行为测试。真实 Ptyxis 光标视觉验收仍为 `INCONCLUSIVE` |
 | 桌面缺陷与产品入口 | 已实现，Linux 桌面验收通过 | 默认模型恢复、重命名草稿与 `1–3` 选区在状态更新时保持、图片/归档/恢复入口；开发版、安装包、AppImage、deb smoke 由 run 41680030634 验证 |
-| 首次使用与功能文档 | 已同步；复验中 | README、开发参考、架构/意图与索引记载当前功能和 run 41679968530/41680030634 证据；run 41681394512 的 Ubuntu/macOS 通过，Windows 遇到既有 10 秒子进程限时，已扩大测试余量并将随修复提交复验 |
+| 首次使用与功能文档 | 已同步并通过三平台 Check | README、开发参考、架构/意图、索引及项目待办均更新；最终提交 `fb6741e` 由 run 41682368460 全平台验证通过；6 份 Markdown 的本地相对链接目标已核对 |
 | 真实终端光标观感 | INCONCLUSIVE | Ptyxis 可访问树可读；Orca Linux provider 不支持截图且启动界面有本地会话文本，因此未输入或确认像素级光标位置。保留既有模拟终端测试结果 |
 | 当前配置的真实 Provider | 已有历史验收；本轮不扩展 | Anthropic/DeepSeek 固定任务 309 输出 token，见 run 41638870512；其余三种协议无各自真实端点证据。多模态 Provider 映射由离线协议测试覆盖 |
 | SWE-bench Lite 开发集 | 暂缓 | 历史 23 题无 resolved；第 0 题诊断未产出补丁。不是当前产品功能验收，详见 [评测说明](evaluation/README.md) |
@@ -123,7 +123,7 @@
 5. **记录安全处置。** 用户接受五项既有残留风险；在安全文档和 ADR 中记录范围与日期，风险事实及现有控制保持可见。
 6. **实现产品新增功能。** 三项范围和共享契约已确定；图片/provider、版本化会话交换与事务导入、检查点恢复及 TUI/桌面入口已接入。提交 `f66f293` 的三平台全量检查和 Linux 开发版、AppImage、deb smoke 全部通过，SQLite 集成回归通过。云同步保持取消；文档同步后的 Check 在最终提交后执行。
 7. **RSI 已暂停（以下保留历史执行记录）。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的硬预算。第一轮由安全符号链接快照问题在模型调用前中断；第二轮因 Anthropic 认证头不匹配在首请求失败（1 请求、0 tokens、无上游调用）。修正网关协议凭证并由 85 项测试覆盖后，`a4da145` 三平台 Check 通过，第三轮 run 41652747706 正常完成 preflight 和 baseline；网关 30/30 成功，计量 747,715 tokens。Agent 达 30 轮上限并留下部分补丁，但评测器按正常完成规则将其记录为 `agent_error`、不评分，最终 `no_candidate`。artifact 已核实，不自动合并、不重复同条件模型调用。
-8. **最终核验。** 产品代码和桌面验收已通过；同步 README、架构、意图、开发说明、计划和审计轨迹后，跑文档提交的三平台 Check，最终核验仅有 `master` 且本地/远端 SHA 一致。真实终端视觉和真实图片 Provider 端点分别按范围记录为未验/不在本轮验收。
+8. **最终核验。** 产品代码、Linux 桌面、打包和最终文档提交的三平台 Check 均通过；README、架构、意图、开发说明、计划和审计轨迹已同步。真实终端视觉与真实图片 Provider 端点按范围记录为 `INCONCLUSIVE`/未验；RSI 暂停，云同步取消。最后确认仅有 `master` 且本地/远端 SHA 一致。
 
 ## 已完成的云端验收
 
