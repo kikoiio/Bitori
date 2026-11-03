@@ -14,10 +14,13 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+
 jobs:
-  openrouter:
+  providers:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -33,9 +36,30 @@ jobs:
         run: npm run build
 
       # OpenRouter 免费档每天约 50 次请求；异常时先看日志，不要连续重跑消耗额度。
-      - name: Run real endpoint e2e
+      - name: List provider models
+        if: inputs.model == '__list__'
         env:
           LLM_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
           LLM_API_KEY: ${{ (inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
-          LLM_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
+          LLM_MODEL: ${{ inputs.model }}
         run: npx tsx tests/acceptance/e2e-openrouter.ts
+
+      # 统一验收脚本：真实编码任务(读 → pwd → 写 → 校验 → 回答)，证据脱敏后写入 evaluation/results/e2e-providers/。
+      - name: Run real provider acceptance
+        if: inputs.model != '__list__'
+        env:
+          E2E_API_KEY: ${{ (inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
+          E2E_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
+          E2E_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
+          BITORI_E2E_PROVIDERS: '1'
+          BITORI_E2E_PROTOCOL: openai-chat
+          BITORI_E2E_MAX_TOKENS: '150000'
+        run: npm run test:e2e:providers
+
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.model != '__list__'
+        with:
+          name: e2e-evidence-${{ inputs.provider }}
+          path: evaluation/results/e2e-providers/
+          if-no-files-found: ignore
+          retention-days: 7
