@@ -18,7 +18,11 @@ let lastImageDataUrl = null;
 const server = createServer((request, response) => {
   if (request.method === 'GET' && String(request.url).endsWith('/models')) {
     response.writeHead(200, {'content-type': 'application/json'});
-    response.end(JSON.stringify({object: 'list', data: [{id: 'mock-model', display_name: 'Mock Model', is_enabled: true}, {id: 'gone-model', display_name: 'Retired Model', is_enabled: false}]}));
+    response.end(JSON.stringify({object: 'list', data: [
+      {id: 'mock-model', display_name: 'Mock Model', is_enabled: true},
+      {id: 'test-model', display_name: 'Configured Default', is_enabled: true},
+      {id: 'gone-model', display_name: 'Retired Model', is_enabled: false},
+    ]}));
     return;
   }
   let body = '';
