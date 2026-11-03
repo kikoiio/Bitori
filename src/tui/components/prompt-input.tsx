@@ -32,6 +32,9 @@ export function PromptInput({value, focused, disabled, width = 80, model = '-', 
 
   // 输入行在终端里的真实位置由 Ink 布局决定：measureElement 返回布局树坐标，
   // 真实光标必须按它定位，输入法的候选框才会贴在打字处而不是掉到画面底部。
+  // 每次渲染后都要重新测量：上方浮层（命令面板、模型选择等）会改变输入行的行号，
+  // 这些变化不会体现在本组件的 props 里。setMetrics 前后比较过，值没变就不会触发重渲染。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const node = rowRef.current;
     if (!node) return;

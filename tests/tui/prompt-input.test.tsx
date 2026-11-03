@@ -64,7 +64,7 @@ describe('PromptInput 真实光标定位', () => {
         <Text>第一行</Text>
         <PromptInput value="你好" focused disabled={false} width={60} />
       </Box>,
-      {stdout: stdout as never, stdin: stdin as never, exitOnCtrlC: false, patchConsole: false},
+      {stdout: stdout as never, stdin: stdin as never, exitOnCtrlC: false, patchConsole: false, interactive: true},
     );
     await tick();
     const placement = readCursorPlacement(chunks);
@@ -84,7 +84,7 @@ describe('PromptInput 真实光标定位', () => {
         <Text>第一行</Text>
         <PromptInput value="这是一个很长的中文输入需要换行显示才能看到全部内容所以要更长一些才行" focused disabled={false} width={40} />
       </Box>,
-      {stdout: stdout as never, stdin: stdin as never, exitOnCtrlC: false, patchConsole: false},
+      {stdout: stdout as never, stdin: stdin as never, exitOnCtrlC: false, patchConsole: false, interactive: true},
     );
     await tick();
     const placement = readCursorPlacement(chunks);
@@ -101,7 +101,7 @@ describe('PromptInput 真实光标定位', () => {
         <Text>第一行</Text>
         <PromptInput value="你好" focused={false} disabled={false} width={60} />
       </Box>,
-      {stdout: stdout as never, stdin: stdin as never, exitOnCtrlC: false, patchConsole: false},
+      {stdout: stdout as never, stdin: stdin as never, exitOnCtrlC: false, patchConsole: false, interactive: true},
     );
     await tick();
     expect(readCursorPlacement(chunks)).toBeNull();
