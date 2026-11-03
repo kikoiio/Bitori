@@ -54,7 +54,7 @@ export class SnapshotStore {
     const snapshot: FileSnapshot = {
       id: randomUUID(),
       workspaceRoot: this.workspaceRoot,
-      path: input.path,
+      path: normalizeRelative(input.path),
       absolutePath: input.absolutePath,
       preContent: input.preContent,
       postHash: sha256Text(input.postContent),
@@ -76,7 +76,7 @@ export class SnapshotStore {
       if (!name.endsWith('.json')) continue;
       try {
         const parsed = JSON.parse(await readFile(join(this.directory, name), 'utf8')) as FileSnapshot;
-        if (parsed.workspaceRoot === this.workspaceRoot && isSafeTarget(parsed, this.workspaceRoot)) snapshots.push(parsed);
+        if (parsed.workspaceRoot === this.workspaceRoot && isSafeRelative(parsed.path)) snapshots.push(parsed);
       } catch { /* 损坏的快照按不存在处理 */ }
     }
     return snapshots.sort((a, b) => b.createdAt - a.createdAt || (b.order ?? 0) - (a.order ?? 0));
@@ -89,8 +89,12 @@ export class SnapshotStore {
     if (!wanted) {
       return {ok: false, message: path ? `没有 ${path} 的修改快照:只记录 edit_file/write_file 成功提交过的写入` : '没有可撤销的文件修改快照'};
     }
-    const target = wanted.absolutePath;
-    if (!isSafeTarget(wanted, this.workspaceRoot)) return {ok: false, message: '快照指向工作区之外,已拒绝'};
+    if (!isSafeRelative(wanted.path)) return {ok: false, message: '快照路径不合法,已拒绝'};
+    // 用工作区相对路径定位撤销目标，而不是快照里记录的绝对路径：同一个文件在不同平台
+    // 可能被表示成 8.3 短名、展开后的符号链接路径或不同大小写，直接比较绝对路径
+    // 会把合法快照误判成工作区之外，撤销就找不到任何修改。
+    const target = resolve(this.workspaceRoot, wanted.path);
+    if (!isInside(this.workspaceRoot, target)) return {ok: false, message: '快照指向工作区之外,已拒绝'};
     let current: string;
     try { current = await readFile(target, 'utf8'); } catch {
       await this.#discard(wanted.id);
@@ -137,9 +141,14 @@ function canonicalRoot(workspaceRoot: string): string {
   try { return realpathSync(resolve(workspaceRoot)); } catch { return resolve(workspaceRoot); }
 }
 
-function isSafeTarget(snapshot: FileSnapshot, workspaceRoot: string): boolean {
-  const target = resolve(snapshot.absolutePath);
-  const rel = relative(workspaceRoot, target);
+/** 快照只接受工作区内的相对路径;绝对路径与越界路径一律拒绝。 */
+function isSafeRelative(relativePath: string): boolean {
+  const normalized = relativePath.replaceAll('\\', '/');
+  return normalized !== '' && !normalized.startsWith('/') && !/^[a-zA-Z]:/.test(normalized);
+}
+
+function isInside(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate);
   return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
 }
 

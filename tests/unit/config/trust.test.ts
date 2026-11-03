@@ -1,6 +1,6 @@
 import {mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join, resolve} from 'node:path';
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import {
   isWorkspaceTrusted,
@@ -55,6 +55,8 @@ describe('工作区信任清单', () => {
 
   it('trust 写入的目录会自动创建', async () => {
     await trustWorkspace(workspace, join(home, 'missing-yet'));
-    expect(readFileSync(trustedWorkspacesPath(join(home, 'missing-yet')), 'utf8')).toContain(workspace);
+    // 解析清单再比较：JSON 里的反斜杠是转义过的，直接对原始文本做子串匹配在 Windows 上不成立。
+    const list = JSON.parse(readFileSync(trustedWorkspacesPath(join(home, 'missing-yet')), 'utf8')) as string[];
+    expect(list).toContain(resolve(workspace));
   });
 });
