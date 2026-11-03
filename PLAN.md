@@ -71,6 +71,7 @@
 - [桌面复验 run 41675603751](https://github.com/kikoiio/Bitori/actions/runs/41675603751) 已通过图片、归档导入、模型回退、Markdown 安全及首次审批；失败于后续会话切换测试依赖 `.last()` 列表顺序。现保存“你好”所在 session ID 并按 ID 切换，余下 smoke/打包待复跑。
 - [桌面复验 run 41676241422](https://github.com/kikoiio/Bitori/actions/runs/41676241422) 已通过 session ID 切换、跨会话审批等前序场景，重命名状态刷新用例报告 caret 变成整段选择 `0–5`。现将焦点与 `1–3` 选区在同一 renderer 操作中设置并先断言前置状态，确认最终光标恢复结果。
 - [桌面复验 run 41677114497](https://github.com/kikoiio/Bitori/actions/runs/41677114497) 已确认刷新前选区为 `1–3`，但 renderer 替换输入框后重置成整段 `0–5`。现由输入/selectionchange 记住当前 session 的选区并在 redraw 后恢复，等待桌面验证。
+- [桌面复验 run 41677917237](https://github.com/kikoiio/Bitori/actions/runs/41677917237) 证明仅记忆输入/selectionchange 尚未恢复实际 caret，重绘后仍为 `0–5`。现追加 keyup/mouseup 同步，并由 smoke 通过 Home/方向键/Shift+方向键实际设置选区，再触发状态刷新。
 - 提交 `417bb35f23920c74fa681302c3abb6b2b268f377` 的三平台 Check [run 41676188537](https://github.com/kikoiio/Bitori/actions/runs/41676188537)：Ubuntu 与 macOS 通过；Windows 的 4 个 `run-command` 用例因 timeout 失败，`tool-turn` 临时目录清理另报 `EPERM`。较早 Windows 完整 Check 通过；随当前重命名 smoke 修正提交再复验。
 - 当前 caret smoke 提交 `4fb3f07d58241b09b7bce9d245eb59b599c591fa` 的三平台 Check [run 41677079394](https://github.com/kikoiio/Bitori/actions/runs/41677079394) 全部通过。桌面 run 41677114497 则复现并确认 renderer 重绘真实丢选区；已在 `renderer.js` 保存并恢复 caret，待新提交验证。
 - 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前实现改为会话 ID 作用域，引擎与 AgentRunner 回归测试通过，桌面跨会话审批 smoke 也在 run 41637023628 通过。

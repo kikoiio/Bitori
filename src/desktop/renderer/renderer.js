@@ -449,6 +449,8 @@ function renderSessions() {
         }
       });
       input.addEventListener('select', () => rememberRenameSelection(input));
+      input.addEventListener('keyup', () => rememberRenameSelection(input));
+      input.addEventListener('mouseup', () => rememberRenameSelection(input));
       input.addEventListener('blur', () => {
         if (!rebuildingSessionList && input.isConnected && renamingSessionId === session.id) void commit();
       });

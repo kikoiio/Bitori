@@ -311,11 +311,14 @@ try {
     await firstSession.locator('[aria-label="重命名会话"]').click();
     const renameInput = page.getByLabel('新会话标题');
     await renameInput.fill('未提交草稿');
+    await renameInput.focus();
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('Shift+ArrowRight');
     const redrawState = await page.evaluate(async () => {
       const previousInput = document.querySelector('.session-rename-input');
       if (previousInput?.tagName !== 'INPUT') throw new Error('重命名回归前置条件缺失');
-      previousInput.focus();
-      previousInput.setSelectionRange(1, 3);
       const before = {
         focused: document.activeElement === previousInput,
         selectionStart: previousInput.selectionStart,
