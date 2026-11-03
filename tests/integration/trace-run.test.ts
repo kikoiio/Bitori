@@ -12,7 +12,7 @@ import {TraceWriter} from '../../src/trace/writer.js';
 import type {StreamEvent} from '../../src/providers/types.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 
 describe('trace 全链路', () => {
   it('一次含 429 重试的 run 产出可回放 trace', async () => {

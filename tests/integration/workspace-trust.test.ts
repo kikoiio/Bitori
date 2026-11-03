@@ -8,7 +8,7 @@ import {trustWorkspace} from '../../src/config/trust.js';
 import {loadHookConfigs} from '../../src/hooks/loader.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 
 function makeHome(): string {
   const root = mkdtempSync(join(tmpdir(), 'bitori-trust-home-'));

@@ -8,7 +8,7 @@ import {toolCallsMigration} from '../../src/storage/migrations/002-tool-calls.js
 import {SessionRepository} from '../../src/storage/repository.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 
 describe('Storage Worker', () => {
   it('持久化运行、thinking、usage 和状态', async () => {

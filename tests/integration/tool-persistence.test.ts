@@ -6,7 +6,7 @@ import {SessionRepository} from '../../src/storage/repository.js';
 import type {ToolCallRecord} from '../../src/storage/types.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 const update = {content: '准备读取', thinking: '', status: 'completed' as const, error: null, usage: null, providerState: null};
 function toolRecord(sessionId: string, assistantMessageId: string, status: ToolCallRecord['executionStatus'], approval: ToolCallRecord['approvalStatus']): ToolCallRecord {
   return {id: `${status}-${approval}`, sessionId, assistantMessageId, providerCallId: 'provider-1', position: 0, toolName: 'read_file', arguments: {path: 'a'}, argumentsText: '{"path":"a"}', agentRunId: 'run', approvalStatus: approval, executionStatus: status, result: status === 'succeeded' ? {status: 'success', output: {content: 'x'}} : null, createdAt: 1, updatedAt: 1};

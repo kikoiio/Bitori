@@ -11,7 +11,7 @@ import {AgentContext} from '../../src/agent/context.js';
 import type {FinalMessageUpdate, ToolCallRecord} from '../../src/storage/types.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 const workerUrl = new URL('../fixtures/anthropic-storage-worker.ts', import.meta.url);
 const payload = anthropicReplayPayloadSchema.parse([
   {type: 'thinking', thinking: '读取文件', signature: 'signed+/='},

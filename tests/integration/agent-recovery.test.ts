@@ -4,7 +4,7 @@ import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {SessionRepository} from '../../src/storage/repository.js';
 
-const roots: string[] = []; afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+const roots: string[] = []; afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 describe('Agent 中断恢复', () => {
   it('重复结束运行不会覆盖终态或会话计划指针', async () => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-recovery-')); roots.push(root);

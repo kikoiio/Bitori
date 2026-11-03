@@ -9,7 +9,7 @@ import {createToolSystem} from '../../src/tools/create-tool-system.js';
 import {MockLLMClient} from '../helpers/mock-llm-client.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 const profile: ProviderProfile = {name: 'plan', protocol: 'openai-chat', model: 'm', baseUrl: 'https://example.com', apiKey: 'x', thinking: {type: 'disabled'}};
 
 describe('Plan Mode', () => {

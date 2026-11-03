@@ -19,7 +19,7 @@ class EchoClient implements LLMClient {
 }
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 const profile: ProviderProfile = {name: 'test', protocol: 'openai-chat', model: 'm', baseUrl: 'https://example.com', apiKey: 'test', thinking: {type: 'disabled'}};
 
 describe('Agent services integration', () => {

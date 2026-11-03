@@ -14,7 +14,7 @@ import {SessionRepository} from '../../src/storage/repository.js';
 import {MockLLMClient} from '../helpers/mock-llm-client.js';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 
 function toolCalls(...calls: Array<{id: string; name: string; args: string}>): StreamEvent[] {
   const events: StreamEvent[] = [];

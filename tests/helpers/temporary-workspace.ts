@@ -17,5 +17,5 @@ export class TemporaryWorkspace {
       throw error;
     }
   }
-  async cleanup(): Promise<void> { await rm(this.root, {recursive: true, force: true}); }
+  async cleanup(): Promise<void> { await rm(this.root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); }
 }

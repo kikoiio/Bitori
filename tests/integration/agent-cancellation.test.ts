@@ -8,7 +8,7 @@ import type {ChatRequest, LLMClient, StreamEvent} from '../../src/providers/type
 import {SessionRepository} from '../../src/storage/repository.js';
 import {createToolSystem} from '../../src/tools/create-tool-system.js';
 
-const roots: string[] = []; afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+const roots: string[] = []; afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 const profile: ProviderProfile = {name: 'cancel', protocol: 'openai-chat', model: 'm', baseUrl: 'https://example.com', apiKey: 'x', thinking: {type: 'disabled'}};
 async function waitFor(check: () => boolean): Promise<void> { for (let index = 0; index < 100; index++) { if (check()) return; await new Promise(resolve => setTimeout(resolve, 5)); } throw new Error('等待状态超时'); }
 

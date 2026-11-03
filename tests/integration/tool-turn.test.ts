@@ -40,7 +40,7 @@ class SecondBatchClient implements LLMClient {
 async function waitForApproval(controller: ChatController, toolName: string): Promise<void> { for (let index = 0; index < 100; index++) { if (controller.getState().approvalPrompt?.toolName === toolName) return; await new Promise(resolve => setTimeout(resolve, 10)); } throw new Error(`未等到审批：${toolName}`); }
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true}); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100}); });
 const profile: ProviderProfile = {name: 'tools', protocol: 'openai-chat', model: 'm', baseUrl: 'https://example.com', apiKey: 'test', thinking: {type: 'disabled'}};
 
 describe('Agent 工具回合', () => {
