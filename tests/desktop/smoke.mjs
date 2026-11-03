@@ -111,7 +111,8 @@ try {
 
     const imageBase64 = (await readFile(imagePath)).toString('base64');
     await application.evaluate(async ({clipboard, ClipboardItem}, data) => {
-      const image = new (require('node:buffer').Blob)([Buffer.from(data, 'base64')], {type: 'image/png'});
+      const bytes = Uint8Array.from(globalThis.atob(data), character => character.charCodeAt(0));
+      const image = new globalThis.Blob([bytes], {type: 'image/png'});
       await clipboard.write([new ClipboardItem({'image/png': image})]);
     }, imageBase64);
     await page.getByTestId('paste-image').click();
