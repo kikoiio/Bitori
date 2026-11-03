@@ -252,3 +252,37 @@ describe('ChatScreen 会话搜索/重命名/删除', () => {
     view.unmount();
   });
 });
+
+describe('ChatScreen 生成中输入', () => {
+  const tick = () => new Promise(resolve => setTimeout(resolve, 25));
+
+  it('生成中输入框不锁死：可以打字，Enter 排队发送，Esc 中断当前生成', async () => {
+    const steerMessage = vi.fn().mockResolvedValue(undefined);
+    const cancelActiveRequest = vi.fn().mockResolvedValue(undefined);
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const controller = {steerMessage, cancelActiveRequest, sendMessage} as unknown as ChatController;
+    const state = {...initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'}), requestStatus: 'streaming' as const};
+    const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={vi.fn()} />);
+    view.stdin.write('顺便把 README 也改了'); await tick();
+    expect(view.lastFrame()).toContain('顺便把 README 也改了');
+    expect(view.lastFrame()).toContain('▌');
+    view.stdin.write('\r'); await tick();
+    expect(steerMessage).toHaveBeenCalledWith('顺便把 README 也改了');
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(view.lastFrame()).not.toContain('顺便把 README 也改了');
+    view.stdin.write('\u001B'); await tick();
+    expect(cancelActiveRequest).toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it('排队消息在输入区上方可见，并提示 Esc 可中断', async () => {
+    const controller = {steerMessage: vi.fn(), cancelActiveRequest: vi.fn(), sendMessage: vi.fn()} as unknown as ChatController;
+    const state = {...initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'}), requestStatus: 'streaming' as const, queuedMessages: ['排队的内容']};
+    const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={vi.fn()} />);
+    await tick();
+    expect(view.lastFrame()).toContain('已排队 1 条');
+    expect(view.lastFrame()).toContain('排队的内容');
+    expect(view.lastFrame()).toContain('Esc 中断当前生成');
+    view.unmount();
+  });
+});

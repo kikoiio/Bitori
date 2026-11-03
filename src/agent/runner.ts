@@ -65,6 +65,10 @@ export class AgentRunner {
         const result: AgentRunResult = {runId: input.runId, status: 'cancelled', stopReason: 'user_cancelled', iterationCount: iteration - 1, usage: total, finalIterationId};
         yield {...base(), type: 'run_finished', result}; return result;
       }
+      // 生成中排队的用户消息在迭代边界注入：工具调用一结束，模型就在同一回合里读到它。
+      if (input.steering !== undefined) {
+        for (const item of await input.steering()) context.appendUserMessage(item);
+      }
       const iterationId = createId(); finalIterationId = iterationId;
       yield {...base(), type: 'iteration_started', iterationId, iteration};
       yield {...base(), type: 'progress', iteration, maxIterations, phase: 'streaming', completedTools: 0, totalTools: 0};

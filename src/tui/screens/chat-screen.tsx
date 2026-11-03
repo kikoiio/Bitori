@@ -14,6 +14,7 @@ import {Header} from '../components/header.js';
 import {MessageList} from '../components/message-list.js';
 import {ModelPicker} from '../components/model-picker.js';
 import {PromptInput} from '../components/prompt-input.js';
+import {QueuedMessages} from '../components/queued-messages.js';
 import {SessionList} from '../components/session-list.js';
 import {SlashMenu, type PaletteCommand} from '../components/slash-menu.js';
 import {StatusBar} from '../components/status-bar.js';
@@ -84,7 +85,9 @@ export function ChatScreen({state, controller, height, onExit, profiles = [], on
   // failed 已经是一次请求的终态，不阻止用户继续发送；其余进行中状态才算 busy。
   const busy = state.requestStatus !== 'idle' && state.requestStatus !== 'failed';
   const spinner = useSpinner(busy);
-  const disabled = busy || sessionPending || switchingModel;
+  // 生成期间输入框不锁死：允许随时打字，Enter 走排队而不是被忽略。
+  // 审批是模态的：此时输入归审批面板，真实光标也收起来。
+  const disabled = sessionPending || switchingModel || state.approvalPrompt !== null;
   const catalog = useMemo(() => {
     const merged = new Map<string, PaletteCommand>();
     for (const command of [...UI_COMMANDS, ...(controller.commandCatalog?.() ?? [])]) {
@@ -183,7 +186,12 @@ export function ChatScreen({state, controller, height, onExit, profiles = [], on
     if (text.trim().length === 0) return;
     const local = parseLocalCommand(text);
     if (local !== null && runLocalCommand(local)) return;
-    if (busy || sendingRef.current) return;
+    if (busy) {
+      // 生成中：新消息排队，模型在当前回合的下一个边界读到它（同一回合内转向）。
+      void controller.steerMessage(text).catch((error: unknown) => setOperationError(error instanceof Error ? error.message : String(error)));
+      return;
+    }
+    if (sendingRef.current) return;
     sendingRef.current = true;
     setOperationError(null);
     setOffset(0);
@@ -218,6 +226,8 @@ export function ChatScreen({state, controller, height, onExit, profiles = [], on
       const callId = state.approvalPrompt.callId;
       if (key.upArrow) { setApprovalSelection({callId, index: Math.max(0, approvalIndex - 1)}); return; }
       if (key.downArrow) { setApprovalSelection({callId, index: Math.min(approvalDecisions.length - 1, approvalIndex + 1)}); return; }
+      // 审批是模态的：Esc 等同于“否”，和 Claude Code 一致，不会误触发批准。
+      if (key.escape) { controller.resolveToolApproval('denied'); return; }
       if (key.return) { controller.resolveToolApproval(approvalDecisions[approvalIndex] ?? 'denied'); return; }
       if (input.toLowerCase() === 'y' || input === '1') controller.resolveToolApproval('approved');
       else if (input.toLowerCase() === 's' || input === '2') controller.resolveToolApproval('approved_session');
@@ -329,6 +339,8 @@ export function ChatScreen({state, controller, height, onExit, profiles = [], on
       }
     }
     if (key.escape && diffPanelOpen) { setDiffPanelOpen(false); return; }
+    // 生成中按 Esc 立即中断当前回合；已排队消息随后作为下一回合发出。
+    if (key.escape && busy) { void controller.cancelActiveRequest().catch((error: unknown) => setOperationError(error instanceof Error ? error.message : String(error))); return; }
     if (input === 'n' && key.ctrl) { runLocalCommand({name: 'new', args: ''}); return; }
     if (input === 's' && key.ctrl) { runLocalCommand({name: 'sessions', args: ''}); return; }
     if (input === 'o' && key.ctrl) { setToolCallsExpanded(value => !value); return; }
@@ -365,7 +377,9 @@ export function ChatScreen({state, controller, height, onExit, profiles = [], on
   const modelHeight = modelPickerOpen ? Math.min(modelStage === 'models' ? (modelList?.models.length ?? 0) + 2 : profiles.length, 8) + 5 : 0;
 
   const approvalHeight = state.approvalPrompt === null ? 0 : 10;
-  const conversationHeight = Math.max(4, height - 10 - (busy ? 1 : 0) - (toolCallsExpanded ? 1 : 0) - errorHeight - paletteHeight - modelHeight - sessionHeight - approvalHeight - debugHeight);
+  // 排队面板：上下边框各一行 + 标题一行 + 每条消息一行。
+  const queueHeight = state.queuedMessages.length === 0 ? 0 : state.queuedMessages.length + 3;
+  const conversationHeight = Math.max(4, height - 10 - (busy ? 1 : 0) - (toolCallsExpanded ? 1 : 0) - errorHeight - paletteHeight - modelHeight - sessionHeight - approvalHeight - debugHeight - queueHeight);
   const panelWidth = diffPanelOpen ? Math.max(24, Math.min(42, Math.floor(Math.max(columns, 80) / 4))) : 0;
   const permission = state.permissionTier === 'strict' ? '严格' : state.permissionTier === 'bypass' ? '放行' : '默认';
 
@@ -393,6 +407,7 @@ export function ChatScreen({state, controller, height, onExit, profiles = [], on
       {sessions === null ? null : <SessionList sessions={filterSessions(sessions, sessionFilter)} selectedIndex={sessionIndex} totalCount={sessions.length} filter={sessionFilter} renaming={sessionRenaming} renameValue={sessionRenameValue} deletePending={sessionDeletePending} />}
       {state.approvalPrompt ? <ToolApprovalPanel prompt={state.approvalPrompt} selectedIndex={approvalIndex} /> : null}
       {debugOpen ? <DebugPanel state={state} controller={controller} height={debugHeight} /> : null}
+      <QueuedMessages messages={state.queuedMessages} />
       <PromptInput value={draft} focused={focus === 'input'} disabled={disabled} width={Math.max(20, columns - panelWidth)}
         model={state.profile?.model ?? '-'} mode={state.agentMode === 'plan' ? 'PLAN' : 'DO'} permission={permission} />
     </Box>

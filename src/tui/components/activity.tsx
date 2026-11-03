@@ -23,6 +23,6 @@ export function Activity({state, spinner}: {state: AppState; spinner: string}) {
       <Text color={theme.dim}>{phase}</Text>
       <Text color={theme.faint}> · 迭代 {state.iteration}/{state.maxIterations} · {formatUsage(state.runUsage)}</Text>
     </Box>
-    <Text color={theme.faint}>Ctrl+C 停止</Text>
+    <Text color={theme.faint}>Esc 中断 · Enter 排队发送 · Ctrl+C 停止</Text>
   </Box>;
 }

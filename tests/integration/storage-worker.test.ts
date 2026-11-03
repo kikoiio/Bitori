@@ -70,5 +70,18 @@ describe('Storage Worker', () => {
     expect((await restored.getSession('s'))?.title).toBe('旧标题');
     await restored.close();
   });
+  it('生成中排队的消息挂到当前 run 并进入会话上下文', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-storage-'));
+    roots.push(root);
+    const repository = new SessionRepository(join(root, 'bitori.db'));
+    await repository.initialize();
+    const session = await repository.createSession('profile-a');
+    await repository.beginAgentRun({runId: 'run', sessionId: session.id, displayText: '原始任务', mode: 'execute'});
+    const steered = await repository.appendSteerMessage({runId: 'run', sessionId: session.id, content: '顺便把 README 也改了'});
+    expect(steered).toMatchObject({role: 'user', content: '顺便把 README 也改了', agentRunId: 'run', status: 'completed'});
+    const conversation = await repository.getConversation(session.id);
+    expect(conversation?.messages.map(item => item.content)).toContain('顺便把 README 也改了');
+    await repository.close();
+  }, 20_000);
 
 });

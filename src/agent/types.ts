@@ -1,5 +1,5 @@
 import type {ProviderError} from '../providers/errors.js';
-import type {FinishReason, ModelContextItem, ProviderState, Usage} from '../providers/types.js';
+import type {FinishReason, ModelContextItem, ModelMessageItem, ProviderState, Usage} from '../providers/types.js';
 import type {PromptBlock} from '../prompt/builder.js';
 import type {PreparedToolCall, ToolApprovalPrompt, ToolDefinition, ToolExecutionResult, ToolExecutionStatus} from '../tools/types.js';
 
@@ -21,6 +21,11 @@ export interface AgentRunInput {
   system?: PromptBlock[];
   /** 本回合注入的提醒文本（已含标签），由控制器按模式与轮次生成。 */
   reminders?: string[];
+  /**
+   * 生成中排队的用户消息：每轮迭代开始时取一次，注入到同一回合的下一轮请求。
+   * 取出的消息必须已经持久化，返回值直接作为上下文里的 user 消息。
+   */
+  steering?: () => Promise<ModelMessageItem[]>;
   limits?: {maxIterations: number; maxUnknownToolIterations: number; /** 重试基础退避毫秒数；测试可注入较小值。 */ retryBaseDelayMs?: number};
   /** 上下文窗口与工作目录；缺省时工具结果预算仍生效，全量摘要禁用。 */
   contextManagement?: {windowTokens: number; workspaceRoot: string};

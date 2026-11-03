@@ -24,6 +24,7 @@ interface InputMetrics {
 export function PromptInput({value, focused, disabled, width = 80, model = '-', mode = 'DO', permission = '默认'}: PromptInputProps) {
   const {setCursorPosition} = useCursor();
   const rowRef = useRef<DOMElement>(null);
+  const measuredRef = useRef<InputMetrics | null>(null);
   const [metrics, setMetrics] = useState<InputMetrics | null>(null);
   const visible = visibleDraft(value);
   const active = focused && !disabled;
@@ -31,15 +32,19 @@ export function PromptInput({value, focused, disabled, width = 80, model = '-', 
   // 输入行在终端里的真实位置由 Ink 布局决定：measureElement 返回布局树坐标，
   // 真实光标必须按它定位，输入法的候选框才会贴在打字处而不是掉到画面底部。
   // 每次渲染后都要重新测量：上方浮层（命令面板、模型选择等）会改变输入行的行号，
-  // 这些变化不会体现在本组件的 props 里。setMetrics 前后比较过，值没变就不会触发重渲染。
+  // 这些变化不会体现在本组件的 props 里。
+  // 关键：量到的值没变时不能调用 setState。流式输出时提交阶段会连发多次更新，
+  // 无谓的 setState 会排成嵌套更新，撞上 React 的嵌套更新上限（“Maximum update depth exceeded”）。
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const node = rowRef.current;
     if (!node) return;
     const measured = measureElement(node);
-    setMetrics(previous => previous !== null && previous.x === measured.x && previous.y === measured.y && previous.width === measured.width
-      ? previous
-      : {x: measured.x, y: measured.y, width: measured.width});
+    const previous = measuredRef.current;
+    if (previous !== null && previous.x === measured.x && previous.y === measured.y && previous.width === measured.width) return;
+    const next = {x: measured.x, y: measured.y, width: measured.width};
+    measuredRef.current = next;
+    setMetrics(next);
   });
 
   const flow = `❯ ${visible}▌`;

@@ -37,6 +37,8 @@ export interface AppState {
   approvalPrompt: ToolApprovalPrompt | null;
   agentMode: AgentMode;
   activeRunId: string | null;
+  /** 生成中排队、尚未注入模型的消息；界面上以“已排队”展示。 */
+  queuedMessages: string[];
   iteration: number;
   maxIterations: number;
   agentPhase: AgentPhase | null;
@@ -59,7 +61,7 @@ export function initialAppState(profile: ProfileSummary | null = null): AppState
     selectedMessageId: null,
     visibleError: null,
     toolCalls: [], liveToolCalls: [], approvalPrompt: null,
-    agentMode: 'execute', activeRunId: null, iteration: 0, maxIterations: 20,
+    agentMode: 'execute', activeRunId: null, queuedMessages: [], iteration: 0, maxIterations: 20,
     agentPhase: null, runUsage: {inputTokens: 0, outputTokens: 0}, stopReason: null,
     permissionTier: 'default',
     debugOpen: false,

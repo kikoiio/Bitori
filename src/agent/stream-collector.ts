@@ -41,7 +41,9 @@ export class StreamCollector {
         else if (event.type === 'error') { error = event.error; break; }
       }
     } catch (caught) {
-      error = {code: 'provider_error', message: caught instanceof Error ? caught.message : '模型流意外中断', retryable: false};
+      // 中断导致的异常不算供应商错误：被取消的回合应当干净地以 user_cancelled 结束，
+      // 否则界面会把内部异常（例如渲染层的重入报错）当成模型故障展示出来。
+      if (!input.signal.aborted) error = {code: 'provider_error', message: caught instanceof Error ? caught.message : '模型流意外中断', retryable: false};
     }
     const cancelled = input.signal.aborted;
     if (!cancelled && !error && !completed) error = {code: 'provider_error', message: '模型流未产生正常结束事件', retryable: false};

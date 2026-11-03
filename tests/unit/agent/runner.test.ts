@@ -126,6 +126,23 @@ describe('AgentRunner', () => {
     expect(value.client.requests[1]?.items?.some(item => item.type === 'tool_results' && item.results.some(entry => entry.result.status === 'denied' && entry.result.error.code === 'hook_rejected'))).toBe(true);
   });
 
+  it('生成中排队的消息在迭代边界注入同一回合的下一轮请求', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-runner-')); roots.push(root); writeFileSync(join(root, 'note.txt'), 'ok');
+    const client = new MockLLMClient([toolCall('read_file', '{"path":"note.txt"}'), [{type: 'text_delta', text: '完成'}, {type: 'completed', finishReason: 'stop'}]]);
+    const tools = createToolSystem(root);
+    const runner = new AgentRunner(client, tools.registry, new StreamCollector(), new SafetyBatchScheduler(tools.executor, tools.approvals));
+    // 第一轮取不到排队消息（消息此时还没到），第二轮边界才拿到。
+    let pulls = 0;
+    const generator = runner.run({runId: 'r', sessionId: 's', trigger: 'message', mode: 'execute', instruction: 'test',
+      context: [{type: 'message', messageId: 'u', role: 'user', content: 'test'}],
+      steering: async () => { pulls += 1; return pulls === 1 ? [] : [{type: 'message', messageId: 'steer', role: 'user', content: '顺便改 README'}]; }}, new AbortController().signal);
+    while (true) { const step = await generator.next(); if (step.done) break; }
+    expect(client.requests).toHaveLength(2);
+    expect(client.requests[0]?.items?.some(item => item.type === 'message' && item.content === '顺便改 README')).toBe(false);
+    expect(client.requests[1]?.items?.some(item => item.type === 'message' && item.content === '顺便改 README')).toBe(true);
+    await tools.close();
+  });
+
   it('permission_request Hook 拒绝时不会发布人工审批或执行工具', async () => {
     const hooks = new HookEngine([{event: 'permission_request', reject: true, action: {type: 'prompt', prompt: '策略拒绝'}}]);
     const value = await run([toolCall('write_file', '{"path":"blocked.txt","content":"x"}'), [{type: 'completed', finishReason: 'stop'}]], undefined, {hooks});

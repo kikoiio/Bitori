@@ -83,6 +83,8 @@ export interface SessionRepositoryContract {
   renameSession(sessionId: string, title: string): Promise<Session>;
   deleteSession(sessionId: string): Promise<void>;
   beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}>;
+  /** 生成中排队的用户消息：挂在当前 run 下并进入会话上下文。 */
+  appendSteerMessage(input: {runId: string; sessionId: string; content: string}): Promise<StoredMessage>;
   beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage>;
   finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void>;
   abortAgentRun(runId: string, result: AgentRunResult, message: string): Promise<void>;

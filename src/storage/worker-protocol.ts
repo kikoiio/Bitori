@@ -18,6 +18,7 @@ export type StorageOperation =
   | {type: 'rename_session'; sessionId: string; title: string}
   | {type: 'delete_session'; sessionId: string}
   | {type: 'begin_agent_run'; runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}
+  | {type: 'append_steer_message'; runId: string; sessionId: string; content: string}
   | {type: 'begin_agent_iteration'; messageId: string; runId: string; sessionId: string; iteration: number}
   | {type: 'finalize_iteration_with_tool_batch'; messageId: string; update: FinalMessageUpdate; records: ToolCallRecord[]}
   | {type: 'abort_agent_run'; runId: string; result: AgentRunResult; message: string}

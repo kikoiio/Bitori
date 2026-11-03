@@ -1,6 +1,6 @@
 import {toProfileSummary} from '../config/types.js';
 import type {ProviderProfile} from '../config/types.js';
-import type {LLMClient} from '../providers/types.js';
+import type {LLMClient, ModelMessageItem} from '../providers/types.js';
 import type {AgentRunRecord, Session, SessionRepositoryContract, StoredMessage, ToolCallRecord} from '../storage/types.js';
 import type {ApprovalDecision} from '../tools/types.js';
 import {ApprovalCoordinator} from '../tools/approval-coordinator.js';
@@ -75,6 +75,8 @@ export class ChatController {
   #systemBlocks: PromptBlock[] | null = null;
   #state = initialAppState();
   #active: ActiveRequest | null = null;
+  /** 生成中排队、等待注入模型的用户消息。 */
+  #pendingSteers: string[] = [];
   #shutdownPromise: Promise<void> | null = null;
   #closed = false;
   readonly #commands: CommandRegistry;
@@ -147,6 +149,45 @@ export class ChatController {
       if (!abortController.signal.aborted) this.#publish({...this.#state, requestStatus: 'failed', activeRunId: null, visibleError: errorMessage(error)});
     }).finally(() => { if (this.#active === active) this.#active = null; if (abortController.signal.aborted && this.#state.requestStatus === 'cancelling') this.#publish({...this.#state, requestStatus: 'idle', activeRunId: null}); });
     await active.promise;
+    // 回合结束后，把还没来得及注入的排队消息作为下一回合发出。
+    await this.#flushPendingSteers();
+  }
+  /**
+   * 生成中发送新消息：排队后由 runner 在当前回合的下一个边界注入，模型在同一回合里读到；
+   * 回合若先结束，剩余排队消息由 #flushPendingSteers 作为下一回合发出。
+   */
+  async steerMessage(text: string): Promise<void> {
+    if (this.#closed) throw new Error('控制器已经关闭');
+    if (!text.trim()) return;
+    if (this.#active === null) { await this.sendMessage(text); return; }
+    this.#pendingSteers.push(text);
+    this.#publish({...this.#state, queuedMessages: [...this.#pendingSteers]});
+  }
+  /** 回合结束后依次发出排队消息；每条都是独立回合，顺序保持不变。 */
+  async #flushPendingSteers(): Promise<void> {
+    while (this.#pendingSteers.length > 0 && !this.#closed) {
+      const next = this.#pendingSteers.shift()!;
+      this.#publish({...this.#state, queuedMessages: [...this.#pendingSteers]});
+      await this.sendMessage(next);
+    }
+  }
+  /**
+   * runner 每轮迭代调用：排队消息先落库再进入上下文，保证会话记录与模型看到的内容一致。
+   */
+  async #takePendingSteers(runId: string): Promise<ModelMessageItem[]> {
+    if (this.#pendingSteers.length === 0) return [];
+    const session = this.#state.session;
+    if (!session) return [];
+    const pending = this.#pendingSteers.splice(0, this.#pendingSteers.length);
+    const items: ModelMessageItem[] = [];
+    const stored: StoredMessage[] = [];
+    for (const content of pending) {
+      const message = await this.#repository.appendSteerMessage({runId, sessionId: session.id, content});
+      stored.push(message);
+      items.push({type: 'message', role: 'user', messageId: message.id, content: message.content});
+    }
+    this.#publish({...this.#state, messages: [...this.#state.messages, ...stored], queuedMessages: [...this.#pendingSteers]});
+    return items;
   }
   async #sendMessage(text: string, signal: AbortSignal): Promise<void> {
     if (signal.aborted) return;
@@ -221,8 +262,8 @@ export class ChatController {
     }
   }
   async #consume(runId: string, userMessageId: string, instruction: string, trigger: 'message' | 'do', context: AgentContext, signal: AbortSignal, reminders: string[]): Promise<void> {
-    const session = this.#state.session!; const projector = new AgentEventProjector(this.#repository, this.#state, state => this.#publish(state), this.#state.agentMode);
-    const generator = this.#runner.run({runId, userMessageId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders, limits: {maxIterations: this.#maxIterations, maxUnknownToolIterations: 3}, ...(this.#profile ? {contextManagement: {windowTokens: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), workspaceRoot: this.#workspaceRoot}} : {})}, signal);
+    const session = this.#state.session!; const projector = new AgentEventProjector(this.#repository, () => this.#state, state => this.#publish(state), this.#state.agentMode);
+    const generator = this.#runner.run({runId, userMessageId, sessionId: session.id, trigger, mode: this.#state.agentMode, instruction, context: [...context.items()], ...(this.#systemBlocks ? {system: this.#systemBlocks} : {}), reminders, steering: async () => this.#takePendingSteers(runId), limits: {maxIterations: this.#maxIterations, maxUnknownToolIterations: 3}, ...(this.#profile ? {contextManagement: {windowTokens: effectiveContextWindow(this.#profile.protocol, this.#profile.contextWindow), workspaceRoot: this.#workspaceRoot}} : {})}, signal);
     let finished = false;
     while (true) {
       const step = await generator.next();

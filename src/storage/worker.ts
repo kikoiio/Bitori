@@ -215,6 +215,15 @@ function execute(operation: StorageOperation): unknown {
       database.prepare(`UPDATE sessions SET updated_at=?, title=CASE WHEN ?=0 THEN ? ELSE title END WHERE id=?`).run(timestamp, count, title, operation.sessionId);
       return {run: agentRun(database.prepare('SELECT * FROM agent_runs WHERE id=?').get(operation.runId) as unknown as AgentRunRow), userMessage: message(database.prepare('SELECT * FROM messages WHERE id=?').get(userId) as unknown as MessageRow)};
     });
+    case 'append_steer_message': return transaction(() => {
+      // 生成中排队的用户消息：挂在当前 run 下，作为普通 user 消息进入会话上下文。
+      const current = database.prepare('SELECT * FROM sessions WHERE id=?').get(operation.sessionId) as SessionRow | undefined;
+      if (!current) throw new Error('会话不存在');
+      const timestamp = now(); const messageId = createId();
+      database.prepare(`INSERT INTO messages(id,session_id,role,content,display_content,thinking,status,error_code,error_message,input_tokens,output_tokens,credits,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?, 'user',?,?,'','completed',NULL,NULL,NULL,NULL,NULL,NULL,?,NULL,?,?,?,?)`).run(messageId, operation.sessionId, operation.content, operation.content, operation.runId, timestamp, timestamp, ownerId, process.pid);
+      database.prepare('UPDATE sessions SET updated_at=? WHERE id=?').run(timestamp, operation.sessionId);
+      return message(database.prepare('SELECT * FROM messages WHERE id=?').get(messageId) as unknown as MessageRow);
+    });
     case 'begin_agent_iteration': {
       const timestamp = now();
       database.prepare(`INSERT INTO messages(id,session_id,role,content,thinking,status,error_code,error_message,input_tokens,output_tokens,credits,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?,'assistant','','','streaming',NULL,NULL,NULL,NULL,NULL,NULL,?,?,?, ?,?,?)`).run(operation.messageId, operation.sessionId, operation.runId, operation.iteration, timestamp, timestamp, ownerId, process.pid);

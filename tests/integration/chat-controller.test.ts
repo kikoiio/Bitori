@@ -167,4 +167,80 @@ describe('ChatController', () => {
     });
     await restored.shutdown();
   }, 20_000);
+
+  it('生成中发送的新消息在同一回合的下一个边界注入模型', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);
+    writeFileSync(join(root, 'note.txt'), 'ok');
+    const requests: ChatRequest[] = [];
+    let controller: ChatController | null = null;
+    let queuedDuringRun: string[] = [];
+    const client: LLMClient = {async *streamChat(request): AsyncIterable<StreamEvent> {
+      requests.push(request);
+      if (requests.length === 1) {
+        yield {type: 'tool_call_start', internalId: 'c1', providerCallId: 'p1', position: 0, name: 'read_file'};
+        yield {type: 'tool_call_arguments_delta', internalId: 'c1', delta: '{"path":"note.txt"}'};
+        yield {type: 'tool_call_end', internalId: 'c1'};
+        yield {type: 'completed', finishReason: 'tool_calls'};
+        // 工具执行期间用户排队一条新消息：界面立刻看到“已排队”。
+        void controller!.steerMessage('顺便把 README 也改了');
+        queuedDuringRun = controller!.getState().queuedMessages;
+        return;
+      }
+      yield {type: 'text_delta', text: '好的'};
+      yield {type: 'completed', finishReason: 'stop'};
+    }};
+    const tools = createToolSystem(root);
+    const repository = new SessionRepository(join(root, 'db.sqlite'));
+    controller = new ChatController(client, repository, tools, undefined, {workspaceRoot: root});
+    await controller.initialize(profile);
+    await controller.sendMessage('先读一下 note.txt');
+    expect(queuedDuringRun).toEqual(['顺便把 README 也改了']);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.items?.some(item => item.type === 'message' && item.content === '顺便把 README 也改了')).toBe(true);
+    expect(controller.getState().queuedMessages).toEqual([]);
+    const sessionId = controller.getState().session?.id ?? '';
+    expect((await repository.getConversation(sessionId))?.messages.map(item => item.content)).toContain('顺便把 README 也改了');
+    await controller.shutdown();
+    await tools.close();
+  }, 20_000);
+
+  it('回合先结束时，排队消息作为下一回合发出', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);
+    const requests: ChatRequest[] = [];
+    let controller: ChatController | null = null;
+    const client: LLMClient = {async *streamChat(request): AsyncIterable<StreamEvent> {
+      requests.push(request);
+      if (requests.length === 1) {
+        yield {type: 'text_delta', text: '第一轮回答'};
+        yield {type: 'completed', finishReason: 'stop'};
+        void controller!.steerMessage('接着做第二件事');
+        return;
+      }
+      yield {type: 'text_delta', text: '第二轮回答'};
+      yield {type: 'completed', finishReason: 'stop'};
+    }};
+    controller = new ChatController(client, new SessionRepository(join(root, 'db.sqlite')), null, undefined, {workspaceRoot: root});
+    await controller.initialize(profile);
+    await controller.sendMessage('第一件事');
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.items?.some(item => item.type === 'message' && item.content === '接着做第二件事')).toBe(true);
+    expect(controller.getState().queuedMessages).toEqual([]);
+    await controller.shutdown();
+  }, 20_000);
+
+  it('空闲时发送新消息直接开始回合', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-controller-')); roots.push(root);
+    const requests: ChatRequest[] = [];
+    const client: LLMClient = {async *streamChat(request): AsyncIterable<StreamEvent> {
+      requests.push(request);
+      yield {type: 'text_delta', text: '好的'};
+      yield {type: 'completed', finishReason: 'stop'};
+    }};
+    const controller = new ChatController(client, new SessionRepository(join(root, 'db.sqlite')), null, undefined, {workspaceRoot: root});
+    await controller.initialize(profile);
+    await controller.steerMessage('直接开始');
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.items?.some(item => item.type === 'message' && item.content === '直接开始')).toBe(true);
+    await controller.shutdown();
+  }, 20_000);
 });
