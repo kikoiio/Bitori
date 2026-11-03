@@ -7,6 +7,7 @@ import {connect} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import Anthropic from '@anthropic-ai/sdk';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {startGateway} from '../../../evaluation/RSI/model_gateway.js';
 import type {GatewayHandle, GatewayOptions, GatewayProtocol} from '../../../evaluation/RSI/model_gateway.js';
@@ -64,6 +65,10 @@ function body(protocol: GatewayProtocol, extra: Record<string, unknown> = {}): R
   return {model: 'fixed-model', stream: true, ...(protocol === 'openai-responses' ? {input: [{role: 'user', content: '你好'}]} : {messages: [{role: 'user', content: '你好'}]}), ...extra};
 }
 
+function runCredential(protocol: GatewayProtocol): Record<string, string> {
+  return protocol === 'anthropic' ? {'x-api-key': runToken} : {authorization: `Bearer ${runToken}`};
+}
+
 async function fake(handler: (req: IncomingMessage, res: ServerResponse) => void): Promise<string> {
   const server = createServer(handler);
   servers.push(server);
@@ -92,13 +97,13 @@ async function start(config: GatewayOptions): Promise<GatewayHandle> {
 }
 
 async function post(gateway: GatewayHandle, protocol: GatewayProtocol, value = body(protocol)): Promise<{status: number; text: string; headers: Headers}> {
-  const response = await fetch(gateway.url + paths[protocol], {method: 'POST', headers: {authorization: `Bearer ${runToken}`, 'content-type': 'application/json'}, body: JSON.stringify(value)});
+  const response = await fetch(gateway.url + paths[protocol], {method: 'POST', headers: {...runCredential(protocol), 'content-type': 'application/json'}, body: JSON.stringify(value)});
   return {status: response.status, text: await response.text(), headers: response.headers};
 }
 
-async function rawPost(gateway: GatewayHandle, path: string, headers: Record<string, string | string[]>, payload = '{}', method = 'POST'): Promise<{status: number; text: string}> {
+async function rawPost(gateway: GatewayHandle, path: string, headers: Record<string, string | string[]>, payload = '{}', method = 'POST', protocol: GatewayProtocol = 'openai-chat'): Promise<{status: number; text: string}> {
   return new Promise((resolveResponse, reject) => {
-    const req = request(gateway.url, {method, path, headers: {authorization: `Bearer ${runToken}`, 'content-type': 'application/json', ...headers}}, res => {
+    const req = request(gateway.url, {method, path, headers: {...runCredential(protocol), 'content-type': 'application/json', ...headers}}, res => {
       let text = '';
       res.setEncoding('utf8'); res.on('data', (chunk: string) => { text += chunk; });
       res.on('end', () => resolveResponse({status: res.statusCode ?? 0, text}));
@@ -166,6 +171,31 @@ describe('trusted RSI model gateway', () => {
     expect(ledger).not.toContain('read_file');
     if (process.platform !== 'win32') expect((await stat(config.ledgerPath)).mode & 0o777).toBe(0o600);
     expect(reservationLine(ledger).reservedTokens).toBeGreaterThan(Buffer.byteLength(JSON.stringify(body(protocol))) + 100);
+  });
+
+  it('accepts the Anthropic SDK x-api-key run token and substitutes the upstream key', async () => {
+    let forwardedCredential: string | undefined;
+    const output = stream('anthropic');
+    const baseURL = await fake((req, res) => {
+      const credential = req.headers['x-api-key'];
+      forwardedCredential = typeof credential === 'string' ? credential : undefined;
+      void collect(req).then(() => {
+        res.writeHead(200, {'content-type': 'text/event-stream'});
+        res.end(output);
+      });
+    });
+    const gateway = await start(options(baseURL, 'anthropic'));
+    const client = new Anthropic({apiKey: runToken, baseURL: gateway.url, maxRetries: 0});
+    const events: string[] = [];
+    for await (const event of await client.messages.create({
+      model: 'fixed-model', max_tokens: 100, stream: true,
+      messages: [{role: 'user', content: 'hello'}],
+    })) events.push(event.type);
+    await settled(gateway);
+    expect(events).toContain('message_stop');
+    expect(forwardedCredential).toBe(apiKey);
+    expect(gateway.usage).toMatchObject({requests: 1, upstreamRequests: 1, completedRequests: 1, failedRequests: 0});
+    await gateway.close();
   });
 
   it.each(protocols)('keeps the entire UTF-8 reservation when %s final usage is absent', async protocol => {
@@ -254,6 +284,24 @@ describe('trusted RSI model gateway', () => {
     }
     expect(upstream).not.toHaveBeenCalled();
     expect(gateway.usage.requests).toBe(5);
+  });
+
+  it('requires Anthropic x-api-key credentials and rejects bearer or duplicate credentials', async () => {
+    const upstream = vi.fn((_req: IncomingMessage, res: ServerResponse) => res.end());
+    const gateway = await start(options(await fake(upstream), 'anthropic'));
+    for (const headers of [
+      {authorization: `Bearer ${runToken}`},
+      {'x-api-key': apiKey},
+      {'x-api-key': runToken, authorization: `Bearer ${runToken}`},
+      {'x-api-key': [runToken, runToken]},
+    ]) {
+      const result = await rawPost(gateway, paths.anthropic, headers, '{}', 'POST', 'anthropic');
+      expect([400, 401]).toContain(result.status);
+      expect(result.text).not.toContain(apiKey);
+      expect(result.text).not.toContain(runToken);
+    }
+    expect(upstream).not.toHaveBeenCalled();
+    expect(gateway.usage.requests).toBe(4);
   });
 
   it.each([

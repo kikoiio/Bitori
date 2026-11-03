@@ -96,14 +96,16 @@ function configuration(options: GatewayOptions): {endpoint: URL; apiKey: string;
   const apiKey = readSecret(upstream.apiKeyEnv);
   const token = readSecret(options.runTokenEnv);
   if (token.length < 32 || !/^[A-Za-z0-9._~+/-]+=*$/u.test(token) || token === apiKey) throw new Error('Invalid temporary run token.');
-  return {endpoint, apiKey, tokenHash: createHash('sha256').update(`Bearer ${token}`).digest()};
+  const credential = upstream.protocol === 'anthropic' ? token : `Bearer ${token}`;
+  return {endpoint, apiKey, tokenHash: createHash('sha256').update(credential).digest()};
 }
 
-function validateHeaders(req: IncomingMessage, tokenHash: Buffer, path: string): void {
-  const authorization = req.headers.authorization ?? '';
-  if (!timingSafeEqual(createHash('sha256').update(authorization).digest(), tokenHash)) throw new GatewayError(401, 'unauthorized');
+function validateHeaders(req: IncomingMessage, tokenHash: Buffer, path: string, protocol: GatewayProtocol): void {
+  const providedCredential = protocol === 'anthropic' ? req.headers['x-api-key'] : req.headers.authorization;
+  const credential = typeof providedCredential === 'string' ? providedCredential : '';
+  if (!timingSafeEqual(createHash('sha256').update(credential).digest(), tokenHash)) throw new GatewayError(401, 'unauthorized');
   if (req.method !== 'POST' || req.url !== path) throw new GatewayError(404, 'invalid_route');
-  const allowed = new Set(['authorization', 'host', 'content-type', 'content-length', 'accept', 'accept-encoding', 'accept-language', 'sec-fetch-mode', 'user-agent', 'connection', 'transfer-encoding', 'anthropic-version']);
+  const allowed = new Set(['host', 'content-type', 'content-length', 'accept', 'accept-encoding', 'accept-language', 'sec-fetch-mode', 'user-agent', 'connection', 'transfer-encoding', 'anthropic-version', protocol === 'anthropic' ? 'x-api-key' : 'authorization']);
   const seen = new Set<string>();
   for (let i = 0; i < req.rawHeaders.length; i += 2) {
     const name = req.rawHeaders[i]!.toLowerCase();
@@ -384,7 +386,7 @@ export async function startGateway(input: GatewayOptions): Promise<GatewayHandle
       if (closed || Date.now() >= limits.deadlineEpochMs) throw new GatewayError(504, 'deadline_exceeded');
       if (ledgerFailed) throw new GatewayError(503, 'ledger_unavailable');
       if (id > limits.maxRequests) throw new GatewayError(429, 'request_budget_exceeded');
-      validateHeaders(req, tokenHash, paths[protocol]);
+      validateHeaders(req, tokenHash, paths[protocol], protocol);
       const raw = await readBody(req, options.maxBodyBytes ?? 1024 * 1024, signal);
       const body = prepareBody(raw, options);
       if (body.length > (options.maxBodyBytes ?? 1024 * 1024)) throw new GatewayError(413, 'body_too_large');
