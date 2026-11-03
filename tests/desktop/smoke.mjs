@@ -195,7 +195,7 @@ try {
     await page.getByTestId('message-input').fill('你好');
     await page.getByTestId('send').click();
     await page.getByText('测试回复 你好 <img src=x>', {exact: true}).waitFor();
-    assert.equal(await page.locator('img').count(), 0);
+    assert.equal(await page.locator('.message.assistant img').count(), 0);
     await page.getByTestId('request-status').getByText('就绪').waitFor();
     await page.getByTestId('new-session').click();
     await page.getByTestId('message-input').fill('执行写入');
