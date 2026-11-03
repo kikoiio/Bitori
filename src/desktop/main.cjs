@@ -112,7 +112,8 @@ function checkedText(value, name, max = 100000) {
   return value;
 }
 function archiveBaseName(title) {
-  const safe = String(title || '会话').replace(/[\u0000-\u001f<>:"/\\|?*]/g, '_').trim().slice(0, 80);
+  const forbidden = new Set('<>:"/\\|?*');
+  const safe = Array.from(String(title || '会话'), character => character.charCodeAt(0) < 32 || forbidden.has(character) ? '_' : character).join('').trim().slice(0, 80);
   return safe || '会话';
 }
 function handle(channel, fn) {

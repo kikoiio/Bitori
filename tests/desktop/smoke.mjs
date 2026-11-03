@@ -304,16 +304,17 @@ try {
     await renameInput.evaluate(input => input.setSelectionRange(1, 3));
     const redrawState = await page.evaluate(async () => {
       const previousInput = document.querySelector('.session-rename-input');
-      if (!(previousInput instanceof HTMLInputElement)) throw new Error('重命名回归前置条件缺失');
+      if (previousInput?.tagName !== 'INPUT') throw new Error('重命名回归前置条件缺失');
       await window.bitori.send('重命名期间触发桌面状态刷新');
       await new Promise(resolve => setTimeout(resolve, 500));
       const nextInput = document.querySelector('.session-rename-input');
+      const isInput = nextInput?.tagName === 'INPUT';
       return {
         replaced: nextInput !== previousInput,
         focused: document.activeElement === nextInput,
-        value: nextInput instanceof HTMLInputElement ? nextInput.value : null,
-        selectionStart: nextInput instanceof HTMLInputElement ? nextInput.selectionStart : null,
-        selectionEnd: nextInput instanceof HTMLInputElement ? nextInput.selectionEnd : null,
+        value: isInput ? nextInput.value : null,
+        selectionStart: isInput ? nextInput.selectionStart : null,
+        selectionEnd: isInput ? nextInput.selectionEnd : null,
       };
     });
     assert.deepEqual(redrawState, {replaced: true, focused: true, value: '未提交草稿', selectionStart: 1, selectionEnd: 3});
