@@ -3,14 +3,14 @@ name: E2E LLM
 on:
   workflow_dispatch:
     inputs:
-      provider:
-        description: LLM provider
+      protocol:
+        description: 接口方言（与 LLM_BASE_URL 对应）
         required: false
-        default: openrouter
+        default: anthropic
         type: choice
-        options: [openrouter, groq]
+        options: [anthropic, openai-chat, openai-responses, qoder]
       model:
-        description: Model id, or __list__ to only list provider models
+        description: 覆盖 vars.LLM_MODEL（留空则用变量）
         required: false
         default: ''
 
@@ -35,31 +35,22 @@ jobs:
       - name: Build
         run: npm run build
 
-      # OpenRouter 免费档每天约 50 次请求；异常时先看日志，不要连续重跑消耗额度。
-      - name: List provider models
-        if: inputs.model == '__list__'
-        env:
-          LLM_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
-          LLM_API_KEY: ${{ (inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
-          LLM_MODEL: ${{ inputs.model }}
-        run: npx tsx tests/acceptance/e2e-openrouter.ts
-
-      # 统一验收脚本：真实编码任务(读 → pwd → 写 → 校验 → 回答)，证据脱敏后写入 evaluation/results/e2e-providers/。
+      # 凭据与端点统一走 LLM_* 三个变量；真实端点会按 protocol 拼路径
+      # （anthropic 由 SDK 拼成 <base_url>/v1/messages）。
       - name: Run real provider acceptance
-        if: inputs.model != '__list__'
         env:
-          E2E_API_KEY: ${{ (inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY) || secrets.OPENROUTER_LLM_API_KEY }}
-          E2E_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || 'https://openrouter.ai/api/v1' }}
-          E2E_MODEL: ${{ inputs.model || (inputs.provider == 'groq' && vars.GROQ_MODEL) || vars.OPENROUTER_MODEL }}
+          E2E_API_KEY: ${{ secrets.LLM_API_KEY }}
+          E2E_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          E2E_MODEL: ${{ inputs.model || vars.LLM_MODEL }}
           BITORI_E2E_PROVIDERS: '1'
-          BITORI_E2E_PROTOCOL: openai-chat
+          BITORI_E2E_PROTOCOL: ${{ inputs.protocol }}
           BITORI_E2E_MAX_TOKENS: '150000'
         run: npm run test:e2e:providers
 
       - uses: actions/upload-artifact@v4
-        if: always() && inputs.model != '__list__'
+        if: always()
         with:
-          name: e2e-evidence-${{ inputs.provider }}
+          name: e2e-evidence-${{ inputs.protocol }}
           path: evaluation/results/e2e-providers/
           if-no-files-found: ignore
           retention-days: 7

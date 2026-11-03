@@ -10,6 +10,32 @@
 
 用户级 `config.yaml` 可包含 `mcp_servers`；项目级同名文件只允许 `mcp_servers`，同名服务完整覆盖用户级服务。stdio 服务配置 `transport: stdio`、`command`，可选 `args` 和 `env`；HTTP 服务配置 `transport: http`、`url`，可选 `headers`。命令、参数、环境值、URL 和 header 引用的环境变量在加载时展开，缺失即报错；示例中的 HTTP URL 是占位符，不是可用服务。stdio 服务会执行配置的命令，HTTP 服务会接收发往它的数据；只启用可信服务，并先检查命令、地址和凭据。项目级扩展（MCP/Hooks）属于工作区自带内容：**未信任的工作区默认拒载**项目级 `.bitori/config.yaml` 的 MCP 与 `hooks.yaml`（启动时会在 warnings 中说明）。clone 的仓库确认后用 `bitori trust [path]` 登记（清单在 `~/.bitori/trusted-workspaces.json`，`--revoke` 撤销）；桌面选择工作区时的确认对话框会自动登记。`bitori doctor` 报告工作区信任状态。
 
+### 只用一组 LLM_* 变量（默认 profile）
+
+`LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 是模板里 `default` profile 用的连接参数，也是 CI 手动 E2E 工作流读的那三个变量。本地只要它们：
+
+```ini
+# ~/.bitori/.env
+LLM_API_KEY=<你的密钥>
+LLM_BASE_URL=https://api.scnet.cn/api/llm/anthropic
+LLM_MODEL=DeepSeek-V4.1-Flash-1017-Event
+```
+
+`~/.bitori/config.yaml` 里把 `default` 的 `protocol` 改成端点实际方言即可（这一项是字面量，不做变量展开）：
+
+```yaml
+profiles:
+  - name: default
+    protocol: anthropic
+    model: ${LLM_MODEL}
+    base_url: ${LLM_BASE_URL}
+    api_key: ${LLM_API_KEY}
+```
+
+Anthropic 兼容网关的 `base_url` 填接口根，SDK 自己拼 `/v1/messages`（填 `https://host/v1` 会变成 `/v1/v1/messages`）。OpenAI 兼容网关用 `protocol: openai-chat`，`base_url` 填到 `/v1` 为止。
+
+若想连 `config.yaml` 都不写协议，把它的 `profiles` 留空（`profiles: []`）并在 `.env` 追加 `LLM_PROTOCOL=anthropic`：此时变量组会自行派生出名为 `llm` 的 profile。注意 `default` profile 一旦引用了 `${LLM_API_KEY}`，同前缀的变量组就不再重复派生，所以两种写法只能选一种。
+
 ### 多个 Provider：只填 .env
 
 一个 Provider = `.env` 里一组同前缀变量，填完自动生效，`config.yaml` 不需要动：

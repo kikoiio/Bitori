@@ -112,7 +112,8 @@ function softExpand(value: string, environment: NodeJS.ProcessEnv): {resolved?: 
 /** <前缀>_API_KEY + <前缀>_MODEL（+ 可选 _BASE_URL/_PROTOCOL）自动派生 profile，用户只需要填 .env。 */
 const envGroupPattern = /^(.+)_(API_KEY|BASE_URL|MODEL|PROTOCOL)$/;
 const protocolBaseDefaults: Partial<Record<Protocol, string>> = {
-  anthropic: 'https://api.anthropic.com/v1',
+  // Anthropic SDK 自己拼 /v1/messages，base_url 只能是接口根，否则会变成 /v1/v1/messages。
+  anthropic: 'https://api.anthropic.com',
   'openai-chat': 'https://api.openai.com/v1',
   'openai-responses': 'https://api.openai.com/v1',
 };

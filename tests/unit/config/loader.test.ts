@@ -172,7 +172,7 @@ mcp_servers:
     });
     expect(multi.profiles.map(profile => profile.name)).toEqual(['anthropic', 'openrouter', 'qoder']);
     expect(multi.profiles.find(profile => profile.name === 'qoder')).toMatchObject({protocol: 'qoder', baseUrl: 'https://api.qoder.com.cn'});
-    expect(multi.profiles.find(profile => profile.name === 'anthropic')).toMatchObject({baseUrl: 'https://api.anthropic.com/v1'});
+    expect(multi.profiles.find(profile => profile.name === 'anthropic')).toMatchObject({baseUrl: 'https://api.anthropic.com'});
   });
 
   it('显式 profile 引用的变量组不重复派生；残组只提示不阻塞', () => {
