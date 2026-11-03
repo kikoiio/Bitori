@@ -16,6 +16,8 @@ export interface FileSnapshot {
   postHash: string;
   toolName: string;
   createdAt: number;
+  /** 同一时间戳内的记录顺序,保证撤销总能取到最近一次。 */
+  order?: number;
 }
 
 const PREVIEW_LIMIT = 1024 * 1024;
@@ -24,7 +26,18 @@ export function sha256Text(text: string): string {
   return createHash('sha256').update(text).digest('hex');
 }
 
+/**
+ * 亚毫秒单调时间戳。Date.now() 只有毫秒精度,同一毫秒里的两次写入无法区分先后,
+ * 撤销会从并列的快照里挑到旧的那一个并误判成"被外部修改"。这里用进程内单调时钟
+ * 保留亚毫秒精度,配合 record 的 order 序号保证排序严格。
+ */
+function now(): number {
+  return performance.timeOrigin + performance.now();
+}
+
 export class SnapshotStore {
+  /** 同一进程内单调递增的记录序号,用于时间戳相同时定序。 */
+  #order = 0;
   constructor(readonly directory: string, readonly workspaceRoot: string, private readonly maxKeep = 200) {}
 
   static forWorkspace(workspaceRoot: string): SnapshotStore {
@@ -45,7 +58,8 @@ export class SnapshotStore {
       preContent: input.preContent,
       postHash: sha256Text(input.postContent),
       toolName: input.toolName,
-      createdAt: Date.now(),
+      createdAt: now(),
+      order: ++this.#order,
     };
     await mkdir(this.directory, {recursive: true});
     await writeFile(join(this.directory, `${snapshot.id}.json`), JSON.stringify(snapshot), 'utf8');
@@ -64,7 +78,7 @@ export class SnapshotStore {
         if (parsed.workspaceRoot === this.workspaceRoot && isSafeTarget(parsed, this.workspaceRoot)) snapshots.push(parsed);
       } catch { /* 损坏的快照按不存在处理 */ }
     }
-    return snapshots.sort((a, b) => b.createdAt - a.createdAt);
+    return snapshots.sort((a, b) => b.createdAt - a.createdAt || (b.order ?? 0) - (a.order ?? 0));
   }
 
   /** path 省略时撤销全局最近一次,否则撤销该文件的最近一次。 */

@@ -1,5 +1,5 @@
 import {describe, expect, it, beforeAll, afterAll} from 'vitest';
-import {mkdtemp, readFile, writeFile, rm, stat} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, writeFile, rm, stat} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -67,6 +67,20 @@ describe('SnapshotStore 文件修改快照与撤销', () => {
     expect((await store.undo('multi.txt')).ok).toBe(true);
     expect(await readFile(file, 'utf8')).toBe('v1');
     expect((await store.undo('multi.txt')).ok).toBe(true);
+    expect(await readFile(file, 'utf8')).toBe('v0');
+  });
+
+  it('同一时间戳的快照按写入顺序撤销最近一次', async () => {
+    const directory = join(root, 'tie');
+    const tieStore = new SnapshotStore(directory, root);
+    const file = join(root, 'tie.txt');
+    await writeFile(file, 'v2', 'utf8');
+    await mkdir(directory, {recursive: true});
+    const base = {workspaceRoot: root, path: 'tie.txt', absolutePath: file, preContent: 'v0', toolName: 'edit_file', createdAt: 1000};
+    await writeFile(join(directory, 'first.json'), JSON.stringify({...base, id: 'first', postHash: sha256Text('v1'), order: 1}));
+    await writeFile(join(directory, 'second.json'), JSON.stringify({...base, id: 'second', postHash: sha256Text('v2'), order: 2}));
+    const result = await tieStore.undo('tie.txt');
+    expect(result.ok).toBe(true);
     expect(await readFile(file, 'utf8')).toBe('v0');
   });
 
