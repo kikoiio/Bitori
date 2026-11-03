@@ -13,6 +13,7 @@ import {mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, existsSync}
 import {join} from 'node:path';
 import {tmpdir, homedir} from 'node:os';
 import {createApplicationRuntime} from '../../src/app/runtime.js';
+import {inferProtocol} from '../../src/config/protocol.js';
 import {redactSecrets} from '../../src/config/secrets.js';
 import type {AppConfig, ProviderProfile, Protocol} from '../../src/config/types.js';
 
@@ -23,8 +24,15 @@ if (process.env['BITORI_E2E_PROVIDERS'] !== '1') {
   process.exit(2);
 }
 
-const protocol = (process.env['BITORI_E2E_PROTOCOL'] ?? 'qoder') as Protocol;
 const env = process.env;
+// 协议可以显式指定；不指定时按地址与密钥形状推断，和 ~/.bitori/config.yaml 的规则一致。
+const requestedProtocol = process.env['BITORI_E2E_PROTOCOL']?.trim();
+const protocol = (requestedProtocol === undefined || requestedProtocol === ''
+  ? inferProtocol({
+    baseUrl: env['E2E_BASE_URL'] ?? env['LLM_BASE_URL'] ?? '',
+    apiKey: env['E2E_API_KEY'] ?? env['LLM_API_KEY'] ?? '',
+  }).protocol
+  : requestedProtocol) as Protocol;
 // 变量优先级:E2E_*(显式)> 协议专用(OPENROUTER_* 用于 openai-chat)> 通用 LLM_*。
 const apiKey = env['E2E_API_KEY'] ?? (protocol === 'openai-chat' ? env['OPENROUTER_API_KEY'] : undefined) ?? env['LLM_API_KEY'] ?? '';
 const baseUrl = env['E2E_BASE_URL'] ?? (protocol === 'openai-chat' ? env['OPENROUTER_BASE_URL'] ?? 'https://openrouter.ai/api/v1' : undefined) ?? env['LLM_BASE_URL'] ?? '';

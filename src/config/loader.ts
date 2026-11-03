@@ -7,8 +7,9 @@ import {parse as parseYaml} from 'yaml';
 import {ZodError} from 'zod';
 import {ConfigurationError} from '../shared/errors.js';
 import {defaultUserConfigYaml, defaultUserEnv} from './defaults.js';
+import {inferProtocol, parseProtocolHint} from './protocol.js';
 import {normalizeThinking, parseConfig, parseProjectConfig} from './schema.js';
-import {effectiveContextWindow, protocols, type AppConfig, type McpServerConfig, type McpServerConfigSource, type Protocol, type ProviderProfile} from './types.js';
+import {effectiveContextWindow, protocols, type AppConfig, type McpServerConfig, type McpServerConfigSource, type Protocol, type ProtocolSource, type ProviderProfile, type ProviderProfileSource} from './types.js';
 
 export interface ConfigPaths {
   directory: string;
@@ -118,6 +119,29 @@ const protocolBaseDefaults: Partial<Record<Protocol, string>> = {
   'openai-responses': 'https://api.openai.com/v1',
 };
 
+/**
+ * 协议优先级：config.yaml 显式 > .env 的 <前缀>_PROTOCOL > 按 base_url 与密钥形状推断。
+ * 推断结论必须带依据，诊断命令会把它展示出来，用户随时可以在 config.yaml 写死覆盖。
+ */
+function resolveProtocol(
+  source: ProviderProfileSource,
+  connection: {baseUrl: string; apiKey: string},
+  environment: NodeJS.ProcessEnv,
+): {protocol: Protocol; source: ProtocolSource; reason: string} {
+  if (source.protocol !== undefined) {
+    return {protocol: source.protocol, source: 'config', reason: 'config.yaml 显式指定'};
+  }
+  const variable = source.api_key.slice(2, -1);
+  const prefix = variable.replace(/_API_KEY$/, '');
+  const hint = parseProtocolHint(environment[`${prefix}_PROTOCOL`]);
+  if (hint !== undefined) {
+    return {protocol: hint, source: 'env', reason: `.env 的 ${prefix}_PROTOCOL 指定`};
+  }
+  const guess = inferProtocol(connection);
+  const reason = guess.confidence === 'strong' ? guess.reason : `${guess.reason}；要换方言请在 config.yaml 写 protocol`;
+  return {protocol: guess.protocol, source: 'inferred', reason};
+}
+
 function deriveProfilesFromEnvironment(environment: NodeJS.ProcessEnv, explicit: ProviderProfile[]): {profiles: ProviderProfile[]; notes: string[]} {
   interface Group {key?: [string, string]; base?: [string, string]; model?: [string, string]; protocol?: [string, string]}
   const groups = new Map<string, Group>();
@@ -149,12 +173,21 @@ function deriveProfilesFromEnvironment(environment: NodeJS.ProcessEnv, explicit:
     // 显式 profile 已经引用了这个 key 变量：以 config.yaml 为准，不重复派生。
     if (explicitKeyVars.has(group.key[0])) continue;
     let protocol: Protocol = 'openai-chat';
+    let protocolSource: ProtocolSource = 'inferred';
+    let protocolReason = '未指定方言，按 OpenAI 兼容接口处理';
     if (group.protocol !== undefined) {
       if (!(protocols as readonly string[]).includes(group.protocol[1])) {
         notes.push(`变量组 ${prefix}_* 的 ${group.protocol[0]}=${group.protocol[1]} 不是支持的协议（${protocols.join(' | ')}），未派生`);
         continue;
       }
       protocol = group.protocol[1] as Protocol;
+      protocolSource = 'env';
+      protocolReason = `.env 的 ${group.protocol[0]} 指定`;
+    } else if (group.base !== undefined) {
+      // 地址形状能认出方言时按识别结果走，认不出才落到 OpenAI 兼容接口。
+      const guess = inferProtocol({baseUrl: group.base[1], apiKey: group.key[1]});
+      protocol = guess.protocol;
+      protocolReason = guess.confidence === 'strong' ? guess.reason : `${guess.reason}；要换方言请在 .env 写 ${prefix}_PROTOCOL`;
     }
     if (group.model === undefined) {
       // 只有 key 的散变量（如 GITHUB_API_KEY）太常见，沉默；像故意成组的才提示。
@@ -184,6 +217,8 @@ function deriveProfilesFromEnvironment(environment: NodeJS.ProcessEnv, explicit:
       baseUrl,
       apiKey: group.key[1],
       apiKeyVariable: group.key[0],
+      protocolSource,
+      protocolReason,
       thinking: {type: 'disabled'},
       contextWindow: effectiveContextWindow(protocol),
     });
@@ -247,15 +282,18 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
       const variable = source.api_key.slice(2, -1);
       const apiKey = environment[variable];
       // 缺失的 key/model/base_url 都先标记；真正使用该 profile 时 resolveProfileWithApiKey 会指名缺哪个变量。
+      const resolved = resolveProtocol(source, {baseUrl, apiKey: apiKey ?? ''}, environment);
       return {
         name: source.name,
-        protocol: source.protocol,
+        protocol: resolved.protocol,
         model,
         baseUrl,
         apiKey: apiKey === undefined ? '' : apiKey,
         apiKeyVariable: variable,
+        protocolSource: resolved.source,
+        protocolReason: resolved.reason,
         thinking: normalizeThinking(source.thinking),
-        contextWindow: effectiveContextWindow(source.protocol, source.context_window),
+        contextWindow: effectiveContextWindow(resolved.protocol, source.context_window),
         ...(missingVariables.length === 0 ? {} : {missingVariables}),
       };
     });

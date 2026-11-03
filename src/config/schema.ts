@@ -22,7 +22,8 @@ const thinkingSchema = z.union([
 
 const profileSchema = z.object({
   name: z.string().trim().min(1, 'name 不能为空'),
-  protocol: z.enum(protocols),
+  // protocol 可省略：loader 会按 base_url 与密钥形状推断接口方言。
+  protocol: z.enum(protocols).optional(),
   model: z.string().trim().min(1, 'model 不能为空'),
   base_url: z.string().trim().min(1, 'base_url 不能为空'),
   api_key: z.string().regex(environmentReference, 'api_key 必须完整使用 ${ENV_NAME} 引用'),
@@ -79,7 +80,8 @@ export const configSchema = z
         });
       }
       names.add(profile.name);
-      if (profile.protocol !== 'anthropic' && profile.thinking !== undefined && profile.thinking !== false) {
+      // protocol 省略时还没定下方言，等推断出来再谈 thinking 约束。
+      if (profile.protocol !== undefined && profile.protocol !== 'anthropic' && profile.thinking !== undefined && profile.thinking !== false) {
         context.addIssue({
           code: 'custom',
           message: 'thinking 只能用于 anthropic profile',

@@ -204,9 +204,58 @@ mcp_servers:
     // config.yaml 的模板只在 src/config/defaults.ts 维护，仓库不再保留副本，这里守住模板的可解析性与结构。
     const parsed = parseConfig(parseYaml(defaultUserConfigYaml));
     expect(parsed.profiles).toHaveLength(1);
-    expect(parsed.profiles[0]).toMatchObject({name: 'default', protocol: 'openai-chat', model: '${LLM_MODEL}', base_url: '${LLM_BASE_URL}', api_key: '${LLM_API_KEY}'});
+    expect(parsed.profiles[0]).toMatchObject({name: 'default', model: '${LLM_MODEL}', base_url: '${LLM_BASE_URL}', api_key: '${LLM_API_KEY}'});
+    // 模板不再写死协议：方言由 loader 按地址与密钥形状推断。
+    expect(parsed.profiles[0]?.protocol).toBeUndefined();
     // 比较内容而不是字节：Windows 检出若被转成 CRLF，实体文件与源码里的 \n 转义就不一致。
     expect(readFileSync('.env.example', 'utf8').replace(/\r\n/g, '\n')).toBe(defaultUserEnv);
+  });
+
+  it('协议优先级：config.yaml 显式 > .env 的 <前缀>_PROTOCOL > 按地址与密钥形状推断', () => {
+    const yaml = `profiles:
+  - name: local
+    model: \${LLM_MODEL}
+    base_url: \${LLM_BASE_URL}
+    api_key: \${LLM_API_KEY}
+`;
+    const anthropicEnv = {LLM_API_KEY: 'k', LLM_MODEL: 'm', LLM_BASE_URL: 'https://api.scnet.cn/api/llm/anthropic'};
+    const inferred = loadConfig(home(yaml, 'LLM_API_KEY=k\nLLM_MODEL=m\nLLM_BASE_URL=https://api.scnet.cn/api/llm/anthropic\n'), '', anthropicEnv);
+    expect(inferred.profiles[0]).toMatchObject({protocol: 'anthropic', protocolSource: 'inferred'});
+    expect(inferred.profiles[0]?.protocolReason).toContain('anthropic');
+
+    // 地址看不出方言时按 OpenAI 兼容兜底，并说明可以写死。
+    const openAiEnv = {LLM_API_KEY: 'k', LLM_MODEL: 'm', LLM_BASE_URL: 'https://host.invalid/v1'};
+    const fallback = loadConfig(home(yaml, 'LLM_API_KEY=k\nLLM_MODEL=m\nLLM_BASE_URL=https://host.invalid/v1\n'), '', openAiEnv);
+    expect(fallback.profiles[0]).toMatchObject({protocol: 'openai-chat', protocolSource: 'inferred'});
+    expect(fallback.profiles[0]?.protocolReason).toContain('config.yaml');
+
+    const pinned = loadConfig(home(`profiles:
+  - name: local
+    protocol: openai-responses
+    model: \${LLM_MODEL}
+    base_url: \${LLM_BASE_URL}
+    api_key: \${LLM_API_KEY}
+`, 'LLM_API_KEY=k\nLLM_MODEL=m\nLLM_BASE_URL=https://host.invalid/v1\n'), '', openAiEnv);
+    expect(pinned.profiles[0]).toMatchObject({protocol: 'openai-responses', protocolSource: 'config'});
+  });
+
+  it('.env 的 <前缀>_PROTOCOL 覆盖推断结果', () => {
+    const yaml = `profiles:
+  - name: local
+    model: \${LLM_MODEL}
+    base_url: \${LLM_BASE_URL}
+    api_key: \${LLM_API_KEY}
+`;
+    const root = home(yaml, 'LLM_API_KEY=k\nLLM_MODEL=m\nLLM_BASE_URL=https://host.invalid/v1\nLLM_PROTOCOL=anthropic\n');
+    const config = loadConfig(root, '', {LLM_API_KEY: 'k', LLM_MODEL: 'm', LLM_BASE_URL: 'https://host.invalid/v1', LLM_PROTOCOL: 'anthropic'});
+    expect(config.profiles[0]).toMatchObject({protocol: 'anthropic', protocolSource: 'env'});
+    expect(config.profiles[0]?.protocolReason).toContain('LLM_PROTOCOL');
+  });
+
+  it('变量组派生的 profile 同样按地址形状推断方言', () => {
+    const root = home('profiles: []\n', 'SCNET_API_KEY=k\nSCNET_MODEL=m\nSCNET_BASE_URL=https://api.scnet.cn/api/llm/anthropic\n');
+    const config = loadConfig(root, '', {SCNET_API_KEY: 'k', SCNET_MODEL: 'm', SCNET_BASE_URL: 'https://api.scnet.cn/api/llm/anthropic'});
+    expect(config.profiles[0]).toMatchObject({name: 'scnet', protocol: 'anthropic', protocolSource: 'inferred'});
   });
 
   it('缺失文件、变量和未知 profile 给出安全错误', () => {

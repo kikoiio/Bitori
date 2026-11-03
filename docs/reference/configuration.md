@@ -21,20 +21,32 @@ LLM_BASE_URL=https://api.scnet.cn/api/llm/anthropic
 LLM_MODEL=DeepSeek-V4.1-Flash-1017-Event
 ```
 
-`~/.bitori/config.yaml` 里把 `default` 的 `protocol` 改成端点实际方言即可（这一项是字面量，不做变量展开）：
+`~/.bitori/config.yaml` 不用写 `protocol`——协议会按地址与密钥形状自动识别：
 
 ```yaml
 profiles:
   - name: default
-    protocol: anthropic
     model: ${LLM_MODEL}
     base_url: ${LLM_BASE_URL}
     api_key: ${LLM_API_KEY}
 ```
 
-Anthropic 兼容网关的 `base_url` 填接口根，SDK 自己拼 `/v1/messages`（填 `https://host/v1` 会变成 `/v1/v1/messages`）。OpenAI 兼容网关用 `protocol: openai-chat`，`base_url` 填到 `/v1` 为止。
+识别规则按信号强度排列（`src/config/protocol.ts`）：
 
-若想连 `config.yaml` 都不写协议，把它的 `profiles` 留空（`profiles: []`）并在 `.env` 追加 `LLM_PROTOCOL=anthropic`：此时变量组会自行派生出名为 `llm` 的 profile。注意 `default` profile 一旦引用了 `${LLM_API_KEY}`，同前缀的变量组就不再重复派生，所以两种写法只能选一种。
+| 信号 | 结论 |
+|---|---|
+| 密钥以 `pt-` 开头 | `qoder`（Qoder PAT 形状） |
+| 地址含 `qoder` | `qoder` |
+| 地址含 `anthropic` 或 `claude` | `anthropic` |
+| 地址含 `/responses` | `openai-responses` |
+| 地址含 `chat/completions` | `openai-chat` |
+| 其它 | `openai-chat`（兜底，最常见的 OpenAI 兼容接口） |
+
+兜底是**弱推断**：`bitori doctor` 会写明"按最常见的 OpenAI 兼容接口处理"，地址看不出方言时应当手工指定。协议优先级是：`config.yaml` 里显式写 `protocol:` > `.env` 里同前缀的 `<前缀>_PROTOCOL` > 上述推断。`bitori doctor` 的「协议 <name>」一行会显示当前用的方言与依据。
+
+Anthropic 兼容网关的 `base_url` 填接口根，SDK 自己拼 `/v1/messages`（填 `https://host/v1` 会变成 `/v1/v1/messages`）。OpenAI 兼容网关的 `base_url` 填到 `/v1` 为止。
+
+若想连 `config.yaml` 都不写 profile，把它的 `profiles` 留空（`profiles: []`）：此时变量组会自行派生出名为 `llm` 的 profile，协议同样按上面规则识别。注意 `default` profile 一旦引用了 `${LLM_API_KEY}`，同前缀的变量组就不再重复派生，所以两种写法只能选一种。
 
 ### 多个 Provider：只填 .env
 

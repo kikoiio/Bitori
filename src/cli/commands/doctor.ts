@@ -19,7 +19,8 @@ export async function buildDoctorChecks(options: {profile?: string; json: boolea
   let config: AppConfig | null = null;
   try {
     config = loadConfig(undefined, workspace);
-    checks.push({name: '配置解析', status: 'ok', detail: `${config.profiles.length} 个 profile`});
+    const summary = config.profiles.map(profile => `${profile.name}·${profile.protocol}`).join(' ');
+    checks.push({name: '配置解析', status: 'ok', detail: `${config.profiles.length} 个 profile：${summary}`});
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     checks.push({name: '配置解析', status: 'fail', detail: message});
@@ -30,6 +31,8 @@ export async function buildDoctorChecks(options: {profile?: string; json: boolea
     checks.push({name: 'profile 选择', status: 'fail', detail: `找不到 profile：${options.profile}(可用:${config.profiles.map(p => p.name).join(', ') || '无'})`});
   }
   for (const profile of profiles) {
+    // 协议是写死的还是推断出来的，必须让用户看见；猜错了要能一眼发现。
+    checks.push({name: `协议 ${profile.name}`, status: 'ok', detail: `${profile.protocol} · ${profile.protocolReason ?? 'config.yaml 显式指定'}`});
     if (profile.apiKey.length === 0) {
       checks.push({name: `凭据 ${profile.name}`, status: 'fail', detail: `请在 .env 中填写 ${profile.apiKeyVariable ?? 'API key'}`});
       continue;

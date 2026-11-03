@@ -21,7 +21,8 @@ export type ThinkingConfig =
 /** 配置文件刚解析完成、环境变量引用仍待展开时的 profile。 */
 export interface ProviderProfileSource {
   name: string;
-  protocol: Protocol;
+  /** 省略时按 base_url 与密钥形状推断接口方言。 */
+  protocol?: Protocol;
   model: string;
   base_url: string;
   api_key: string;
@@ -29,6 +30,9 @@ export interface ProviderProfileSource {
   /** token 上限；未配置时按协议默认值处理。 */
   context_window?: number;
 }
+
+/** 协议是怎么定下来的：配置显式、环境变量指定，还是按形状推断。 */
+export type ProtocolSource = 'config' | 'env' | 'inferred';
 
 /** 完成校验、密钥替换和字段标准化后，应用实际使用的 profile。 */
 export interface ProviderProfile {
@@ -39,6 +43,10 @@ export interface ProviderProfile {
   apiKey: string;
   /** config.yaml 中 api_key 引用的环境变量名，供缺 key 时报错。 */
   apiKeyVariable?: string;
+  /** 协议来源；诊断命令据此说明是写死的还是推断的。 */
+  protocolSource?: ProtocolSource;
+  /** 推断或指定协议的依据，展示给用户核对。 */
+  protocolReason?: string;
   thinking: ThinkingConfig;
   /** 未配置时由 effectiveContextWindow 给出协议默认值。 */
   contextWindow?: number;

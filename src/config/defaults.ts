@@ -5,7 +5,9 @@ export const defaultUserConfigYaml = `# 连接参数只写在同目录 .env。pr
 # https://api.qoder.com.cn 或 https://api.qoder.com，model 可用展示名或官方 id）。
 profiles:
   - name: default
-    protocol: openai-chat
+    # protocol 可省略：按 base_url 与密钥形状自动识别接口方言
+    # （anthropic / openai-chat / openai-responses / qoder）。
+    # 要写死就填 protocol: <方言>，或在 .env 里加 LLM_PROTOCOL。
     model: \${LLM_MODEL}
     base_url: \${LLM_BASE_URL}
     api_key: \${LLM_API_KEY}
@@ -47,9 +49,11 @@ export const defaultUserEnv = `# Bitori 密钥文件：一个 Provider = 一组�
 # 不完整的变量组会被跳过并在 bitori doctor 中列明缺哪一项；config.yaml 显式定义的 profile 优先。
 
 # default profile（config.yaml 模板）使用的连接参数；不使用它可以留空：
-# 协议（anthropic / openai-chat / openai-responses / qoder）在 config.yaml 里写死；
+# 协议默认按 base_url 与密钥形状自动识别；要写死就填 LLM_PROTOCOL=anthropic
+# （anthropic / openai-chat / openai-responses / qoder），或在 config.yaml 里写 protocol。
 # Anthropic 兼容网关的 base_url 填接口根即可，SDK 自己拼 /v1/messages。
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
+LLM_PROTOCOL=
 `;

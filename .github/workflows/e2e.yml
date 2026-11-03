@@ -4,11 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       protocol:
-        description: 接口方言（与 LLM_BASE_URL 对应）
+        description: 接口方言（留空则按地址与密钥形状自动识别）
         required: false
-        default: anthropic
-        type: choice
-        options: [anthropic, openai-chat, openai-responses, qoder]
+        default: ''
+        type: string
       model:
         description: 覆盖 vars.LLM_MODEL（留空则用变量）
         required: false

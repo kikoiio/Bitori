@@ -35,6 +35,8 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=qoder npm run test:e2e:providers
 BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:providers   # 需要 OPENROUTER_API_KEY 或 OPENAI_* 凭据
 ```
 
+`BITORI_E2E_PROTOCOL` 可以省略：此时按 `LLM_BASE_URL` 与密钥形状推断方言，与 `~/.bitori/config.yaml` 的规则一致；凭据仍从 `~/.bitori/.env` 读取。
+
 脚本在临时工作区跑“读取 → pwd → 编辑 → 校验 → 回答”的完整编码任务，断言工具链、diff、回复与用量（tokens 或 credits 至少其一真实非零），证据写入 `evaluation/results/e2e-providers/`（自动脱敏，日志不打印密钥）。`BITORI_E2E_PRESET=fix-test|add-test|refactor` 另跑「修复失效测试 / 补测试 / 小重构」三类真实编码场景（2026-11-01 全部用 Qoder 通过）。旧的 `tests/acceptance/e2e-openrouter.ts` 保留可用。
 
 三种协议都已有真实闭环证据：Qoder 见 `2026-11-01-qoder*.json`（credits 计费），OpenAI 兼容协议见 `2026-11-03-openai-chat.json`（Groq `openai/gpt-oss-120b`，token 计费），Anthropic 兼容网关见 `2026-11-03-anthropic.json`。没有本地凭据时，用手动 E2E 工作流跑同一个脚本：它读 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 三个变量，协议在运行时选择，证据目录作为 artifact 上传（保留 7 天），下载后按同样格式归档到 `evaluation/results/e2e-providers/`。

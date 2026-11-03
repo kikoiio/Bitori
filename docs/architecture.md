@@ -39,7 +39,7 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 
 ## 诊断、信任与安全边界
 
-`src/diagnostics/connection.ts` 用各协议的 `/models` 端点做真实连接探测，把 DNS/超时/401/404/协议不匹配/模型不存在归入 `ProviderErrorCode`；`bitori doctor` 复用同一探测输出配置、凭据、工作区与模型清单（永不打印密钥值）。工作区信任清单在 `~/.bitori/trusted-workspaces.json`，由 `bitori trust`、桌面信任对话框与 doctor 检查共同维护。文件修改撤销依赖 `src/tools/snapshots.ts`：edit/write 提交前记录改前内容，撤销要求当前内容仍等于 Bitori 写入结果（被外部修改则拒绝覆盖）；快照按写入时间排序，同一毫秒内的多次写入也能定位到最近一次。撤销目标由工作区相对路径推导而非快照里记录的绝对路径——同一文件在不同平台可能被写成 8.3 短名、展开后的符号链接路径或不同大小写，比较绝对路径会把合法快照误判成工作区之外。威胁模型、控制、验证证据与已知残留风险记录见 [安全模型与审计](reference/security.md)。
+`src/diagnostics/connection.ts` 用各协议的 `/models` 端点做真实连接探测，把 DNS/超时/401/404/协议不匹配/模型不存在归入 `ProviderErrorCode`；`bitori doctor` 复用同一探测输出配置、凭据、工作区与模型清单（永不打印密钥值）。接口方言可省略：`src/config/protocol.ts` 按密钥形状（Qoder PAT 的 `pt-` 前缀）与地址关键词（anthropic/claude、responses、chat/completions）推断，认不出时兜底为最常见的 OpenAI 兼容接口并标记为弱推断；优先级是 `config.yaml` 显式 > `.env` 的 `<前缀>_PROTOCOL` > 推断，doctor 的「协议」一项会显示结论与依据。工作区信任清单在 `~/.bitori/trusted-workspaces.json`，由 `bitori trust`、桌面信任对话框与 doctor 检查共同维护。文件修改撤销依赖 `src/tools/snapshots.ts`：edit/write 提交前记录改前内容，撤销要求当前内容仍等于 Bitori 写入结果（被外部修改则拒绝覆盖）；快照按写入时间排序，同一毫秒内的多次写入也能定位到最近一次。撤销目标由工作区相对路径推导而非快照里记录的绝对路径——同一文件在不同平台可能被写成 8.3 短名、展开后的符号链接路径或不同大小写，比较绝对路径会把合法快照误判成工作区之外。威胁模型、控制、验证证据与已知残留风险记录见 [安全模型与审计](reference/security.md)。
 
 ## 意图与实现状态
 
