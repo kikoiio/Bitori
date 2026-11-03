@@ -23,7 +23,7 @@ export async function isFixtureRunning(pid: number): Promise<boolean> {
     // 容器的 PID 1 不一定及时回收孤儿僵尸；僵尸已经不能执行代码或持有管道。
     try { return !(await readFile(`/proc/${String(pid)}/stat`, 'utf8')).includes(') Z'); }
     catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;
+      if (error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'ESRCH')) return false;
       throw error;
     }
   }

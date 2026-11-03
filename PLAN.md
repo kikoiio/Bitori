@@ -66,6 +66,7 @@
 - [再一次桌面复验 run 41672493312](https://github.com/kikoiio/Bitori/actions/runs/41672493312) 已运行到剪贴板粘贴预览，并确认功能显示名为 `clipboard.png`；测试误将它与文件选择入口的 `icon.png` 等同。现已修正该断言，桌面/打包完整复验待运行。
 - [桌面复验 run 41672961793](https://github.com/kikoiio/Bitori/actions/runs/41672961793) 已通过剪贴板写入/读取、图片发送和导出，失败在导入验证唯一选择器匹配两条图片消息。改为精确等待两张导入图片后重跑。
 - [桌面复验 run 41673485851](https://github.com/kikoiio/Bitori/actions/runs/41673485851) 已通过图片粘贴、纯图片发送、图片导出/导入和两条附件恢复；后续模型 smoke 的 Provider fixture 未列出配置默认模型 `test-model`，按实现预期没有显示不可用默认模型的选择项。现将默认模型加入可用列表，重跑余下审批和打包验收。
+- [桌面复验 run 41674058906](https://github.com/kikoiio/Bitori/actions/runs/41674058906) 在补入默认模型的 fixture 后仍未显示回退选项，根因是连接探测只标准化配置模型名、未对比标准化 Provider 返回的 ID；修复双侧规范化并添加单测。同期三平台 run 41674024320 的 Ubuntu 还暴露 `/proc/<pid>/stat` 读取进程刚退出时的 `ESRCH` 竞态，fixture 清理现已按进程不存在处理，完整 Check 待复验。
 - 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前实现改为会话 ID 作用域，引擎与 AgentRunner 回归测试通过，桌面跨会话审批 smoke 也在 run 41637023628 通过。
 - 用户于 2026-11-03 取消云同步；决定见 [ADR 0001](docs/decisions/0001-cloud-sync-out-of-scope.md)。多模态、会话导入和自动断点续跑已纳入当前首版范围，具体状态见下表。
 - 用户于 2026-11-03 接受安全文档列出的五项当前残留风险；决定见 [ADR 0002](docs/decisions/0002-accept-current-security-residual-risks.md)。

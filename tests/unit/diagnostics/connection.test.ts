@@ -43,6 +43,10 @@ describe('probeProfile', () => {
     expect(result.modelAvailable).toBe(true);
     expect(result.models?.length).toBeGreaterThan(5);
   });
+  it('模型 ID 与配置名以相同规则忽略连接符', async () => {
+    const result = await probeProfile(profile('openai-chat', 'https://example.test', 'test-model'), () => jsonResponse({data: [{id: 'test-model'}]}));
+    expect(result.modelAvailable).toBe(true);
+  });
   it('配置的模型不在列表 → modelAvailable false 并给出指引', async () => {
     const catalog = qoderFixtureJson('models.json');
     const result = await probeProfile(profile('qoder', 'https://api.qoder.com.cn', 'GPT-99'), () => jsonResponse(catalog));

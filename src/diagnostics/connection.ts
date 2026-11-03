@@ -60,6 +60,10 @@ function rowToModel(row: ModelRow): RemoteModel | null {
   return {id, ...(displayName === undefined ? {} : {displayName}), enabled};
 }
 
+function normalizeModelId(value: string): string {
+  return value.toLowerCase().replace(/[\s._-]+/g, '');
+}
+
 /** 真实网络探测:区分 DNS/超时/401/404/协议不兼容/模型不存在,全程可安全展示(不含密钥)。 */
 export async function probeProfile(profile: ProviderProfile, fetchImpl: typeof fetch = fetch, timeoutMs = 10_000): Promise<ProbeResult> {
   const base: Omit<ProbeResult, 'ok' | 'latencyMs'> = {profileName: profile.name, protocol: profile.protocol, model: profile.model};
@@ -88,8 +92,9 @@ export async function probeProfile(profile: ProviderProfile, fetchImpl: typeof f
     const models = rows.map(rowToModel).filter((model): model is RemoteModel => model !== null);
     if (models.length === 0) return {...base, latencyMs: Date.now() - started, ok: true, note: '连接成功,但该端点不提供可用模型列表'};
     const wanted = profile.model.trim();
-    const folded = wanted.toLowerCase().replace(/[\s._-]+/g, '');
-    const modelAvailable = wanted === '' ? undefined : models.some(model => model.enabled && (model.id.toLowerCase() === folded || (model.displayName ?? '').toLowerCase().replace(/[\s._-]+/g, '') === folded));
+    const folded = normalizeModelId(wanted);
+    const modelAvailable = wanted === '' ? undefined : models.some(model => model.enabled
+      && (normalizeModelId(model.id) === folded || normalizeModelId(model.displayName ?? '') === folded));
     const result: ProbeResult = {...base, latencyMs: Date.now() - started, ok: true, models};
     if (modelAvailable !== undefined) {
       result.modelAvailable = modelAvailable;
