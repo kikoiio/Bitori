@@ -1,0 +1,50 @@
+{
+  "at": "2026-11-03T03:59:21.905Z",
+  "preset": "loop",
+  "protocol": "openai-chat",
+  "model": "openai/gpt-oss-120b",
+  "status": "idle",
+  "stopReason": "natural_completion",
+  "iterations": 7,
+  "toolCalls": [
+    {
+      "name": "read_file",
+      "approval": "denied",
+      "execution": "skipped"
+    },
+    {
+      "name": "read_file",
+      "approval": "not_required",
+      "execution": "succeeded"
+    },
+    {
+      "name": "run_command",
+      "approval": "approved",
+      "execution": "succeeded"
+    },
+    {
+      "name": "write_file",
+      "approval": "denied",
+      "execution": "skipped"
+    },
+    {
+      "name": "write_file",
+      "approval": "approved",
+      "execution": "succeeded"
+    },
+    {
+      "name": "run_command",
+      "approval": "approved",
+      "execution": "succeeded"
+    }
+  ],
+  "usage": {
+    "inputTokens": 15570,
+    "outputTokens": 479
+  },
+  "reply": "E2E DONE",
+  "planFileMatches": true,
+  "budgetExceeded": false,
+  "visibleError": null,
+  "passed": true
+}

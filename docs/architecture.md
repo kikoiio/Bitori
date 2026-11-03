@@ -1,6 +1,6 @@
 # 当前架构
 
-核对日期：2026-10-27。以下是当前实现的代码导航与主要数据路径，非完整依赖图；产品意图见 [项目意图](intent.md)。
+核对日期：2026-11-02。以下是当前实现的代码导航与主要数据路径，非完整依赖图；产品意图见 [项目意图](intent.md)。
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 
 ## 诊断、信任与安全边界
 
-`src/diagnostics/connection.ts` 用各协议的 `/models` 端点做真实连接探测，把 DNS/超时/401/404/协议不匹配/模型不存在归入 `ProviderErrorCode`；`bitori doctor` 复用同一探测输出配置、凭据、工作区与模型清单（永不打印密钥值）。工作区信任清单在 `~/.bitori/trusted-workspaces.json`，由 `bitori trust`、桌面信任对话框与 doctor 检查共同维护。文件修改撤销依赖 `src/tools/snapshots.ts`：edit/write 提交前记录改前内容，撤销要求当前内容仍等于 Bitori 写入结果（被外部修改则拒绝覆盖）。威胁模型、控制、验证证据与已知残留风险记录见 [安全模型与审计](reference/security.md)。
+`src/diagnostics/connection.ts` 用各协议的 `/models` 端点做真实连接探测，把 DNS/超时/401/404/协议不匹配/模型不存在归入 `ProviderErrorCode`；`bitori doctor` 复用同一探测输出配置、凭据、工作区与模型清单（永不打印密钥值）。工作区信任清单在 `~/.bitori/trusted-workspaces.json`，由 `bitori trust`、桌面信任对话框与 doctor 检查共同维护。文件修改撤销依赖 `src/tools/snapshots.ts`：edit/write 提交前记录改前内容，撤销要求当前内容仍等于 Bitori 写入结果（被外部修改则拒绝覆盖）；快照按写入时间排序，同一毫秒内的多次写入也能定位到最近一次。威胁模型、控制、验证证据与已知残留风险记录见 [安全模型与审计](reference/security.md)。
 
 ## 意图与实现状态
 
@@ -49,8 +49,8 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 | 桌面工作台 | 已实现 | `src/desktop/`；Claude Desktop 风格深色布局、斜杠命令、流式工具卡片与 `Ctrl+/-` 页面缩放。edit/write 卡片默认展开行级 diff（与 TUI 同语义）并提供撤销按钮；审批为一次/本会话/永久/拒绝四选项（按钮 + Y/S/P/N）；模型菜单含 Provider 模型列表与连接测试；会话支持搜索、重命名、两步删除。开发入口与打包形态由 `tests/desktop/smoke.mjs` 覆盖。 |
 | 多轮工具、Plan/Do、权限、MCP | 已实现 | `src/agent/`、`src/tools/`、`src/mcp/`；命令和 MCP 不构成操作系统沙箱。 |
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
-| 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。 |
+| 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。Qoder（Cloud Agents，credits 计费）与 OpenAI 兼容协议（Groq `openai/gpt-oss-120b`，token 计费）已各跑通一次真实编码任务闭环，脱敏证据见 `evaluation/results/e2e-providers/`；统一验收脚本 `npm run test:e2e:providers` 可本地或由手动 E2E 工作流运行。 |
 | 桌面图形应用 | Linux 初版 | `src/desktop/` 提供 Electron 界面；Linux CI 验证开发入口、会话与审批及打包后启动。其他桌面平台和真实模型需另行验收。打包路径见 [开发与测试](reference/development.md)。 |
 | 多模态、云同步、会话导入、自动断点续跑 | 当前不支持 | 是否纳入后续版本尚未确定。 |
 
-状态依据 2026-10-27 的代码和验证记录，其中终端工具展示于 2026-10-30 更新；真实端点与平台验收须单独核实。
+状态依据 2026-11-02 的代码和验证记录，其中终端工具展示于 2026-10-30 更新；真实端点与平台验收须单独核实。

@@ -35,6 +35,8 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:provider
 
 脚本在临时工作区跑“读取 → pwd → 编辑 → 校验 → 回答”的完整编码任务，断言工具链、diff、回复与用量（tokens 或 credits 至少其一真实非零），证据写入 `evaluation/results/e2e-providers/`（自动脱敏，日志不打印密钥）。`BITORI_E2E_PRESET=fix-test|add-test|refactor` 另跑「修复失效测试 / 补测试 / 小重构」三类真实编码场景（2026-11-01 全部用 Qoder 通过）。旧的 `tests/acceptance/e2e-openrouter.ts` 保留可用。
 
+两种协议都已有真实闭环证据：Qoder 见 `2026-11-01-qoder*.json`（credits 计费），OpenAI 兼容协议见 `2026-11-03-openai-chat.json`（Groq `openai/gpt-oss-120b`，token 计费）。没有本地凭据时，用手动 E2E 工作流跑同一个脚本：选择供应商与模型，证据目录作为 artifact 上传（保留 7 天），下载后按同样格式归档到 `evaluation/results/e2e-providers/`。
+
 Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-capture.ts --out /tmp/qoder-capture`（录制 busy 409、版本冲突 409、Last-Event-ID 重连、内置工具 requires_action、credits 用量等），再 `npx tsx tests/acceptance/sanitize-qoder-capture.ts` 脱敏输出到 `tests/fixtures/streams/qoder/`。`tests/integration/qoder-events.test.ts` 逐帧回放这些真实事件。
 
 桌面冒烟（开发入口）：`npm run build && HOME=<隔离目录> xvfb-run -a node tests/desktop/smoke.mjs`，覆盖会话/审批四选项/diff/撤销/模型列表/会话搜索重命名删除；打包形态：`npm run desktop:package` 后用 `BITORI_PACKAGED=1` 运行同一脚本，要求 `~/.bitori` 在测试 HOME 中不存在。
@@ -76,7 +78,7 @@ Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-
 |---|---|---|
 | [Check](../../.github/workflows/check.yml) | push 到 `master` 或 `desktop/**`、所有 PR、手动；三平台执行 `npm run check` | 未声明模型 secrets 或显式写权限。 |
 | [Linux desktop](../../.github/workflows/desktop.yml) | push 到 `desktop/**`、所有 PR、手动；模拟服务冒烟、打包及 `out/desktop/` 包启动 | 未调用真实模型；上传 7 天 AppImage/deb 与截图 artifact。 |
-| [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选择供应商和模型，`__list__` 只列模型 | 使用所选 `OPENROUTER_LLM_API_KEY` 或 `GROQ_LLM_API_KEY`，模型来自输入或对应 `OPENROUTER_MODEL` / `GROQ_MODEL` vars；会向供应商发送请求。 |
+| [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选择供应商和模型，`__list__` 只列模型 | 使用所选 `OPENROUTER_LLM_API_KEY` 或 `GROQ_LLM_API_KEY`，模型来自输入或对应 `OPENROUTER_MODEL` / `GROQ_MODEL` vars；跑统一验收脚本 `npm run test:e2e:providers`（`BITORI_E2E_PROTOCOL=openai-chat`），证据目录作为 artifact 上传保留 7 天；会向供应商发送请求。 |
 | [SWE-bench Lite development](../../.github/workflows/swe-bench-lite.yml) | 手动运行单题或 23 题开发集；见 [评测说明](../../evaluation/README.md) | 使用所选模型供应商的 secret 和 model var；向供应商发送公开任务内容，上传安全证据白名单和汇总 artifact。 |
 | [RSI smoke](../../.github/workflows/rsi.yml) | 当前暂停；恢复后手动运行受控单题 RSI smoke；默认分支代码、完整基线 SHA 和确认短语 | 使用 `XUNFEI_LLM_API_KEY`、`XUNFEI_OPENAI_RESPONSE_URL` 和 `XUNFEI_MODEL`；向讯飞发送第 0 题内容，上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，不上传 gold、凭据、worktree 或构建产物。 |
 
