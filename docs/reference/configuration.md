@@ -44,7 +44,7 @@ profiles:
 
 兜底是**弱推断**：`bitori doctor` 会写明"按最常见的 OpenAI 兼容接口处理"，地址看不出方言时应当手工指定。协议优先级是：`config.yaml` 里显式写 `protocol:` > `.env` 里同前缀的 `<前缀>_PROTOCOL` > 上述推断。`bitori doctor` 的「协议 <name>」一行会显示当前用的方言与依据。
 
-Anthropic 兼容网关的 `base_url` 填接口根，SDK 自己拼 `/v1/messages`（填 `https://host/v1` 会变成 `/v1/v1/messages`）。OpenAI 兼容网关的 `base_url` 填到 `/v1` 为止。
+Anthropic 兼容网关的 `base_url` 填接口根，SDK 自己拼 `/v1/messages`（填 `https://host/v1` 会变成 `/v1/v1/messages`）；`bitori doctor` 的模型列表同样取自 `{base_url}/v1/models`，并按官方 SDK 的方式用 `x-api-key` 认证。OpenAI 兼容网关的 `base_url` 填到 `/v1` 为止，模型列表取自 `{base_url}/models`，用 `Authorization: Bearer`。
 
 若想连 `config.yaml` 都不写 profile，把它的 `profiles` 留空（`profiles: []`）：此时变量组会自行派生出名为 `llm` 的 profile，协议同样按上面规则识别。注意 `default` profile 一旦引用了 `${LLM_API_KEY}`，同前缀的变量组就不再重复派生，所以两种写法只能选一种。
 
