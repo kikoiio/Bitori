@@ -53,7 +53,7 @@ Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-
 
 本轮产品代码由三平台 Check [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 和 Linux 桌面工作流 [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 验收通过。一个 Anthropic 兼容端点的历史真实文本工具任务不验收本轮图片能力；Qoder、OpenAI Chat 和 Anthropic 的早期证据未记录提交 SHA；OpenAI Responses 没有真实端点验收证据，不能把适配器单测当作真实端点成功。
 
-Run 41679968530 在提交 `f66f293` 上完成三平台 `npm run check`，包括类型检查、lint、构建和全量 Vitest；Ubuntu 为 111 files / 737 tests。Linux desktop run 41680030634 通过开发版、安装包、AppImage 和 deb smoke，并已核实 artifact 上传。只改文档的后续提交仍由 GitHub Actions Check 验证，最终证据以 PLAN.md 为准。
+Run 41679968530 在提交 `f66f293` 上完成三平台 `npm run check`，包括类型检查、lint、构建和全量 Vitest；Ubuntu 为 111 files / 737 tests。Linux desktop run 41680030634 通过开发版、安装包、AppImage 和 deb smoke，并已核实 artifact 上传。计划/文档提交 `42e1f1c` 的 [run 41681394512](https://github.com/kikoiio/Bitori/actions/runs/41681394512) 在 Ubuntu/macOS 通过，Windows 的 Unicode shell 用例命中 10 秒命令限时（730 passed / 1 timed out）；现将该 Windows 回归测试放宽至 30 秒命令限时、40 秒用例限时，随新提交复验。
 
 | 本轮场景 | 需要确认的行为 |
 |---|---|
