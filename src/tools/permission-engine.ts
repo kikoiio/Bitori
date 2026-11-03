@@ -73,6 +73,7 @@ function callValue(call: ToolCall): string | null {
 export class PermissionEngine {
   readonly workspaceRoot: string; readonly userRulesPath: string; readonly projectRulesPath: string; readonly localRulesPath: string;
   #tier: PermissionTier; #rules: PermissionRule[]; #localRules: PermissionRule[]; #paths: WorkspacePaths | null = null;
+  readonly #sessionRules = new Map<string, PermissionRule[]>();
   readonly #registered: ReadonlySet<string>;
   constructor(options: PermissionEngineOptions) {
     this.workspaceRoot = options.workspaceRoot; const userDirectory = join(homedir(), '.bitori');
@@ -82,12 +83,13 @@ export class PermissionEngine {
     this.#rules = [...user.rules, ...project.rules, ...local.rules]; this.#localRules = [...local.rules]; this.#tier = local.tier ?? 'default';
   }
   get tier(): PermissionTier { return this.#tier; }
-  allRules(): readonly PermissionRule[] { return [...this.#rules]; }
-  async evaluate(call: ToolCall): Promise<PermissionCheck> {
+  allRules(): readonly PermissionRule[] { return [...this.#rules, ...[...this.#sessionRules.values()].flat()]; }
+  async evaluate(call: ToolCall, sessionId?: string): Promise<PermissionCheck> {
     if (call.effect === 'command') { const command = typeof call.arguments.command === 'string' ? call.arguments.command : ''; const blocked = blacklist.find(item => item.pattern.test(command)); if (blocked) return {decision: 'deny', source: 'blacklist', reason: `命令命中危险黑名单：${blocked.name}`}; }
     try { await this.#assertSandbox(call); }
     catch (error) { return {decision: 'deny', source: 'sandbox', reason: error instanceof Error ? error.message : '路径未通过工作区沙箱'}; }
-    const value = callValue(call) ?? ''; const matching = this.#rules.filter(rule => rule.tool === call.name && (rule.exact ? rule.pattern === value : matches(rule.pattern.replaceAll('\\', '/'), value)));
+    const value = callValue(call) ?? ''; const sessionRules = this.#sessionRules.get(sessionId ?? '') ?? [];
+    const matching = [...this.#rules, ...sessionRules].filter(rule => rule.tool === call.name && (rule.exact ? rule.pattern === value : matches(rule.pattern.replaceAll('\\', '/'), value)));
     const strongest = matching.find(rule => rule.decision === 'deny') ?? matching.find(rule => rule.decision === 'ask') ?? matching.find(rule => rule.decision === 'allow');
     if (strongest) {
       if (strongest.decision === 'deny') return {decision: 'deny', source: 'rule', reason: `命中 deny 规则：${strongest.tool}(${strongest.pattern})`, rule: strongest};
@@ -100,7 +102,10 @@ export class PermissionEngine {
     return {decision: call.effect === 'read' ? 'allow' : 'ask', source: 'tier', reason: call.effect === 'read' ? '默认档自动放行只读工具' : '默认档要求副作用工具确认'};
   }
   denialResult(check: PermissionCheck): ToolExecutionResult { return {status: 'denied', error: {code: 'permission_denied', message: `工具调用被拒绝（${check.source}）：${check.reason}`, retryable: false, details: {source: check.source, reason: check.reason}}}; }
-  addSessionAllow(call: ToolCall): void { this.#rules.push(this.#exactRule(call)); }
+  addSessionAllow(call: ToolCall, sessionId?: string): void {
+    const key = sessionId ?? ''; const rules = this.#sessionRules.get(key) ?? [];
+    rules.push(this.#exactRule(call)); this.#sessionRules.set(key, rules);
+  }
   addPermanentAllow(call: ToolCall): void { const rule = this.#exactRule(call); this.#writeLocal(this.#tier, [...this.#localRules, rule]); this.#localRules.push(rule); this.#rules.push(rule); }
   setTier(tier: PermissionTier): void { this.#writeLocal(tier, this.#localRules); this.#tier = tier; }
   #exactRule(call: ToolCall): PermissionRule { return parseRule({tool: call.name, pattern: callValue(call) ?? '', decision: 'allow', exact: true}, this.localRulesPath, this.#localRules.length, this.#registered); }

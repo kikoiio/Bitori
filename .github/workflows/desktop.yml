@@ -31,6 +31,20 @@ jobs:
         run: xvfb-run -a node tests/desktop/smoke.mjs
         env:
           BITORI_PACKAGED: '1'
+      - name: Exercise AppImage startup
+        run: |
+          mapfile -t appimages < <(find out/desktop -maxdepth 1 -type f -name '*.AppImage' -print)
+          test "${#appimages[@]}" -eq 1
+          BITORI_PACKAGED=1 BITORI_APPIMAGE=1 BITORI_SCREENSHOT_PREFIX=appimage BITORI_PACKAGED_BINARY="${appimages[0]}" xvfb-run -a node tests/desktop/smoke.mjs
+      - name: Exercise extracted deb startup
+        run: |
+          mapfile -t debs < <(find out/desktop -maxdepth 1 -type f -name '*.deb' -print)
+          test "${#debs[@]}" -eq 1
+          deb_root="$RUNNER_TEMP/bitori-deb-root"
+          dpkg-deb -x "${debs[0]}" "$deb_root"
+          binary="$(find "$deb_root/opt" -type f -name bitori -perm -u+x -print -quit)"
+          test -n "$binary"
+          BITORI_PACKAGED=1 BITORI_SCREENSHOT_PREFIX=deb BITORI_PACKAGED_BINARY="$binary" xvfb-run -a node tests/desktop/smoke.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-packaged-linux

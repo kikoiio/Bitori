@@ -1,4 +1,4 @@
-import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
@@ -53,6 +53,37 @@ describe('AgentRunner', () => {
     expect(results).toEqual([decision === 'cancelled' ? 'interrupted' : 'denied']);
     expect(tools.approvals.current()).toBeNull();
     await tools.close();
+  }, 2_000);
+  it('本会话允许只对原会话复用精确工具调用', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-runner-')); roots.push(root);
+    const tools = createToolSystem(root);
+    const writePath = join(root, 'session-write.txt');
+    async function runWrite(sessionId: string, callId: string, approval: 'approved_session' | 'denied') {
+      const client = new MockLLMClient([toolCall('write_file', JSON.stringify({path: 'session-write.txt', content: callId}), callId), [{type: 'completed', finishReason: 'stop'}]]);
+      const runner = new AgentRunner(client, tools.registry, new StreamCollector(), new SafetyBatchScheduler(tools.executor, tools.approvals));
+      const events: AgentEvent[] = [];
+      for await (const event of runner.run({runId: `run-${callId}`, sessionId, trigger: 'message', mode: 'execute', instruction: 'write', context: []}, new AbortController().signal)) {
+        events.push(event);
+        if (event.type === 'approval_requested') tools.approvals.resolve(event.callId, approval);
+      }
+      return events;
+    }
+    try {
+      const first = await runWrite('session-a', 'write-a1', 'approved_session');
+      expect(first.some(event => event.type === 'approval_requested')).toBe(true);
+      expect(first.some(event => event.type === 'tool_result' && event.result.status === 'success')).toBe(true);
+      rmSync(writePath);
+
+      const repeated = await runWrite('session-a', 'write-a2', 'denied');
+      expect(repeated.some(event => event.type === 'approval_requested')).toBe(false);
+      expect(repeated.some(event => event.type === 'tool_result' && event.result.status === 'success')).toBe(true);
+      rmSync(writePath);
+
+      const other = await runWrite('session-b', 'write-b1', 'denied');
+      expect(other.some(event => event.type === 'approval_requested')).toBe(true);
+      expect(other.some(event => event.type === 'tool_result' && event.result.status === 'denied')).toBe(true);
+      expect(existsSync(writePath)).toBe(false);
+    } finally { await tools.close(); }
   }, 2_000);
   it('连续三轮全未知工具后停止', async () => {
     const value = await run([toolCall('missing_a', '{}', 'a'), toolCall('missing_b', '{}', 'b'), toolCall('missing_c', '{}', 'c')]);

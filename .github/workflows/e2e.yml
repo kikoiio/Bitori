@@ -12,6 +12,19 @@ on:
         description: 覆盖 vars.LLM_MODEL（留空则用变量）
         required: false
         default: ''
+        type: string
+      max_tokens:
+        description: 运行后超额判定阈值（不会阻止请求超过此值）
+        required: true
+        default: '50000'
+        type: choice
+        options: ['25000', '50000', '100000', '150000']
+      max_credits:
+        description: 运行后超额判定阈值（不会阻止请求超过此值）
+        required: true
+        default: '1'
+        type: choice
+        options: ['1', '2', '5']
 
 permissions:
   contents: read
@@ -50,13 +63,15 @@ jobs:
           E2E_MODEL: ${{ inputs.model || vars.LLM_MODEL }}
           BITORI_E2E_PROVIDERS: '1'
           BITORI_E2E_PROTOCOL: ${{ inputs.protocol }}
-          BITORI_E2E_MAX_TOKENS: '150000'
+          BITORI_E2E_MAX_TOKENS: ${{ inputs.max_tokens }}
+          BITORI_E2E_MAX_CREDITS: ${{ inputs.max_credits }}
+          BITORI_E2E_RESULTS_DIR: ${{ runner.temp }}/e2e-evidence
         run: npm run test:e2e:providers
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-evidence-${{ inputs.protocol }}
-          path: evaluation/results/e2e-providers/
+          name: e2e-evidence-${{ inputs.protocol || 'auto' }}
+          path: ${{ runner.temp }}/e2e-evidence/
           if-no-files-found: ignore
           retention-days: 7

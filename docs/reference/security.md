@@ -22,7 +22,7 @@
 
 ### T2 审批绑定
 - 审批决定与具体 `callId` 绑定：同轮两个写入只放行被批准的一个（测试覆盖）。
-- `approved_once` 不复用；`approved_session` 仅会话内；`approved_permanent` 写入 `.bitori/permissions.local.yaml` 的**精确匹配**规则（`tests/unit/tools/permission-engine.test.ts`）。
+- `approved_once` 不复用；`approved_session` 按对话 `sessionId` 隔离；`approved_permanent` 写入 `.bitori/permissions.local.yaml` 的**精确匹配**规则（`tests/unit/tools/permission-engine.test.ts`、`tests/unit/agent/runner.test.ts`）。
 - 取消/拒绝在审批发布瞬间被竞态处理不丢失决定（`tests/unit/agent/runner.test.ts`）。
 
 ### T3 Shell 与路径
@@ -57,3 +57,4 @@
 ## 修复记录
 
 - 2026-11-01：审批四选项桌面统一、`/undo` 快照撤销、放行档持久提示、信任清单 + `bitori trust` + doctor 检查、探测/诊断输出脱敏测试补齐。
+- 2026-11-03：修复“本会话允许”曾跨聊天会话复用的问题；权限规则现在绑定 Agent 运行的对话 ID，并由引擎与 AgentRunner 测试覆盖。

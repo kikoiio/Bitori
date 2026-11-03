@@ -13,6 +13,7 @@ if (existsSync(configDir)) throw new Error('桌面测试需要隔离的用户目
 const workspace = await mkdtemp(join(tmpdir(), 'bitori-desktop-'));
 let application;
 let configCreated = false;
+let toolCallSequence = 0;
 const server = createServer((request, response) => {
   if (request.method === 'GET' && String(request.url).endsWith('/models')) {
     response.writeHead(200, {'content-type': 'application/json'});
@@ -23,21 +24,23 @@ const server = createServer((request, response) => {
   request.on('data', chunk => { body += chunk; });
   request.on('end', () => {
     const messages = JSON.parse(body).messages || [];
-    const wantsWait = messages.some(message => message.role === 'user' && String(message.content).includes('等待响应'));
+    const latestUser = [...messages].reverse().find(message => message.role === 'user');
+    const userText = String(latestUser?.content ?? '');
+    const wantsWait = userText.includes('等待响应');
     if (wantsWait) {
       response.writeHead(200, {'content-type': 'text/event-stream'});
       response.write('data: {"choices":[{"delta":{"content":"等待中"},"finish_reason":null}]}\n\n');
       return;
     }
-    const denied = messages.some(message => message.role === 'user' && String(message.content).includes('拒绝写入'));
-    const wantsWrite = denied || messages.some(message => message.role === 'user' && String(message.content).includes('执行写入'));
-    const wantsMarkdown = messages.some(message => message.role === 'user' && String(message.content).includes('渲染 Markdown'));
-    const afterTool = messages.some(message => message.role === 'tool');
+    const denied = userText.includes('拒绝写入');
+    const wantsWrite = ['执行写入', '拒绝写入', '本会话写入', '永久写入'].some(marker => userText.includes(marker));
+    const wantsMarkdown = userText.includes('渲染 Markdown');
+    const afterTool = messages.at(-1)?.role === 'tool';
     const reply = wantsMarkdown
       ? '## 顶层\n\n| 条目 | 说明 |\n| --- | --- |\n| `pwd` | 打印目录 |\n\n- 第一项\n- 第二项\n\n```ts\nconst x = 1\n```\n\n[安全链接](https://docs.qoder.com) · [危险链接](javascript:alert(1))'
-      : '测试回复 <img src=x>';
+      : `测试回复 ${userText} <img src=x>`;
     const chunk = wantsWrite && !afterTool
-      ? {choices: [{delta: {tool_calls: [{index: 0, id: 'call-test', type: 'function', function: {name: 'write_file', arguments: JSON.stringify({path: denied ? 'denied.txt' : 'result.txt', content: 'approved'})}}]}, finish_reason: 'tool_calls'}]}
+      ? {choices: [{delta: {tool_calls: [{index: 0, id: `call-${++toolCallSequence}`, type: 'function', function: {name: 'write_file', arguments: JSON.stringify({path: denied ? 'denied.txt' : userText.includes('本会话写入') ? 'session-permission.txt' : userText.includes('永久写入') ? 'permanent-permission.txt' : 'result.txt', content: denied ? 'denied' : userText.includes('本会话写入') ? 'session-approved' : userText.includes('永久写入') ? 'permanent-approved' : 'approved'})}}]}, finish_reason: 'tool_calls'}]}
       : {choices: [{delta: {content: reply}, finish_reason: 'stop'}]};
     response.writeHead(200, {'content-type': 'text/event-stream'});
     response.end(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`);
@@ -51,8 +54,12 @@ try {
   await writeFile(join(configDir, 'config.yaml'), `profiles:\n  - name: test\n    protocol: openai-chat\n    model: test-model\n    base_url: http://127.0.0.1:${port}/v1\n    api_key: \${TEST_KEY}\n`);
   await writeFile(join(configDir, '.env'), 'TEST_KEY=desktop-test\n');
   const packaged = process.env.BITORI_PACKAGED === '1';
-  const executablePath = packaged ? resolve('out/desktop/linux-unpacked/bitori') : require('electron');
-  const args = packaged ? ['--disable-gpu', '--no-sandbox'] : [resolve('src/desktop/main.cjs'), '--disable-gpu', '--no-sandbox'];
+  const screenshotPrefix = process.env.BITORI_SCREENSHOT_PREFIX ?? (packaged ? 'packaged' : '');
+  const screenshotPath = name => resolve(`desktop-test-output/${screenshotPrefix ? `${screenshotPrefix}-` : ''}${name}.png`);
+  const executablePath = packaged ? resolve(process.env.BITORI_PACKAGED_BINARY ?? 'out/desktop/linux-unpacked/bitori') : require('electron');
+  const args = packaged
+    ? [...(process.env.BITORI_APPIMAGE === '1' ? ['--appimage-extract-and-run'] : []), '--disable-gpu', '--no-sandbox']
+    : [resolve('src/desktop/main.cjs'), '--disable-gpu', '--no-sandbox'];
   application = await electron.launch({executablePath, args, cwd: workspace, timeout: 30000});
   const page = await application.firstWindow();
   await page.getByTestId('request-status').getByText('等待工作区').waitFor({timeout: 30000});
@@ -72,7 +79,7 @@ try {
   await page.getByTestId('request-status').getByText('就绪').waitFor({timeout: 30000});
   assert.equal(await page.getByTestId('profile-select').inputValue(), 'test');
   await mkdir(resolve('desktop-test-output'), {recursive: true});
-  await page.screenshot({path: resolve(`desktop-test-output/${packaged ? 'packaged' : 'startup'}.png`)});
+  await page.screenshot({path: screenshotPath('startup')});
   {
     await page.locator('#composer-plus').click();
     await page.locator('#slash-menu').getByText('/model').waitFor();
@@ -100,20 +107,20 @@ try {
   {
     await page.getByTestId('message-input').fill('你好');
     await page.getByTestId('send').click();
-    await page.getByText('测试回复 <img src=x>').waitFor();
+    await page.getByText('测试回复 你好 <img src=x>', {exact: true}).waitFor();
     assert.equal(await page.locator('img').count(), 0);
     await page.getByTestId('request-status').getByText('就绪').waitFor();
     await page.getByTestId('new-session').click();
     await page.getByTestId('message-input').fill('执行写入');
     await page.getByTestId('send').click();
     await page.getByTestId('approval').waitFor({state: 'visible'});
-    await page.screenshot({path: resolve(`desktop-test-output/${packaged ? 'packaged-' : ''}approval.png`)});
+    await page.screenshot({path: screenshotPath('approval')});
     assert.equal(existsSync(join(workspace, 'result.txt')), false);
     const staleRejected = await page.evaluate(() => window.bitori.decideApproval('allow_once', 'stale-call').then(() => false, () => true));
     assert.equal(staleRejected, true);
     assert.equal(existsSync(join(workspace, 'result.txt')), false);
     await page.getByTestId('approve-once').click();
-    await page.getByText('测试回复 <img src=x>').waitFor();
+    await page.getByText('测试回复 执行写入 <img src=x>', {exact: true}).waitFor();
     assert.equal(await readFile(join(workspace, 'result.txt'), 'utf8'), 'approved');
     // 工具卡片默认展开显示真实 diff,并可撤销 write_file 新建的文件。
     const toolCard = page.locator('details.tool').last();
@@ -132,6 +139,54 @@ try {
     await page.getByTestId('deny').click();
     await page.getByTestId('request-status').getByText('就绪').waitFor();
     assert.equal(existsSync(join(workspace, 'denied.txt')), false);
+
+    // 本会话允许只对同一会话中的精确工具参数生效。
+    await page.getByTestId('message-input').fill('本会话写入');
+    await page.getByTestId('send').click();
+    await page.getByTestId('approval').waitFor({state: 'visible'});
+    await page.getByTestId('approve-session').click();
+    await page.getByText('测试回复 本会话写入 <img src=x>', {exact: true}).waitFor();
+    await page.getByTestId('request-status').getByText('就绪').waitFor();
+    assert.equal(await readFile(join(workspace, 'session-permission.txt'), 'utf8'), 'session-approved');
+    await rm(join(workspace, 'session-permission.txt'));
+    await page.getByTestId('message-input').fill('再次本会话写入');
+    await page.getByTestId('send').click();
+    await page.getByText('测试回复 再次本会话写入 <img src=x>', {exact: true}).waitFor();
+    await page.getByTestId('request-status').getByText('就绪').waitFor();
+    assert.equal(await readFile(join(workspace, 'session-permission.txt'), 'utf8'), 'session-approved');
+    assert.equal(await page.getByTestId('approval').isVisible().catch(() => false), false);
+    await rm(join(workspace, 'session-permission.txt'));
+    await page.getByTestId('new-session').click();
+    await page.getByTestId('message-input').fill('另一个会话本会话写入');
+    await page.getByTestId('send').click();
+    await page.getByTestId('approval').waitFor({state: 'visible'});
+    assert.equal(existsSync(join(workspace, 'session-permission.txt')), false);
+    await page.getByTestId('deny').click();
+    await page.getByTestId('request-status').getByText('就绪').waitFor();
+    assert.equal(existsSync(join(workspace, 'session-permission.txt')), false);
+
+    // 永久允许写入工作区规则，并可跨会话复用同一精确规则。
+    await page.getByTestId('new-session').click();
+    await page.getByTestId('message-input').fill('永久写入');
+    await page.getByTestId('send').click();
+    await page.getByTestId('approval').waitFor({state: 'visible'});
+    await page.getByTestId('approve-always').click();
+    await page.getByText('测试回复 永久写入 <img src=x>', {exact: true}).waitFor();
+    await page.getByTestId('request-status').getByText('就绪').waitFor();
+    assert.equal(await readFile(join(workspace, 'permanent-permission.txt'), 'utf8'), 'permanent-approved');
+    const localRules = await readFile(join(workspace, '.bitori', 'permissions.local.yaml'), 'utf8');
+    assert.match(localRules, /tool: write_file/);
+    assert.match(localRules, /pattern: permanent-permission\.txt/);
+    assert.match(localRules, /decision: allow/);
+    await rm(join(workspace, 'permanent-permission.txt'));
+    await page.getByTestId('new-session').click();
+    await page.getByTestId('message-input').fill('再次永久写入');
+    await page.getByTestId('send').click();
+    await page.getByText('测试回复 再次永久写入 <img src=x>', {exact: true}).waitFor();
+    await page.getByTestId('request-status').getByText('就绪').waitFor();
+    assert.equal(await readFile(join(workspace, 'permanent-permission.txt'), 'utf8'), 'permanent-approved');
+    assert.equal(await page.getByTestId('approval').isVisible().catch(() => false), false);
+
     await page.getByTestId('new-session').click();
     await page.getByTestId('message-input').fill('等待响应');
     await page.getByTestId('send').click();
@@ -148,7 +203,7 @@ try {
     assert.equal(await page.locator('.message-body.markdown a.md-link').count(), 1);
     assert.match(await page.locator('.message-body.markdown a.md-link').getAttribute('href'), /^https:\/\/docs\.qoder\.com/);
     assert.equal(await page.locator('img').count(), 0);
-    await page.screenshot({path: resolve(`desktop-test-output/${packaged ? 'packaged-' : ''}markdown.png`)});
+    await page.screenshot({path: screenshotPath('markdown')});
     await page.getByTestId('request-status').getByText('就绪').waitFor();
   }
   {

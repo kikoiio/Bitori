@@ -1,12 +1,14 @@
 # 评测与 RSI
 
-> 当前状态：**暂停**。以下代码与流程保留为参考；未完成的安全验收不再作为近期目标，恢复需另行立项。
+> RSI 状态：**暂停**。SWE-bench Lite 23 题开发集工作流可手动运行；最近一次结果未解决任何题目，是否重跑及预算待决定。
 
 RSI 指持续改进本项目的 coding-agent harness，不训练或升级底层模型。实现位于 `evaluation/RSI/`：runner 记录安全证据，规则分析器诊断失败，隔离容器生成候选，独立 verifier 检查，控制面在预算内编排并输出可合并审查报告。自动合并、无人值守轮询和正式 300 题测试仍未启用；该方向当前暂停，未完成验收不再作为近期目标。
 
 ## SWE-bench Lite 开发集
 
 `benchmarks/swe-bench-lite/` 运行 SWE-bench Lite 的 23 题开发集；这是开发集，不是 300 题正式测试集。数据集 revision 固定在 runner 中，官方评分器版本固定在 GitHub Actions 中。每题先运行官方补丁校验环境，再运行 Bitori 和官方评分。模型使用无审批模式，仅限隔离的临时容器。
+
+最近一次完整开发集记录（2026-10-28，agent commit `ff9a4fb8ea70d9c0a7d2191086af99925a07069d`）覆盖 23/23 题，但结果为 8 个 `agent_error`、7 个 `unresolved`、8 个 `infrastructure_error`，没有 `resolved`。这是旧提交上的诊断记录，不代表当前版本。重跑前需决定单题或全 23 题、Provider/model 与供应商账户预算；工作流自身没有总 token 或美元费用硬上限，且按单题串行。
 
 手动运行 `.github/workflows/swe-bench-lite.yml`：`index=0` 至 `22` 为单题，`index=all` 为完整开发集；选择 openrouter、groq 或 xunfei。每题独立 runner，单题串行，减少共享模型服务的限流。模型、API key 和需要的接口地址来自对应仓库变量与 secret。讯飞使用 `XUNFEI_MODEL`、`XUNFEI_OPENAI_RESPONSE_URL` 和 `XUNFEI_LLM_API_KEY`，协议为 `openai-responses`；完整 `/responses` 地址会转为 SDK base URL，避免重复拼接路径。runner 需要联网下载依赖、数据、镜像，并将公开任务内容发送给模型供应商。模型产生的命令可访问容器内的模型凭据和网络，应只使用限额、可撤销的专用密钥。请勿对不可信的工作流或数据集开放仓库密钥。
 

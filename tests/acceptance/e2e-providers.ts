@@ -9,8 +9,9 @@
  * 输出写入 evaluation/results/e2e-providers/,全程脱敏,不打印密钥。
  */
 import {config as loadDotenv} from 'dotenv';
+import {execFileSync} from 'node:child_process';
 import {mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, existsSync} from 'node:fs';
-import {join} from 'node:path';
+import {join, resolve} from 'node:path';
 import {tmpdir, homedir} from 'node:os';
 import {createApplicationRuntime} from '../../src/app/runtime.js';
 import {inferProtocol} from '../../src/config/protocol.js';
@@ -113,6 +114,8 @@ const markerWords: Record<Preset, string> = {loop: 'E2E DONE', 'fix-test': 'FIXE
 
 interface Evidence {
   at: string;
+  commitSha: string | null;
+  workingTreeClean: boolean | null;
   preset: string;
   protocol: string;
   model: string;
@@ -129,6 +132,34 @@ interface Evidence {
 }
 
 async function main(): Promise<number> {
+  let revision = env['GITHUB_ACTIONS'] === 'true' ? env['GITHUB_SHA']?.trim() : undefined;
+  let workingTreeClean: boolean | null = null;
+  if (env['GITHUB_ACTIONS'] !== 'true') {
+    try {
+      revision = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: join(import.meta.dirname, '..', '..'),
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 2000,
+        maxBuffer: 1024,
+      }).trim();
+    } catch {
+      revision = undefined;
+    }
+  }
+  try {
+    const status = execFileSync('git', ['status', '--porcelain'], {
+      cwd: join(import.meta.dirname, '..', '..'),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 2000,
+      maxBuffer: 16_384,
+    });
+    workingTreeClean = status.length === 0;
+  } catch {
+    // Leave the field null when Git status is unavailable.
+  }
+  const commitSha = revision !== undefined && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(revision) ? revision : null;
   const runtime = await createApplicationRuntime({config, profileName: 'e2e', workspace, databasePath: join(workspace, '.bitori', 'bitori.db'), maxIterations: 12});
   const {controller} = runtime;
   const unwatch = controller.subscribe(state => {
@@ -155,6 +186,8 @@ async function main(): Promise<number> {
     && names.some(name => name === 'read_file' || name === 'edit_file' || name === 'write_file');
   const evidence: Evidence = {
     at: new Date().toISOString(),
+    commitSha,
+    workingTreeClean,
     preset,
     protocol,
     model,
@@ -169,7 +202,9 @@ async function main(): Promise<number> {
     visibleError: state.visibleError === null ? null : safeLine(state.visibleError),
     passed,
   };
-  const outDir = join(import.meta.dirname, '..', '..', 'evaluation', 'results', 'e2e-providers');
+  const outDir = env['BITORI_E2E_RESULTS_DIR'] === undefined
+    ? join(import.meta.dirname, '..', '..', 'evaluation', 'results', 'e2e-providers')
+    : resolve(env['BITORI_E2E_RESULTS_DIR']);
   mkdirSync(outDir, {recursive: true});
   const outFile = join(outDir, `${new Date().toISOString().slice(0, 10)}-${protocol}${preset === 'loop' ? '' : `-${preset}`}.json`);
   writeFileSync(outFile, `${JSON.stringify(evidence, null, 2)}\n`);

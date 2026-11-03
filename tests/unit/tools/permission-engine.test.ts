@@ -58,9 +58,10 @@ describe('PermissionEngine', () => {
     const permissions = engine(root);
     const remote = call('mcp__demo__search', 'command', {query: '*'});
     await expect(permissions.evaluate(remote)).resolves.toMatchObject({decision: 'ask'});
-    permissions.addSessionAllow(remote);
-    await expect(permissions.evaluate(remote)).resolves.toMatchObject({decision: 'allow'});
-    await expect(permissions.evaluate(call('mcp__demo__search', 'command', {query: 'other'}))).resolves.toMatchObject({decision: 'ask'});
+    permissions.addSessionAllow(remote, 'session-a');
+    await expect(permissions.evaluate(remote, 'session-a')).resolves.toMatchObject({decision: 'allow'});
+    await expect(permissions.evaluate(remote, 'session-b')).resolves.toMatchObject({decision: 'ask'});
+    await expect(permissions.evaluate(call('mcp__demo__search', 'command', {query: 'other'}), 'session-a')).resolves.toMatchObject({decision: 'ask'});
   });
 
   it('扩展工具长效批准绑定完整参数并可从文件回读', async () => {
@@ -69,9 +70,10 @@ describe('PermissionEngine', () => {
     const permissions = engine(root, {}, registered);
     const first = call('exit_worktree', 'write', {slug: 'first', force: false});
     const changed = call('exit_worktree', 'write', {slug: 'first', force: true});
-    permissions.addSessionAllow(first);
-    await expect(permissions.evaluate(first)).resolves.toMatchObject({decision: 'allow'});
-    await expect(permissions.evaluate(changed)).resolves.toMatchObject({decision: 'ask'});
+    permissions.addSessionAllow(first, 'session-a');
+    await expect(permissions.evaluate(first, 'session-a')).resolves.toMatchObject({decision: 'allow'});
+    await expect(permissions.evaluate(first, 'session-b')).resolves.toMatchObject({decision: 'ask'});
+    await expect(permissions.evaluate(changed, 'session-a')).resolves.toMatchObject({decision: 'ask'});
     permissions.addPermanentAllow(first);
     permissions.addPermanentAllow(call('search_text', 'read', {query: 'needle'}));
     const restored = engine(root, {}, registered);

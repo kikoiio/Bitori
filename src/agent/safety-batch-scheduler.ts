@@ -46,7 +46,7 @@ export class SafetyBatchScheduler {
     const checks = new Map<string, PermissionCheck>(); const executable: PreparedToolCall[] = [];
     for (const prepared of input.calls) if (prepared.availability === 'available') {
       if (!this.permissions) { executable.push(prepared); continue; }
-      const check = await this.permissions.evaluate(prepared.call); checks.set(prepared.call.internalId, check);
+      const check = await this.permissions.evaluate(prepared.call, input.sessionId); checks.set(prepared.call.internalId, check);
       if (check.decision === 'deny') {
         const prompt = this.#prompt(prepared.call, check.reason);
         yield {...base(), type: 'approval_resolved', callId: prepared.call.internalId, prompt, decision: 'denied'};
@@ -59,7 +59,7 @@ export class SafetyBatchScheduler {
       if (input.signal.aborted) break;
       if (segment.kind === 'parallel_reads') {
         for (const call of segment.calls) yield {...base(), type: 'tool_status', callId: call.internalId, status: 'running'};
-        const settled = await Promise.all(segment.calls.map(async call => [call, await this.#executeWithReadGuard(call, input.signal)] as const));
+        const settled = await Promise.all(segment.calls.map(async call => [call, await this.#executeWithReadGuard(call, input.signal, input.sessionId)] as const));
         for (const [call, result] of settled) {
           results.set(call.internalId, result); completed++;
           yield {...base(), type: 'tool_status', callId: call.internalId, status: status(result)};
@@ -95,16 +95,16 @@ export class SafetyBatchScheduler {
             decision = await approval;
           } finally { this.approvals.resolve(call.internalId, 'denied'); }
           yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision};
-          if (!input.signal.aborted && decision === 'approved_session' && this.permissions) this.permissions.addSessionAllow(call);
+          if (!input.signal.aborted && decision === 'approved_session' && this.permissions) this.permissions.addSessionAllow(call, input.sessionId);
           if (!input.signal.aborted && decision === 'approved_permanent' && this.permissions) this.permissions.addPermanentAllow(call);
           result = input.signal.aborted
             ? interrupted()
             : decision === 'denied'
               ? {status: 'denied', error: {code: 'denied', message: '用户拒绝了工具调用', retryable: false, details: {source: 'human', reason: '用户在人在回路中拒绝了调用'}}}
-              : await this.#executeChecked(call, input.signal, true);
+              : await this.#executeChecked(call, input.signal, input.sessionId, true);
         } else {
           if (call.effect !== 'read') yield {...base(), type: 'approval_resolved', callId: call.internalId, prompt, decision: 'approved'};
-          result = input.signal.aborted ? interrupted() : await this.#executeChecked(call, input.signal);
+          result = input.signal.aborted ? interrupted() : await this.#executeChecked(call, input.signal, input.sessionId);
         }
         results.set(call.internalId, result); completed++; yield {...base(), type: 'tool_status', callId: call.internalId, status: status(result)}; yield {...base(), type: 'tool_result', callId: call.internalId, result};
         await this.#afterTool(call, result);
@@ -120,17 +120,17 @@ export class SafetyBatchScheduler {
 
   #prompt(call: ToolCall, reason?: string) { return {callId: call.internalId, toolName: call.name, effect: call.effect, argumentSummary: JSON.stringify(call.arguments), riskMessage: call.effect === 'command' ? '批准的命令可能访问网络、启动子进程或影响工作区外资源。' : null, ...(reason === undefined ? {} : {reason})}; }
 
-  async #executeWithReadGuard(call: ToolCall, signal: AbortSignal): Promise<ToolExecutionResult> {
+  async #executeWithReadGuard(call: ToolCall, signal: AbortSignal, sessionId: string): Promise<ToolExecutionResult> {
     if (this.#hooks) {
       const guard = await this.#hooks.guard('pre_tool_use', call.name, call.arguments, signal);
       if (guard.rejected) return {status: 'denied', error: {code: 'hook_rejected', message: guard.reason, retryable: false}};
     }
-    return signal.aborted ? interrupted() : this.#executeChecked(call, signal);
+    return signal.aborted ? interrupted() : this.#executeChecked(call, signal, sessionId);
   }
 
-  async #executeChecked(call: ToolCall, signal: AbortSignal, approved = false): Promise<ToolExecutionResult> {
+  async #executeChecked(call: ToolCall, signal: AbortSignal, sessionId: string, approved = false): Promise<ToolExecutionResult> {
     if (call.effect === 'command') await this.#hooks?.fire('command_execute', {event: 'command_execute', toolName: call.name, args: call.arguments});
-    return approved ? this.executor.execute(call, signal, {approvedCallId: call.internalId}) : this.executor.execute(call, signal);
+    return this.executor.execute(call, signal, {sessionId, ...(approved ? {approvedCallId: call.internalId} : {})});
   }
 
   async #afterTool(call: ToolCall, result: ToolExecutionResult): Promise<void> {
