@@ -272,7 +272,13 @@ def collect_trace(container, summary, private, secrets):
     raw = private / 'session.jsonl'
     raw.write_bytes(data)
     raw.chmod(0o600)
-    lines = data.decode('utf-8', errors='replace').splitlines()
+    invalid_utf8 = False
+    try:
+        trace_text = data.decode('utf-8')
+    except UnicodeDecodeError:
+        trace_text = data.decode('utf-8', errors='replace')
+        invalid_utf8 = True
+    lines = trace_text.splitlines()
     if run_id is None:
         runs = set()
         for line in lines:
@@ -296,7 +302,7 @@ def collect_trace(container, summary, private, secrets):
     events, integrity = project_trace(lines, run_id=run_id, writer_stats=stats,
                                       secrets=secrets, max_events=MAX_EVENTS)
     integrity.update(available=True, bytes=len(data), session_id=selected, run_id=run_id)
-    if envelope.get('truncated') or b'\xef\xbf\xbd' in data or '\ufffd' in data.decode('utf-8', errors='replace'):
+    if envelope.get('truncated') or invalid_utf8:
         integrity.update(complete=False, truncated=True)
     return without_internal(events), integrity
 
@@ -511,7 +517,9 @@ def run_instance(args, environment=None):
         run = command(['docker', 'exec', '--user=1000:1000', '-e', 'HOME=/tmp/bitori-home',
                        '-e', 'GIT_CONFIG_COUNT=1', '-e', 'GIT_CONFIG_KEY_0=safe.directory',
                        '-e', 'GIT_CONFIG_VALUE_0=/testbed', '-e', credential_name, '-w', '/testbed', container,
-                       'sh', '-ec', 'printf "%s" "$$" > /tmp/bitori-agent.pid; exec "$@"', 'agent',
+                       'sh', '-ec',
+                       'export PATH="/opt/miniconda3/envs/testbed/bin:$PATH"; '
+                       'printf "%s" "$$" > /tmp/bitori-agent.pid; exec "$@"', 'agent',
                        'timeout', '--signal=TERM', '--kill-after=10', str(args.timeout),
                        '/opt/bitori/node', '/opt/bitori/dist/bin/bitori.js',
                        'exec', '--profile', 'bench', '--task', instance['problem_statement'],

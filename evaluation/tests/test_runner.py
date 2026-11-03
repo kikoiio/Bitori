@@ -76,6 +76,7 @@ class FakeRunner:
         self.trace = trace
         self.patch = patch
         self.agent_environments = []
+        self.agent_commands = []
 
     def __call__(self, args, *, input=None, env=None, cwd=None, timeout=120,
                  max_output=1024 * 1024, check=True):
@@ -98,6 +99,7 @@ class FakeRunner:
             return completed(args)
         if 'timeout' in args and any(str(part).endswith('bitori.js') for part in args):
             self.agent_environments.append(env)
+            self.agent_commands.append(args)
             if self.agent_timeout:
                 raise subprocess.TimeoutExpired(args, timeout)
             return completed(args, returncode=self.agent_returncode, stdout=self.agent_stdout)
@@ -159,6 +161,24 @@ class RunnerTests(unittest.TestCase):
 
     def read(self, name):
         return (self.output / name).read_text()
+
+    def test_agent_commands_use_the_testbed_python_environment(self):
+        fake = FakeRunner(trace=trace_lines())
+        self.run_instance(fake)
+        agent_command = fake.agent_commands[0]
+        shell_script = agent_command[agent_command.index('sh') + 2]
+        self.assertIn('export PATH="/opt/miniconda3/envs/testbed/bin:$PATH"', shell_script)
+
+    def test_valid_replacement_character_does_not_mark_trace_truncated(self):
+        data = trace_lines().replace('assistant text', 'assistant � text').encode('utf-8')
+        private = Path(self.temporary.name) / 'trace'
+        private.mkdir()
+        envelope = {'sessionId': 'session-1', 'bytes': len(data), 'truncated': False,
+                    'data': base64.b64encode(data).decode('ascii')}
+        with mock.patch.object(runner, 'command', return_value=completed([], stdout=json.dumps(envelope))):
+            _, integrity = runner.collect_trace('container', json.loads(summary()), private, [])
+        self.assertTrue(integrity['complete'])
+        self.assertFalse(integrity['truncated'])
 
     def test_normal_completion_exports_safe_complete_evidence(self):
         result = self.run_instance(FakeRunner(trace=trace_lines()))

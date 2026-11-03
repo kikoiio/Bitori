@@ -83,6 +83,14 @@ class LoopTestCase(unittest.TestCase):
         return {'LLM_API_KEY': 'test-api-key', 'LLM_BASE_URL': 'https://example.invalid/v1',
                 'LLM_MODEL': 'fake-model'}
 
+    def test_anthropic_gateway_base_preserves_custom_prefix_and_api_version(self):
+        self.assertEqual(loop.upstream_base('https://provider.example/anthropic', 'anthropic'),
+                         'https://provider.example/anthropic/v1')
+        self.assertEqual(loop.upstream_base('https://provider.example/anthropic/v1/messages', 'anthropic'),
+                         'https://provider.example/anthropic/v1')
+        self.assertEqual(loop.upstream_base('https://api.anthropic.com', 'anthropic'),
+                         'https://api.anthropic.com')
+
     def experiment(self, config, output):
         return loop.Experiment(config, self.repo, self.base, output,
                                environment=self.environment())

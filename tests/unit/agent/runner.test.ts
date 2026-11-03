@@ -95,6 +95,11 @@ describe('AgentRunner', () => {
     expect(value.client.requests).toHaveLength(20); expect(value.result).toMatchObject({stopReason: 'iteration_limit', iterationCount: 20});
     expect(value.events.some(event => event.type === 'tool_result' && event.result.status === 'error' && event.result.error.code === 'agent_loop_limit')).toBe(true);
   });
+  it('按实际配置上限提示被阻止的工具调用', async () => {
+    const value = await run([toolCall('read_file', '{"path":"note.txt"}', 'first'), toolCall('read_file', '{"path":"note.txt"}', 'last')], {maxIterations: 2, maxUnknownToolIterations: 3});
+    const blocked = value.events.filter(event => event.type === 'tool_result').at(-1);
+    expect(blocked).toMatchObject({result: {error: {code: 'agent_loop_limit', message: '已达到 2 次模型迭代上限，新的工具调用未执行'}}});
+  });
   it('没有正常结束事件时按流错误停止且不重试', async () => {
     const value = await run([[{type: 'text_delta', text: '部分'}]]); expect(value.client.requests).toHaveLength(1); expect(value.result.stopReason).toBe('stream_error');
   });

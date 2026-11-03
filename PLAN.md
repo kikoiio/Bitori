@@ -5,11 +5,11 @@
 
 ## 完成条件
 
-项目文档中每项未完成工作都要有可核对的状态和证据。状态只能是已验证、已完成、经用户决定暂缓，或因明确的产品决定和权限等待。不能把未决定的功能当作已批准需求，也不能把暂停中的 RSI 当成近期任务。
+项目文档中每项未完成工作都要有可核对的状态和证据。状态只能是已验证、已完成、经用户决定暂缓，或因明确的产品决定和权限等待。未决定的功能不当作已批准需求；RSI 按用户 2026-11-03 的恢复决定进入有界 smoke。
 
 ## 工作规模与严谨度
 
-本轮覆盖 3 个只读审查、桌面与 Provider 验收证据、4 种 Provider 协议、SWE-bench Lite 23 题历史未解决结果、4 个未决产品方向、5 条安全残留风险、1 个暂停中的 RSI 项目，以及桌面“本会话允许”越过对话边界的实现缺陷。用户授权免费云资源并允许调用 GitHub 上配置的模型后，三平台 `Check`、Linux 桌面包验收和当前 Anthropic 配置的真实 Provider E2E 均已执行；另将 SWE-bench 缩为单题、5 次迭代上限诊断。多协议凭据、总费用硬上限、产品/安全决策和 RSI 仍未齐备。
+本轮覆盖 3 个只读审查、桌面与 Provider 验收证据、4 种 Provider 协议、SWE-bench Lite 23 题历史未解决结果、4 个产品方向、5 条安全残留风险、RSI smoke，以及桌面“本会话允许”越过对话边界的实现缺陷。用户取消云同步、接受五项安全残留风险、要求继续 RSI，并授权调用任意可用模型。多模态、会话导入和自动断点续跑仍待决定；当前 GitHub 仅配置 Anthropic/DeepSeek 通用 profile。
 
 ## 吞吐安排
 
@@ -29,11 +29,14 @@
 - 用户指出 GitHub 已配置模型并授权调用。`E2E LLM` 在最终提交 `1cfbed5feaf30cf368e8694314f0b33805c3ba41` 自动识别 Anthropic 协议和模型 `DeepSeek-V4.1-Flash-1017-Event`；[run 41638870512](https://github.com/kikoiio/Bitori/actions/runs/41638870512) 通过，5 次迭代、309 输出 token、任务产物校验通过、事后阈值未超额。对应 artifact `e2e-evidence-auto`（604 字节）已核实上传，保留至 2026-11-10；JSON 确认 `workingTreeClean: true` 和完整 commit SHA。当前 GitHub 只配置这一组通用 endpoint/key/model，因此不将同一 Anthropic endpoint 冒充成其余三种协议。
 - 本计划开始前最近一次 Linux 桌面 smoke 和打包成功记录是 2026-10-28。那次只启动开发入口和 `linux-unpacked`；AppImage 与 deb 只构建并上传，未启动，桌面 smoke 也没有覆盖“本会话”和“永久允许”。当前完整验收已在 run 41637023628 通过。
 - 最近一次 SWE-bench Lite 23 题开发集记录为 2026-10-28、agent SHA `ff9a4fb8ea70d9c0a7d2191086af99925a07069d`：23/23 题有结果，但 8 个 `agent_error`、7 个 `unresolved`、8 个 `infrastructure_error`，没有 `resolved`。结果中的问题包括模型工具调用错误、Groq 速率/上下文限制及 gold 环境验证失败；不能当作当前版本验收。
+- 当前版本第 0 题在 run [41640309946](https://github.com/kikoiio/Bitori/actions/runs/41640309946)（5 次迭代）与 [41641115352](https://github.com/kikoiio/Bitori/actions/runs/41641115352)（10 次迭代）均以 `agent_error` 结束、补丁为空。轨迹证明初始 Git ownership 报错随后由 Agent 自行加入精确 `safe.directory` 配置并恢复；不能将它当作持续根因。第二次轨迹还显示 Agent shell 的 `python` 是系统 3.11.5，复现代码因 `collections.Mapping` 失败；gold grader 使用镜像内 `/opt/miniconda3/envs/testbed/bin/python`。随后为 Agent shell 统一 testbed `PATH`，并修正合法 U+FFFD 字符被误判为轨迹截断及固定写死“20 次”的迭代上限错误提示。补丁和 9 项 Python runner 测试、17 项 AgentRunner 测试已通过；新提交的 CI 与云端诊断仍待运行。
 - TUI 的模拟终端测试覆盖光标行列、中文折行、输入、排队和取消，且已由修复后提交 `7bca1f1` 的三平台 `Check` 运行并通过。它没有启动 CLI 做真实终端交互验收。
 - 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前实现改为会话 ID 作用域，引擎与 AgentRunner 回归测试通过，桌面跨会话审批 smoke 也在 run 41637023628 通过。
-- 文档将多模态、云同步、会话导入和自动断点续跑列为“不支持，是否纳入尚未决定”。这些是产品决策，不是可直接实现的规格。
-- 安全文档记录了五类残留风险。它们尚未组成有优先级和验收标准的修复清单。
-- RSI 文档明确将该方向标为暂停，未完成的隔离和云端验收不属于近期目标。
+- 用户于 2026-11-03 取消云同步；决定见 [ADR 0001](docs/decisions/0001-cloud-sync-out-of-scope.md)。多模态、会话导入和自动断点续跑仍不支持且待决定。
+- 用户于 2026-11-03 接受安全文档列出的五项当前残留风险；决定见 [ADR 0002](docs/decisions/0002-accept-current-security-residual-risks.md)。
+- 用户要求继续 RSI 并允许调用可用模型。受控 workflow 将使用 GitHub 已配置的 Anthropic/DeepSeek profile，按 smoke 文件既有硬上限执行一题/一个候选/90 分钟/100 次请求/2,000,000 tokens；运行及 artifact 核验待完成。
+- Anthropic SDK 在自定义 base URL 后请求 `/v1/messages`；RSI gateway 归一化原本会丢失自定义 `/anthropic` 前缀的 `/v1`。现已在 `upstream_base` 为该协议补齐版本段，并由测试覆盖根地址、自定义前缀和完整 endpoint 地址。
+- 本机 `/usr/bin/x-terminal-emulator` 指向 Ptyxis；已将其设为真实终端光标验收目标，实际显示仍未验收。
 
 ## 并行安排
 
@@ -58,29 +61,29 @@
 | 桌面审批选项 | 已验证 | 一次/本会话/永久/拒绝、授权范围与持久化 smoke 均通过，见 run 41637023628 |
 | Provider 证据可追溯性 | 已验证 | Anthropic 结果含完整 commit SHA、干净工作树和用量，见 run 41638870512 与 `e2e-evidence-auto` artifact |
 | 真实 Provider 验收 | 当前 GitHub 配置的 Anthropic profile 已通过 | 模型 `DeepSeek-V4.1-Flash-1017-Event`；309 输出 token；另三种协议没有各自 endpoint/key 配置，见 run 41638870512 |
-| SWE-bench Lite 开发集 | 单题诊断待运行 | 当前工作流仅支持专用 provider 密钥；已新增 GitHub 通用模型配置选项、单题默认值和最多 5 次迭代/600 秒运行边界。旧 23 题结果没有解决项；详见 [评测说明](evaluation/README.md) |
-| 真实终端观感 | 等目标终端验收 | 自动测试不能证明目标终端上的显示效果 |
+| SWE-bench Lite 开发集 | 两次单题诊断未完成，修复后待复验 | run 41640309946 与 41641115352 均为空补丁；已修正 testbed Python 环境和轨迹诊断，下一轮在新提交上最多 10 次迭代/600 秒；详见 [评测说明](evaluation/README.md) |
+| 真实终端观感 | 目标已定为 Ptyxis，等待显示验收 | 本机 `/usr/bin/x-terminal-emulator` 指向 Ptyxis；自动测试不能证明真实终端显示效果 |
 | Windows/macOS 桌面支持 | 文档目标范围之外 | 产品目标是跨平台终端和 Linux 桌面；新增桌面平台要另作决定 |
 | 多模态 | 等产品决定 | 继续不支持、支持或调研 |
-| 云同步 | 等产品决定 | 继续不支持、支持或调研 |
+| 云同步 | 用户取消，保持不支持 | [ADR 0001](docs/decisions/0001-cloud-sync-out-of-scope.md) |
 | 会话导入 | 等产品决定 | 继续不支持、支持或调研 |
 | 自动断点续跑 | 等产品决定 | 继续不支持、支持或调研 |
-| 仓库说明/skills/命令进入模型上下文 | 等风险处置决定 | 接受、缓解或调研；克隆仓库前仍需审查 |
-| 模型诱导用户批准 | 等风险处置决定 | 审批显示真实调用参数；仍需决定是否增加缓解 |
-| 本地工作区信任清单无密码学保护 | 等风险处置决定 | 当前为本地文件，路径移动需重新信任 |
-| bypass 档跳过逐次审批 | 等风险处置决定 | 仅在受信环境使用；持续显示提示 |
-| trace/历史包含未知机密 | 等风险处置决定 | 已知配置密钥会脱敏；分享前仍需人工检查未知内容 |
-| RSI | 保持暂停 | 恢复需要单独决定和预算 |
+| 仓库说明/skills/命令进入模型上下文 | 用户接受当前风险 | [ADR 0002](docs/decisions/0002-accept-current-security-residual-risks.md)；克隆仓库前仍需审查 |
+| 模型诱导用户批准 | 用户接受当前风险 | 审批继续显示真实调用参数，见 ADR 0002 |
+| 本地工作区信任清单无密码学保护 | 用户接受当前风险 | 当前为本地文件，路径移动需重新信任，见 ADR 0002 |
+| bypass 档跳过逐次审批 | 用户接受当前风险 | 仅在受信环境使用并持续显示提示，见 ADR 0002 |
+| trace/历史包含未知机密 | 用户接受当前风险 | 已知配置密钥会脱敏；分享前仍需人工检查未知内容，见 ADR 0002 |
+| RSI | 用户已授权恢复有界 smoke | 运行 GitHub 通用 Anthropic/DeepSeek profile；使用 smoke.json 既有预算上限，云端结果待核实 |
 
 ## 阶段
 
 1. **完成盘点。** 已汇总三个独立审查与当前项目文档；把实现缺陷、验收缺口、风险处置、产品决定和暂停项目分别记录。
 2. **补齐本地可执行实现。** 已按会话 ID 隔离临时授权；桌面 smoke 增加四项审批选择和范围断言；Linux 工作流新增 AppImage/deb 启动；Provider 证据新增提交 SHA 与工作树洁净标记及独立结果目录。定向测试（23 项）、类型检查、改动文件 lint、脚本语法、工作流 YAML 解析、6 份文档本地链接与差异检查均通过。
-3. **关闭外部验收。** 修复后当前版本三平台 `Check` 与 Linux desktop workflow 均通过。已用 GitHub 配置的 Anthropic/DeepSeek 模型完成一轮真实 Provider E2E 并核实 artifact。SWE-bench 工作流已接通同一配置；待新 workflow 版本通过 Check 后，只跑历史第 0 题作单题诊断，最多 5 次迭代和 600 秒，再按结果更新评测文档。
-4. **处理 TUI 与桌面目标范围。** 当前基线的模拟光标/输入用例由三平台 Check 通过；真实终端观感需要用户确认具体终端并验收。Windows/macOS 桌面支持仍在现有范围之外。
-5. **记录安全处置待决。** 保留五项既有残留风险，分别列明事实和需要的产品/安全决策；不在没有威胁边界和验收标准时改写权限或数据保留政策。
-6. **处理未决产品方向。** 对多模态、云同步、会话导入和自动断点续跑分别取得产品决定。获准方向另拆为有范围、有测试和验收条件的实现阶段。
-7. **保留 RSI 暂停状态。** 只有用户明确恢复该项目并批准服务、数据上传和预算后，才运行 Docker/云端 smoke。
+3. **关闭外部验收。** 先前版本三平台 `Check` 与 Linux desktop workflow 通过，真实 Provider E2E 通过。SWE-bench 单题两次未完成后发现并修正 Agent shell Python 版本与轨迹误报，需在当前改动经 CI 后用 10 次迭代/600 秒重跑第 0 题。RSI 已接通同一 GitHub 配置；在 CI 通过后运行一个有界 smoke 并核对 artifact。
+4. **处理 TUI 与桌面目标范围。** 当前基线的模拟光标/输入用例由三平台 Check 通过。真实终端目标设为 Ptyxis，实际显示仍待验收。Windows/macOS 桌面支持仍在现有范围之外。
+5. **记录安全处置。** 用户接受五项既有残留风险；在安全文档和 ADR 中记录范围与日期，风险事实及现有控制保持可见。
+6. **处理产品方向。** 用户取消云同步；多模态、会话导入和自动断点续跑继续等产品决定。获准方向另拆为有范围、有测试和验收条件的实现阶段。
+7. **执行有界 RSI smoke。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的预算限制，结果不自动合并。
 8. **最终核验。** 每项保留证据或明确的延期理由；更新文档索引；确认测试、工作流、分支和工作区状态，并审阅决策轨迹。
 
 ## 已完成的云端验收
@@ -91,14 +94,14 @@
 ## 剩余范围与成本边界
 
 - **Provider 覆盖范围。** 当前 Anthropic/DeepSeek 配置已通过一次固定任务；25k token / 1 credit 阈值是运行后检查，不是硬限制。若要验收 Qoder、OpenAI Chat 或 OpenAI Responses，需分别配置正确 endpoint/key，不能把 Anthropic endpoint 直接当作这些协议。
-- **SWE-bench Lite 开发集。** 当前已接入仓库通用模型配置，默认单题、最多 5 次迭代/600 秒；工作流仍无总 token/美元硬上限。Docker runner 会下载固定公开数据和镜像，将公开任务发送给 Provider；隔离容器中的 agent 可访问配置的凭据和网络。只跑第 0 题诊断，结果/轨迹/诊断/补丁和汇总 artifact 保留 7 天。完整 23 题集仍需单独明确预算后再启动。
-- **RSI smoke。** 文档将它暂停。恢复会使用 Xunfei 凭据、Docker、最多 90 分钟、100 次模型请求和 2,000,000 tokens，并上传列出的实验报告与轨迹保留 7 天。需要单独明确恢复决定和预算。
-- **产品功能。** 四个未决方向需要逐项选择支持、继续不支持，或另行调研。未获选择的方向保持未实现。
-- **安全风险处置。** `docs/reference/security.md` 已列出风险，但没有批准的修复清单：仓库说明/skills/命令进入模型上下文；模型可能诱导用户批准；本地工作区信任清单无密码学保护；bypass 档跳过逐次审批；trace/历史可能包含未知机密。需决定各项风险接受、缓解或调研，并给缓解项排优先级。
-- **终端与桌面范围。** 真实光标/输入验收需要指定目标终端；Windows/macOS 桌面支持需要明确扩展产品范围。
+- **SWE-bench Lite 开发集。** 工作流已接入仓库通用模型配置，默认单题，最多 5 次迭代/600 秒；下一轮单题诊断将设 10 次迭代/600 秒。工作流没有总 token/美元硬上限。Docker runner 会下载固定公开数据和镜像，将公开任务发送给 Provider；隔离容器中的 Agent 可访问配置凭据和网络。结果、轨迹、诊断、补丁和汇总 artifact 保留 7 天。完整 23 题集仍未授权。
+- **RSI smoke。** 用户已授权恢复并调用可用模型。工作流改用现有通用 Anthropic/DeepSeek profile，使用 Docker、最多 90 分钟、100 次模型请求、2,000,000 tokens 和 32,000 输出 tokens，并上传既定报告、账本、候选证据和轨迹，保留 7 天。此处额度是实验硬上限，不是价格承诺。
+- **产品功能。** 云同步已由用户取消，保持不支持。多模态、会话导入、自动断点续跑仍待决定，未获选择的方向保持未实现。
+- **安全风险处置。** 用户接受 `docs/reference/security.md` 列出的五项当前残留风险：仓库说明/skills/命令进入模型上下文；模型可能诱导用户批准；本地工作区信任清单无密码学保护；bypass 档跳过逐次审批；trace/历史可能包含未知机密。事实和现有控制保留在安全文档，见 ADR 0002。
+- **终端与桌面范围。** 已将本机默认终端 Ptyxis 设为真实光标/输入验收目标；实际显示仍未核验。Windows/macOS 桌面支持仍在现有范围之外。
 
 ## 验收记录
 
 每个阶段结束时，把真实命令、提交 SHA、工作流链接或文件行号写入 `.audit/bitori-backlog.tsv`。未运行的检查记为 `INCONCLUSIVE`，不得记作通过。
 
-`.audit/` 已由仓库 `.gitignore` 排除，本轮 checklist 与 TSV 仅保存在本地；提交范围包含 `PLAN.md` 和受影响的项目文档及实现代码，不会强制把本地审计日志加入版本控制。
+`.audit/` 已由仓库 `.gitignore` 排除。为让项目级执行记录可复核，本轮会将 `.audit/bitori-backlog.tsv` 作为明确文件加入提交；临时 checklist 仍只保存在本地。

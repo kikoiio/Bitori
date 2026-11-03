@@ -71,10 +71,11 @@ jobs:
       - run: docker info
       - name: Show bounded experiment scope
         env:
-          PROVIDER: xunfei
-          MODEL: ${{ vars.XUNFEI_MODEL }}
+          PROVIDER: configured
+          PROTOCOL: anthropic
+          MODEL: ${{ vars.LLM_MODEL }}
         run: |
-          echo "provider=$PROVIDER model=$MODEL"
+          echo "provider=$PROVIDER protocol=$PROTOCOL model=$MODEL"
           echo 'scope: task 0 only, one candidate, 30 agent iterations, 90 minute / 100 request / 2,000,000 token budget'
           echo 'uploads: report, ledger, diagnosis, hypothesis, patch, checks, comparison, verification, trajectory'
           echo 'never uploaded: gold instance data, raw thinking, credentials, worktrees, build outputs'
@@ -85,9 +86,9 @@ jobs:
       - name: Run bounded RSI smoke
         env:
           BASELINE_SHA: ${{ inputs.baseline_sha }}
-          LLM_API_KEY: ${{ secrets.XUNFEI_LLM_API_KEY }}
-          LLM_BASE_URL: ${{ vars.XUNFEI_OPENAI_RESPONSE_URL }}
-          LLM_MODEL: ${{ vars.XUNFEI_MODEL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
           test -n "$LLM_API_KEY" && test -n "$LLM_BASE_URL" && test -n "$LLM_MODEL"
           python3 evaluation/RSI/loop.py \

@@ -175,6 +175,8 @@ def upstream_base(url, protocol):
         if path.endswith(suffix):
             path = path[:-len(suffix)]
             break
+    if protocol == 'anthropic' and path and not path.endswith('/v1'):
+        path += '/v1'
     if not re.fullmatch(r'[\w/-]*', path):
         raise ValueError('invalid LLM_BASE_URL path')
     return urlunsplit((parsed.scheme, parsed.netloc, path, '', ''))

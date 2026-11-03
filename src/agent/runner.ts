@@ -18,7 +18,7 @@ import type {HookEngine} from '../hooks/engine.js';
 function callId(call: PreparedToolCall): string { return call.availability === 'available' ? call.call.internalId : call.draft.internalId; }
 function providerCallId(call: PreparedToolCall): string | null { return call.availability === 'available' ? call.call.providerCallId : call.draft.providerCallId; }
 function callName(call: PreparedToolCall): string { return call.availability === 'available' ? call.call.name : call.draft.name; }
-function limitResult(): ToolExecutionResult { return {status: 'error', error: {code: 'agent_loop_limit', message: '已达到 20 次模型迭代上限，新的工具调用未执行', retryable: false}}; }
+function limitResult(maxIterations: number): ToolExecutionResult { return {status: 'error', error: {code: 'agent_loop_limit', message: `已达到 ${maxIterations} 次模型迭代上限，新的工具调用未执行`, retryable: false}}; }
 
 /** 工具定义指纹：内容变化才随 request_prepared 携带完整定义，其余轮次只带摘要。 */
 function definitionsDigest(definitions: readonly ToolDefinition[]): string {
@@ -141,7 +141,7 @@ export class AgentRunner {
         yield {...base(), type: 'run_finished', result}; return result;
       }
       if (iteration === maxIterations) {
-        const results = response.calls.map(call => ({callId: callId(call), providerCallId: providerCallId(call), name: callName(call), result: limitResult()}));
+        const results = response.calls.map(call => ({callId: callId(call), providerCallId: providerCallId(call), name: callName(call), result: limitResult(maxIterations)}));
         for (const item of results) yield {...base(), type: 'tool_result', iterationId, callId: item.callId, result: item.result};
         context.appendToolResults({type: 'tool_results', assistantMessageId: iterationId, results});
         const result: AgentRunResult = {runId: input.runId, status: 'stopped', stopReason: 'iteration_limit', iterationCount: iteration, usage: total, finalIterationId};

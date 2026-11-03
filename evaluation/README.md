@@ -1,14 +1,16 @@
 # 评测与 RSI
 
-> RSI 状态：**暂停**。SWE-bench Lite 23 题开发集工作流可手动运行；最近一次结果未解决任何题目，是否重跑及预算待决定。
+> RSI 状态：**恢复中的有界 smoke**。用户于 2026-11-03 授权继续并调用 GitHub 当前配置的 Anthropic/DeepSeek 模型；单题、单候选 smoke 结果待云端验收。SWE-bench Lite 全 23 题仍未授权。
 
-RSI 指持续改进本项目的 coding-agent harness，不训练或升级底层模型。实现位于 `evaluation/RSI/`：runner 记录安全证据，规则分析器诊断失败，隔离容器生成候选，独立 verifier 检查，控制面在预算内编排并输出可合并审查报告。自动合并、无人值守轮询和正式 300 题测试仍未启用；该方向当前暂停，未完成验收不再作为近期目标。
+RSI 指持续改进本项目的 coding-agent harness，不训练或升级底层模型。实现位于 `evaluation/RSI/`：runner 记录安全证据，规则分析器诊断失败，隔离容器生成候选，独立 verifier 检查，控制面在预算内编排并输出可合并审查报告。自动合并、无人值守轮询和正式 300 题测试仍未启用；本次仅恢复一个有界 smoke，结果仍需人工审查。
 
 ## SWE-bench Lite 开发集
 
 `benchmarks/swe-bench-lite/` 运行 SWE-bench Lite 的 23 题开发集；这是开发集，不是 300 题正式测试集。数据集 revision 固定在 runner 中，官方评分器版本固定在 GitHub Actions 中。每题先运行官方补丁校验环境，再运行 Bitori 和官方评分。模型使用无审批模式，仅限隔离的临时容器。
 
-最近一次完整开发集记录（2026-10-28，agent commit `ff9a4fb8ea70d9c0a7d2191086af99925a07069d`）覆盖 23/23 题，但结果为 8 个 `agent_error`、7 个 `unresolved`、8 个 `infrastructure_error`，没有 `resolved`。这是旧提交上的诊断记录，不代表当前版本。重跑前需决定单题或全 23 题、Provider/model 与供应商账户预算；工作流自身没有总 token 或美元费用硬上限，且按单题串行。
+最近一次完整开发集记录（2026-10-28，agent commit `ff9a4fb8ea70d9c0a7d2191086af99925a07069d`）覆盖 23/23 题，但结果为 8 个 `agent_error`、7 个 `unresolved`、8 个 `infrastructure_error`，没有 `resolved`。这是旧提交上的诊断记录，不代表当前版本。当前仅获准复验历史第 0 题；全 23 题仍需单独明确范围和预算。工作流自身没有总 token 或美元费用硬上限，且按单题串行。
+
+当前提交前的两个第 0 题诊断分别运行 5 次和 10 次迭代：[run 41640309946](https://github.com/kikoiio/Bitori/actions/runs/41640309946) 与 [run 41641115352](https://github.com/kikoiio/Bitori/actions/runs/41641115352) 均以 `agent_error` 结束、补丁为空，gold 环境均通过。两份轨迹都显示初次 Git dubious ownership 错误随后由 Agent 自行设置 `safe.directory` 并继续执行；这不是持续阻塞。第二次 Agent shell 的 `python` 是系统 3.11.5，复现代码因 `collections.Mapping` 失败，而 runner 官方评分使用镜像内 `testbed` Python。已将 Agent 子进程的 `PATH` 指向该环境，并修正合法 U+FFFD 字符误报轨迹截断及迭代上限错误提示。修复后单题复验待新提交通过 Check。
 
 手动运行 `.github/workflows/swe-bench-lite.yml`：`index=0` 至 `22` 为单题，`index=all` 为完整开发集；默认运行第 0 题，Provider 默认使用仓库配置的 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`（当前配置为 Anthropic 协议）。也可选择 openrouter、groq 或 xunfei 专用变量/secret。每题可选最大迭代次数（默认 5）和 Agent wall-clock 上限（默认 600 秒）；每题独立 runner、单题串行。讯飞使用 `XUNFEI_MODEL`、`XUNFEI_OPENAI_RESPONSE_URL` 和 `XUNFEI_LLM_API_KEY`，协议为 `openai-responses`；完整 `/responses` 地址会转为 SDK base URL，避免重复拼接路径。runner 需要联网下载依赖、公开数据和镜像，并将公开任务内容发送给模型供应商。模型产生的命令可访问容器内的模型凭据和网络，应只使用限额、可撤销的专用密钥。工作流没有总 token 或美元费用硬上限，运行结果只提供用量证据，不保证实际费用上限；请勿对不可信的工作流或数据集开放仓库密钥。
 
@@ -37,7 +39,7 @@ python3 evaluation/RSI/loop.py \
 
 `smoke.json` 默认只跑第 0 题、1 个候选、最多 2 次解题运行；解题 30 轮、改进 10 轮、串行执行，总计 90 分钟、100 次模型请求、2,000,000 token。smoke 只验证链路，verifier 结论固定为 `inconclusive`，不能作为合并依据。完整 dev、重复实验、正式测试集和真实云端开销需要单独的显式配置与授权。
 
-`.github/workflows/rsi.yml` 是仅 `workflow_dispatch` 的受控 smoke 入口：代码来自默认分支，输入完整基线 SHA，并要求输入确认短语后才调用讯飞。它上传与本地实验相同的证据白名单（报告、账本、诊断、假设、补丁、检查、比较、验证、轨迹），上限 7 天。真实云端运行、可信 required check 与分支保护尚未验收；该方向当前暂停，在这些门槛完成前，verifier 只能作为诊断工具。
+`.github/workflows/rsi.yml` 是仅 `workflow_dispatch` 的受控 smoke 入口：代码来自默认分支，输入完整基线 SHA，并要求输入确认短语后才调用模型。当前 workflow 使用仓库通用 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`，协议为 Anthropic。固定预算为 90 分钟、100 次请求、2,000,000 tokens、32,000 输出 tokens；只跑第 0 题和一个候选。它上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，保留 7 天。真实云端运行、可信 required check 与分支保护仍待验收；verifier 只能作为诊断工具。
 
 `compare.py` 与 `experiment.py` 仍可用于已有目录的离线比较和人工审查报告。旧结果缺少可比性指纹时只作诊断素材，不作为严格性能基线。
 
