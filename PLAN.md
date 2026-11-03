@@ -55,7 +55,7 @@
 
 | 项目 | 当前状态 | 完成证据或门槛 |
 |---|---|---|
-| 全平台代码检查 | 已验证 | 当前提交 `1eb870f43f4e8cdb148341d6a7be8f358a15c461` 的 Ubuntu/Windows/macOS 完整 `Check` 全通过，见 run 41644656315；此前 `7bca1f1` 也通过 run 41636966238 |
+| 全平台代码检查 | 已验证 | RSI 网关代码修复提交 `a4da1458442fff7a4b971f24abb57b5777faea1e` 的 Ubuntu/Windows/macOS 完整 `Check` 全通过，见 run 41652289996；此前 `1eb870f` 与 `7bca1f1` 也已通过 |
 | 临时会话授权边界 | 已验证 | 23 项定向单测及 Linux 桌面跨会话 smoke 通过，见 run 41637023628 |
 | Linux 桌面 smoke 与打包 | 已验证 | 开发版、`linux-unpacked`、AppImage 与 deb 启动 smoke 通过；构件和截图已上传，见 run 41637023628 |
 | 桌面审批选项 | 已验证 | 一次/本会话/永久/拒绝、授权范围与持久化 smoke 均通过，见 run 41637023628 |
@@ -73,17 +73,17 @@
 | 本地工作区信任清单无密码学保护 | 用户接受当前风险 | 当前为本地文件，路径移动需重新信任，见 ADR 0002 |
 | bypass 档跳过逐次审批 | 用户接受当前风险 | 仅在受信环境使用并持续显示提示，见 ADR 0002 |
 | trace/历史包含未知机密 | 用户接受当前风险 | 已知配置密钥会脱敏；分享前仍需人工检查未知内容，见 ADR 0002 |
-| RSI | 网关认证修复后待云端复验 | run 41647782174 在 preflight 因安全相对符号链接中断，0 请求/0 tokens；run 41650351744 完成 preflight 后在 Anthropic 首次请求遭内部认证拒绝，1 请求、0 tokens、0 上游请求。根因是 SDK 用 `x-api-key`、网关只接受 Bearer；现已按协议修正并由实际 SDK 网关测试覆盖（目标测试文件 85 项通过）；新 Check 和有界重跑待完成 |
+| RSI | 有界 smoke 已完成；未产出候选 | run 41652747706（基线 `a4da145`）：offline tests 通过；preflight 与 baseline 完成，网关 30/30 请求成功、0 失败，实际计量 747,715 tokens。Agent 达到 30 轮上限，产生 2,682 字节部分补丁后以 `iteration_limit` 停止；gold 验证和完整轨迹均通过，但按既有评测规则归为 `agent_error`、未评分，最终 `no_candidate`。artifact `rsi-smoke-41652747706`（33,754 bytes）已核验；不重复同配置调用 |
 
 ## 阶段
 
 1. **完成盘点。** 已汇总三个独立审查与当前项目文档；把实现缺陷、验收缺口、风险处置、产品决定和暂停项目分别记录。
 2. **补齐本地可执行实现。** 已按会话 ID 隔离临时授权；桌面 smoke 增加四项审批选择和范围断言；Linux 工作流新增 AppImage/deb 启动；Provider 证据新增提交 SHA 与工作树洁净标记及独立结果目录。定向测试（23 项）、类型检查、改动文件 lint、脚本语法、工作流 YAML 解析、6 份文档本地链接与差异检查均通过。
-3. **关闭外部验收。** 先前版本三平台 `Check` 与 Linux desktop workflow 通过，真实 Provider E2E 通过。SWE-bench 单题两次未完成后修正 Agent shell Python 版本与轨迹诊断；最终第 0 题复验仍在 10 轮上限结束、空补丁，原因已记录。RSI 的依赖快照缺陷已修复；第二次 smoke 揭示 Anthropic SDK 与内部网关认证头不匹配，现按协议修正并由实际 SDK 网关测试覆盖（85 项通过）；新 Check 通过后再做一次有界重跑并核验 artifact。
+3. **关闭外部验收。** 先前版本三平台 `Check` 与 Linux desktop workflow 通过，真实 Provider E2E 通过。SWE-bench 单题两次未完成后修正 Agent shell Python 版本与轨迹诊断；最终第 0 题复验仍在 10 轮上限结束、空补丁，原因已记录。RSI 的依赖快照与 Anthropic 网关认证缺陷均已修复，目标网关测试 85 项通过；提交 `a4da145` 的三平台 Check 通过。最终有界 smoke 完成 preflight 与 30 次成功模型请求，但 Agent 达到 30 轮上限，部分补丁未评分，结果 `no_candidate`；完整用量及 artifact 已记录。
 4. **处理 TUI 与桌面目标范围。** 模拟光标/输入用例由三平台 Check 通过。Ptyxis 实机检查受 Orca Linux provider 不支持截图及本地已有会话内容影响，未发送输入，真实光标视觉验收记为 `INCONCLUSIVE`。Windows/macOS 桌面支持仍在现有范围之外。
 5. **记录安全处置。** 用户接受五项既有残留风险；在安全文档和 ADR 中记录范围与日期，风险事实及现有控制保持可见。
 6. **处理产品方向。** 用户取消云同步；多模态、会话导入和自动断点续跑继续等产品决定。获准方向另拆为有范围、有测试和验收条件的实现阶段。
-7. **执行有界 RSI smoke。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的预算限制。首轮在 preflight 零调用失败；第二轮在首个请求因内部 Anthropic 认证头不匹配失败，1 请求、0 token、0 上游调用。网关已改为 Anthropic 校验 `x-api-key`、其他协议校验 Bearer；85 项网关测试（含官方 Anthropic SDK 真实请求）通过。完成新 Check 后再运行一次 smoke，结果不自动合并。
+7. **执行有界 RSI smoke。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的硬预算。第一轮由安全符号链接快照问题在模型调用前中断；第二轮因 Anthropic 认证头不匹配在首请求失败（1 请求、0 tokens、无上游调用）。修正网关协议凭证并由 85 项测试覆盖后，`a4da145` 三平台 Check 通过，第三轮 run 41652747706 正常完成 preflight 和 baseline；网关 30/30 成功，计量 747,715 tokens。Agent 达 30 轮上限并留下部分补丁，但评测器按正常完成规则将其记录为 `agent_error`、不评分，最终 `no_candidate`。artifact 已核实，不自动合并、不重复同条件模型调用。
 8. **最终核验。** 每项保留证据或明确的延期理由；更新文档索引；确认测试、工作流、分支和工作区状态，并审阅决策轨迹。
 
 ## 已完成的云端验收
@@ -95,7 +95,7 @@
 
 - **Provider 覆盖范围。** 当前 Anthropic/DeepSeek 配置已通过一次固定任务；25k token / 1 credit 阈值是运行后检查，不是硬限制。若要验收 Qoder、OpenAI Chat 或 OpenAI Responses，需分别配置正确 endpoint/key，不能把 Anthropic endpoint 直接当作这些协议。
 - **SWE-bench Lite 开发集。** 工作流已接入仓库通用模型配置，默认单题，最多 5 次迭代/600 秒；下一轮单题诊断将设 10 次迭代/600 秒。工作流没有总 token/美元硬上限。Docker runner 会下载固定公开数据和镜像，将公开任务发送给 Provider；隔离容器中的 Agent 可访问配置凭据和网络。结果、轨迹、诊断、补丁和汇总 artifact 保留 7 天。完整 23 题集仍未授权。
-- **RSI smoke。** 用户已授权恢复并调用可用模型。工作流改用现有通用 Anthropic/DeepSeek profile，使用 Docker、最多 90 分钟、100 次模型请求、2,000,000 累计 tokens；每次请求最多输出 32,000 tokens，且受剩余累计 token 预算约束。run 41647782174 在 preflight 因依赖树内安全相对链接失败，0 请求/0 tokens；`tree_digest` 已修复，14 项 sandbox 测试通过。run 41650351744 完成 preflight 后，首次请求因 Anthropic SDK 发送 `x-api-key` 而网关只接受 Bearer 失败；1 请求、0 tokens、0 上游请求。网关已按协议读取临时 token，目标测试文件 85 项通过，待新 Check 与有界重跑。工作流上传既定报告、账本、候选证据和轨迹，保留 7 天。额度是实验硬上限，不是价格承诺。
+- **RSI smoke。** 用户授权使用可用模型。实验配置为 Docker、90 分钟、100 次请求、2,000,000 累计 tokens，每次请求最多输出 32,000 tokens。run 41647782174 在 preflight 因依赖树内安全相对链接失败，0 请求；`tree_digest` 修复并通过 14 项 sandbox 测试。run 41650351744 在 Anthropic SDK 的 `x-api-key` 与网关 Bearer 不匹配时以 1 请求、0 tokens、0 上游调用中断；网关已按协议校验临时凭证，目标测试 85 项通过。最终 run 41652747706 完成 preflight/baseline，30 次请求均成功、计量 747,715 tokens；Agent 达迭代上限，提交了部分补丁，但按评测契约未正常完成，因此 `agent_error`、跳过评分、没有 RSI 候选。artifact `rsi-smoke-41652747706`（33,754 bytes）已核实，保留 7 天；不自动合并、不重复同配置调用。额度是实验硬上限，不是价格承诺。
 - **产品功能。** 云同步已由用户取消，保持不支持。多模态、会话导入、自动断点续跑仍待决定，未获选择的方向保持未实现。
 - **安全风险处置。** 用户接受 `docs/reference/security.md` 列出的五项当前残留风险：仓库说明/skills/命令进入模型上下文；模型可能诱导用户批准；本地工作区信任清单无密码学保护；bypass 档跳过逐次审批；trace/历史可能包含未知机密。事实和现有控制保留在安全文档，见 ADR 0002。
 - **终端与桌面范围。** 已将本机默认终端 Ptyxis 设为真实光标/输入验收目标；实际显示仍未核验。Windows/macOS 桌面支持仍在现有范围之外。

@@ -1,6 +1,6 @@
 # 评测与 RSI
 
-> RSI 状态：**恢复中的有界 smoke**。用户于 2026-11-03 授权继续并调用 GitHub 当前配置的 Anthropic/DeepSeek 模型。第一次 smoke 在 preflight 因依赖快照错误以 0 请求、0 tokens 中断，符号链接摘要修复并由 14 项 sandbox 测试验证；第二次完成 preflight 后因 Anthropic SDK 发送 `x-api-key`、网关只接受 Bearer 而在首次请求失败（1 请求、0 tokens、0 上游请求）。网关认证已按协议修正，含官方 Anthropic SDK 的目标测试 85 项通过，待新 Check 后再做一次有界重跑。SWE-bench Lite 全 23 题仍未授权。
+> RSI 状态：**有界 smoke 已完成，未产出候选**。用户于 2026-11-03 授权使用 GitHub 当前配置的 Anthropic/DeepSeek 模型。首轮因依赖快照符号链接中断（0 请求）；第二轮暴露 Anthropic SDK `x-api-key` 与网关只接受 Bearer 的不匹配（1 请求、0 tokens、0 上游请求），已修复并通过包含官方 SDK 请求的 85 项网关测试。提交 `a4da145` 的三平台 Check 通过；最终 run 41652747706 的 preflight/baseline 完成，30 次请求全部成功，网关计量 747,715 tokens。Agent 达 30 轮上限并留下部分补丁；按评测规则记为 `agent_error`、跳过评分，最终 `no_candidate`。artifact 已核验，不自动合并，也不重复同条件调用。SWE-bench Lite 全 23 题仍未授权。
 
 RSI 指持续改进本项目的 coding-agent harness，不训练或升级底层模型。实现位于 `evaluation/RSI/`：runner 记录安全证据，规则分析器诊断失败，隔离容器生成候选，独立 verifier 检查，控制面在预算内编排并输出可合并审查报告。自动合并、无人值守轮询和正式 300 题测试仍未启用；本次仅恢复一个有界 smoke，结果仍需人工审查。
 
