@@ -43,17 +43,17 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:provider
 
 Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-capture.ts --out .tmp/qoder-capture`（录制 busy 409、版本冲突 409、Last-Event-ID 重连、内置工具 requires_action、credits 用量等），再 `npx tsx tests/acceptance/sanitize-qoder-capture.ts` 脱敏输出到 `tests/fixtures/streams/qoder/`。`tests/integration/qoder-events.test.ts` 逐帧回放这些真实事件。
 
-桌面冒烟由 GitHub Actions + Xvfb 顺序执行，覆盖四种审批选择、一次/会话/永久授权边界、diff/撤销、模型列表和会话管理。工作流还会启动 `linux-unpacked`、AppImage（通过 `APPIMAGE_EXTRACT_AND_RUN=1` 启动）及解包 deb 中的应用二进制；结果和截图 artifact 保留 7 天。历史提交 `7bca1f1` 的全部安装形态已由 [run 41637023628](https://github.com/kikoiio/Bitori/actions/runs/41637023628) 验证；本轮在提交 `507d3d3` 的全新桌面验收待运行。脚本支持 `BITORI_PACKAGED_BINARY` 指定二进制和 `BITORI_SCREENSHOT_PREFIX` 区分截图；测试 HOME 中不得已有 `~/.bitori`。
+桌面冒烟由 GitHub Actions + Xvfb 顺序执行，覆盖四种审批选择、一次/会话/永久授权边界、diff/撤销、模型列表、会话管理、图片/归档入口和重命名期间 caret 稳定。工作流还会启动开发版、打包版、AppImage（通过 `APPIMAGE_EXTRACT_AND_RUN=1` 启动）及解包 deb 中的应用二进制；结果和截图 artifact 保留 7 天。提交 `f66f293` 的 [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 全部通过；只读查询确认 `desktop-packaged-linux`（236,896,325 bytes）和 `desktop-screenshots`（962,896 bytes）已上传，保留至 2026-11-10。脚本支持 `BITORI_PACKAGED_BINARY` 指定二进制和 `BITORI_SCREENSHOT_PREFIX` 区分截图；测试 HOME 中不得已有 `~/.bitori`。
 
 诊断与信任：`node dist/bin/bitori.js doctor [--profile name] [--json]` 输出配置/凭据/工作区/连通性/模型列表（不含密钥）；`bitori trust [path] [--revoke]` 管理工作区信任清单。
 
 ## 本轮产品开发与验证状态
 
-截至 2026-11-03，本地图片、版本化会话 JSON 和自动恢复已完成实现；RSI 暂停。提交 `507d3d3` 的三平台完整 Check 通过，Ubuntu 执行 111 个测试文件、737 项测试，包含新构建下的 SQLite 导入/恢复集成回归。Linux 桌面 GUI/打包 smoke 尚待本轮工作流验证。用户入口与限制见 [配置参考](configuration.md#图片附件)。
+截至 2026-11-03，本地图片、版本化会话 JSON 和自动恢复已完成实现；RSI 暂停。提交 `f66f293` 的三平台完整 Check [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 全部通过；Linux 桌面 GUI/打包 smoke [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 全部通过，包含重命名输入保持 caret 选区。Ubuntu 完成类型检查、lint、构建及 111 个测试文件的 737 项测试；用户入口与限制见 [配置参考](configuration.md#图片附件)。
 
-本轮三平台 Check 由 [run 41669917762](https://github.com/kikoiio/Bitori/actions/runs/41669917762) 通过，Linux 桌面工作流待执行。一个 Anthropic 兼容端点的历史真实文本工具任务不验收本轮图片能力；Qoder、OpenAI Chat 和 Anthropic 的早期证据未记录提交 SHA；OpenAI Responses 没有真实端点验收证据，不能把适配器单测当作真实端点成功。
+本轮产品代码由三平台 Check [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 和 Linux 桌面工作流 [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 验收通过。一个 Anthropic 兼容端点的历史真实文本工具任务不验收本轮图片能力；Qoder、OpenAI Chat 和 Anthropic 的早期证据未记录提交 SHA；OpenAI Responses 没有真实端点验收证据，不能把适配器单测当作真实端点成功。
 
-Run 41669917762 在实现提交上完成三平台 `npm run check`，包括类型检查、lint、构建和全量 Vitest（Ubuntu 111 files / 737 tests）；控制器导入、worker 事务和恢复集成均通过。本次文档状态更新本身仍需最终 Check；桌面 GUI/打包由 Linux desktop workflow 单独复验，最终证据以 PLAN.md 为准。
+Run 41679968530 在提交 `f66f293` 上完成三平台 `npm run check`，包括类型检查、lint、构建和全量 Vitest；Ubuntu 为 111 files / 737 tests。Linux desktop run 41680030634 通过开发版、安装包、AppImage 和 deb smoke，并已核实 artifact 上传。只改文档的后续提交仍由 GitHub Actions Check 验证，最终证据以 PLAN.md 为准。
 
 | 本轮场景 | 需要确认的行为 |
 |---|---|
@@ -94,8 +94,8 @@ TUI 模拟测试覆盖光标行列、中文折行、流式更新、输入与取�
 |---|---|---|---|
 | Check | 类型、lint、单元/集成/TUI 测试、`dist/` 构建 | GitHub-hosted Ubuntu/Windows/macOS | 每个 PR 和 `master` |
 | 终端 | TUI 模拟终端测试；CLI 交互与光标观感 | 自动测试在 Check；交互观感需用户目标终端验收 | 自动测试随 Check；真实终端按环境验收 |
-| 桌面未打包 | 开发入口会话、审批、工作区信任 | GitHub Actions + Xvfb | PR / `desktop/**` / 手动；master 需手动触发 |
-| 桌面包 | `linux-unpacked`、AppImage、解包 deb 启动 | GitHub Actions + Xvfb；截图与安装包 artifact 留 7 天 | 历史启动验收通过；本轮在 `507d3d3` 上待重新验收 |
+| 桌面未打包 | 开发入口会话、审批、工作区信任、图片/归档、重命名 caret | GitHub Actions + Xvfb | 当前 `master` 的 run 41680030634 通过 |
+| 桌面包 | 开发版、AppImage、解包 deb 启动 | GitHub Actions + Xvfb；截图与安装包 artifact 留 7 天 | run 41680030634 通过；artifact 已核实上传 |
 | 真实模型 | Provider 端到端（Qoder/OpenAI 兼容等）+ OpenRouter/Groq | 获授权的手动 `e2e.yml`，或确需本地环境的定向脚本 | 明确授权并确认预算后 |
 | SWE-bench Lite 开发集 | 单题或 23 题开发集；最近 23 题结果为 8 个 agent 错误、7 个未解决、8 个环境错误 | GitHub Actions + Docker；每题串行 | 需选 Provider/model、运行范围和预算后授权 |
 | RSI smoke | 受控单题 RSI 实验 | 当前暂停 | 单独恢复立项并明确授权、数据范围和预算后 |

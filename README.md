@@ -2,7 +2,7 @@
 
 Bitori 是在本地工作区中运行的 AI 编码助手，提供跨平台终端 TUI 和 Linux 桌面界面。模型可读取文件、提出修改并调用工具；需要审批的操作会先显示实际参数。
 
-本地图片、版本化会话 JSON 交换和中断恢复已完成实现；提交 `507d3d3` 的三平台全量 Check 通过，Linux 桌面 GUI/打包复验仍在进行。验收进度见 [开发与测试](docs/reference/development.md) 与 [PLAN.md](PLAN.md)。云同步不在产品范围内，RSI 当前暂停。
+本地图片、版本化会话 JSON 交换和中断恢复已完成实现；提交 `f66f293` 的三平台全量 Check 和 Linux 桌面 smoke/打包验收均通过。云同步不在产品范围内，RSI 当前暂停。真实终端光标视觉验收仍为 `INCONCLUSIVE`；完整验收记录见 [开发与测试](docs/reference/development.md) 与 [PLAN.md](PLAN.md)。
 
 ## 首次启动
 
@@ -49,4 +49,4 @@ Linux 桌面源码入口是 `npm run desktop`，该命令会先构建并准备 E
 
 ## 开发与限制
 
-[文档索引](docs/README.md) 汇总配置、架构、安全与验收说明。完整构建和全量测试由本轮 GitHub Actions run 41669917762 在 Ubuntu、Windows、macOS 全部通过，Linux 桌面 GUI/打包仍待本轮工作流完成。真实终端光标视觉验收目前为 `INCONCLUSIVE`；Windows 和 macOS 桌面不在当前目标范围内。
+[文档索引](docs/README.md) 汇总配置、架构、安全与验收说明。提交 `f66f293` 的完整构建和全量测试由 GitHub Actions run [41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 在 Ubuntu、Windows、macOS 全部通过；Linux 开发版、打包版、AppImage 和解包 deb 的 smoke 由 [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 全部通过。真实终端光标视觉验收目前为 `INCONCLUSIVE`；Windows 和 macOS 桌面不在当前目标范围内。

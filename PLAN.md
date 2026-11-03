@@ -1,11 +1,11 @@
 # Bitori 项目级待办执行计划
 
 更新时间：2026-11-03
-基线：`master`，`a354503bc75633091943b0818abe47beb7d25d8e`。产品实现提交：`507d3d3e1def769d647a957e3f54a42e18dd7229`；三平台 Check 已通过，Linux 桌面最终验收与本计划文档提交后的 Check 尚待完成。
+基线：`master`，`a354503bc75633091943b0818abe47beb7d25d8e`。本轮产品及 caret 修正提交：`f66f293fb2b0aa7939288c2aae446166ac90ba74`；三平台 Check 与 Linux 桌面/打包验收均通过。当前计划与产品文档已同步，文档提交后仍需跑一次三平台 Check。
 
 ## 当前优先级（用户最新决定）
 
-用户明确要求“先暂停 RSI，完成产品本身先”。RSI 现暂停，历史 smoke 报告保留；不启动新的 RSI、候选生成或基准扩跑。当前主线转为既有产品范围的首次配置、TUI/桌面对话、工具审批、会话保存和终端光标验收。用户已明确将多模态、会话导入与自动断点续跑三项全部纳入本轮；首版已确认并直接进入开发：本地图片、Bitori JSON 导入/导出、检查点续跑且不确定副作用先确认。云同步继续取消。
+用户明确要求“先暂停 RSI，完成产品本身先”。RSI 现暂停，历史 smoke 报告保留；不启动新的 RSI、候选生成或基准扩跑。产品范围包括首次配置、TUI/桌面对话、工具审批、会话保存、多模态、会话导入/导出和自动断点续跑；已完成实现、三平台 Check 和 Linux 桌面/打包验收。桌面 caret 回归现通过真实 Chromium/Electron smoke；本机 Ptyxis 像素级光标观感仍为 `INCONCLUSIVE`。云同步继续取消。
 
 本轮并行：图片/provider、会话归档、恢复逻辑、TUI、桌面和文档分属独立文件边界。主执行者集成存储、处理交叉审查问题、更新计划并统一验证。重型构建、全量测试、桌面 GUI 和打包放在 GitHub Actions。
 
@@ -62,7 +62,7 @@
 - 提交 `8ac6b32` 上第 0 题在 run [41640309946](https://github.com/kikoiio/Bitori/actions/runs/41640309946)（5 次迭代）与 [41641115352](https://github.com/kikoiio/Bitori/actions/runs/41641115352)（10 次迭代）均以 `agent_error` 结束、补丁为空。轨迹证明初始 Git ownership 报错随后由 Agent 自行加入精确 `safe.directory` 配置并恢复；不能将它当作持续根因。第二次轨迹还显示 Agent shell 的 `python` 是系统 3.11.5，复现代码因 `collections.Mapping` 失败；gold grader 使用镜像内 `/opt/miniconda3/envs/testbed/bin/python`。随后为 Agent shell 统一 testbed `PATH`，并修正合法 U+FFFD 字符被误判为轨迹截断及固定写死“20 次”的迭代上限错误提示。补丁和 9 项 Python runner 测试、17 项 AgentRunner 测试已通过；提交 `1eb870f` 的 Check 已由 run 41644656315 全平台通过。单题复验将在最终文档/证据提交的 Check 通过后派发。
 - TUI 的模拟终端测试覆盖光标行列、中文折行、输入、排队和取消，且已由修复后提交 `7bca1f1` 的三平台 `Check` 运行并通过。它没有启动 CLI 做真实终端交互验收。
 - 本轮产品实现提交 `507d3d3e1def769d647a957e3f54a42e18dd7229` 的三平台 `Check` [run 41669917762](https://github.com/kikoiio/Bitori/actions/runs/41669917762) 全部通过。Ubuntu 完成类型检查、lint、构建及 111 个测试文件的 737 项测试；Windows 和 macOS 的完整 `npm run check` 也通过。此前该集成检查发现控制器将带本地 checkpoint 的会话直接送入严格归档 schema，已修复为经过版本化归档白名单规范化；回归与存储 worker 集成测试通过。
-- 最终文档提交 `6a56090ce8541e5b9cbee92f2a3f3bb514c2f5a4` 的三平台 `Check` [run 41670936682](https://github.com/kikoiio/Bitori/actions/runs/41670936682) 全部通过。Linux desktop [run 41670975726](https://github.com/kikoiio/Bitori/actions/runs/41670975726) 在首个桌面 smoke 发现 Electron 45 移除了旧 `clipboard.readImage/writeImage` API；已改为异步 ClipboardItem 接口。[后续复验 run 41671689523](https://github.com/kikoiio/Bitori/actions/runs/41671689523) 确认 smoke 主进程 evaluator 不提供 `require`，故测试改用 Node/Web 标准全局 API 创建 ClipboardItem 图片；此修正的桌面 smoke 仍待复验。
+- 最终文档提交 `6a56090ce8541e5b9cbee92f2a3f3bb514c2f5a4` 的三平台 `Check` [run 41670936682](https://github.com/kikoiio/Bitori/actions/runs/41670936682) 全部通过。Linux desktop [run 41670975726](https://github.com/kikoiio/Bitori/actions/runs/41670975726) 在首个桌面 smoke 发现 Electron 45 移除了旧 `clipboard.readImage/writeImage` API；已改为异步 ClipboardItem 接口。[后续复验 run 41671689523](https://github.com/kikoiio/Bitori/actions/runs/41671689523) 确认 smoke 主进程 evaluator 不提供 `require`，故测试改用 Node/Web 标准全局 API 创建 ClipboardItem 图片；当时仍待复验的后续结果与最终修复见下文。
 - [再一次桌面复验 run 41672493312](https://github.com/kikoiio/Bitori/actions/runs/41672493312) 已运行到剪贴板粘贴预览，并确认功能显示名为 `clipboard.png`；测试误将它与文件选择入口的 `icon.png` 等同。现已修正该断言，桌面/打包完整复验待运行。
 - [桌面复验 run 41672961793](https://github.com/kikoiio/Bitori/actions/runs/41672961793) 已通过剪贴板写入/读取、图片发送和导出，失败在导入验证唯一选择器匹配两条图片消息。改为精确等待两张导入图片后重跑。
 - [桌面复验 run 41673485851](https://github.com/kikoiio/Bitori/actions/runs/41673485851) 已通过图片粘贴、纯图片发送、图片导出/导入和两条附件恢复；后续模型 smoke 的 Provider fixture 未列出配置默认模型 `test-model`，按实现预期没有显示不可用默认模型的选择项。现将默认模型加入可用列表，重跑余下审批和打包验收。
@@ -72,6 +72,10 @@
 - [桌面复验 run 41676241422](https://github.com/kikoiio/Bitori/actions/runs/41676241422) 已通过 session ID 切换、跨会话审批等前序场景，重命名状态刷新用例报告 caret 变成整段选择 `0–5`。现将焦点与 `1–3` 选区在同一 renderer 操作中设置并先断言前置状态，确认最终光标恢复结果。
 - [桌面复验 run 41677114497](https://github.com/kikoiio/Bitori/actions/runs/41677114497) 已确认刷新前选区为 `1–3`，但 renderer 替换输入框后重置成整段 `0–5`。现由输入/selectionchange 记住当前 session 的选区并在 redraw 后恢复，等待桌面验证。
 - [桌面复验 run 41677917237](https://github.com/kikoiio/Bitori/actions/runs/41677917237) 证明仅记忆输入/selectionchange 尚未恢复实际 caret，重绘后仍为 `0–5`。现追加 keyup/mouseup 同步，并由 smoke 通过 Home/方向键/Shift+方向键实际设置选区，再触发状态刷新。
+- 提交 `14188d1` 的三平台 Check [run 41678421743](https://github.com/kikoiio/Bitori/actions/runs/41678421743) 通过；桌面 run 41678459201 的键盘 smoke 前置实际得到 `5–5`，证明该输入法合成没有建立 `1–3` 选区。切回确定性的选区前置后，提交 `7c0e6bb` 的桌面 run 41679609440 仍观察到 `1–3` 被稍后改成 `0–5`，且输入框节点未替换。
+- 查阅 run 41679609440 日志后，根因定位到新建重命名框使用 `setTimeout` 延迟聚焦并全选，异步 `.select()` 会覆盖之后的 caret。提交 `f66f293` 改为插入节点后同步聚焦/全选，并在编辑框仍聚焦时跳过列表重建、复用原节点。
+- 提交 `f66f293fb2b0aa7939288c2aae446166ac90ba74` 的三平台 `Check` [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 全部通过。前一轮 `7c0e6bb` 的 run 41679539550 有 Windows `run-command` Unicode 用例偶发 timeout（730 passed / 1 failed）；修复提交的当前 Check 在 Windows、macOS、Ubuntu 全部通过。
+- Linux desktop [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 在同一 `f66f293` 上通过开发版 smoke、Linux 打包、打包版启动、AppImage 启动及解包 deb 启动；caret smoke 确认编辑框保持焦点且 `1–3` 选区不变。只读 artifact 查询确认 `desktop-packaged-linux`（236,896,325 bytes）与 `desktop-screenshots`（962,896 bytes）已上传，保留至 2026-11-10。
 - 提交 `417bb35f23920c74fa681302c3abb6b2b268f377` 的三平台 Check [run 41676188537](https://github.com/kikoiio/Bitori/actions/runs/41676188537)：Ubuntu 与 macOS 通过；Windows 的 4 个 `run-command` 用例因 timeout 失败，`tool-turn` 临时目录清理另报 `EPERM`。较早 Windows 完整 Check 通过；随当前重命名 smoke 修正提交再复验。
 - 当前 caret smoke 提交 `4fb3f07d58241b09b7bce9d245eb59b599c591fa` 的三平台 Check [run 41677079394](https://github.com/kikoiio/Bitori/actions/runs/41677079394) 全部通过。桌面 run 41677114497 则复现并确认 renderer 重绘真实丢选区；已在 `renderer.js` 保存并恢复 caret，待新提交验证。
 - 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前实现改为会话 ID 作用域，引擎与 AgentRunner 回归测试通过，桌面跨会话审批 smoke 也在 run 41637023628 通过。
@@ -89,15 +93,15 @@
 
 | 项目 | 当前状态 | 完成证据或门槛 |
 |---|---|---|
-| 当前三平台代码检查 | 已通过 | 提交 `507d3d3e1def769d647a957e3f54a42e18dd7229`；[run 41669917762](https://github.com/kikoiio/Bitori/actions/runs/41669917762) Ubuntu/Windows/macOS 全通过；Ubuntu 111 files、737 tests |
-| Linux 桌面 GUI/打包 | 待运行 | 用户已授权免费 GitHub Actions；运行 `Linux desktop`，核对开发/打包 smoke、AppImage/deb 启动及截图 artifact |
-| 本机定向检查 | 已验证 | `npm run typecheck` 通过；18 个定向 Vitest 文件共 193 项通过；改动 TS/TSX 文件 ESLint、桌面 JS `node --check` 与 `git diff --check` 通过 |
-| 多模态 | 实现及跨平台 Check 通过；桌面验收待运行 | 本地 PNG/JPEG/GIF/WebP，单图 4 MiB、最多 4 张且合计 8 MiB；桌面选图/粘贴、终端 `/attach`；四种 Provider adapter 离线测试通过。真实图片端点验收不在本轮，Linux 桌面 smoke 待运行 |
-| 会话导入/导出 | 实现、三平台和 SQLite 集成通过；桌面验收待运行 | 版本 1 自包含 JSON；消息、工具记录、图片，排除凭据/provider state；CLI 与 TUI/桌面入口；导入重映射 ID 且数据库事务保护。控制器直接导入也会按便携归档规范化 |
-| 自动断点续跑 | 实现、存储集成与三平台 Check 通过；桌面验收待运行 | 恢复沿用 run 和检查点，保留已完成工具结果且不直接重放；不确定写入/命令要求显式确认；未落盘完成的轮次重试同一轮，已落盘最终回答不再次请求模型；预算与 SQLite 恢复测试由 Check 通过 |
+| 当前三平台代码检查 | 已通过 | 提交 `f66f293fb2b0aa7939288c2aae446166ac90ba74`；[run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) Ubuntu/Windows/macOS 全通过；Ubuntu 111 files、737 tests |
+| Linux 桌面 GUI/打包 | 已通过 | [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 的开发版、打包版、AppImage、解包 deb smoke 全通过；`desktop-packaged-linux` 236,896,325 bytes 与 `desktop-screenshots` 962,896 bytes 已核实上传，保留至 2026-11-10 |
+| 本机定向检查 | 已验证 | caret 修正涉及的 renderer 与 desktop smoke ESLint、Node.js 语法检查、`git diff --check` 通过；重型 build/full tests/GUI 均在 Actions 执行 |
+| 多模态 | 实现及验收通过 | 本地 PNG/JPEG/GIF/WebP，单图 4 MiB、最多 4 张且合计 8 MiB；桌面选图/粘贴、终端 `/attach`；四种 Provider adapter 离线测试和 Linux 桌面 smoke 通过。真实图片端点验收不在本轮 |
+| 会话导入/导出 | 实现及验收通过 | 版本 1 自包含 JSON；消息、工具记录、图片，排除凭据/provider state；CLI 与 TUI/桌面入口；导入重映射 ID 且数据库事务保护。控制器直接导入也会按便携归档规范化；全量集成和 Linux 桌面 smoke 通过 |
+| 自动断点续跑 | 实现及验收通过 | 恢复沿用 run 和检查点，保留已完成工具结果且不直接重放；不确定写入/命令要求显式确认；未落盘完成的轮次重试同一轮，已落盘最终回答不再次请求模型；预算、SQLite 集成和桌面恢复入口通过对应检查 |
 | TUI 缺陷与产品入口 | 已实现，三平台全量 Check 通过 | 会话草稿隔离、过渡期排队、附件/归档/恢复入口；Check 含光标/输入行为测试。真实 Ptyxis 光标视觉验收仍为 `INCONCLUSIVE` |
-| 桌面缺陷与产品入口 | 已实现，Linux 桌面云端验收待运行 | 默认模型恢复、重命名草稿保留、图片/归档/恢复入口和 smoke 覆盖；本机 `node --check` 通过；GUI/打包只在 GitHub Actions 验证 |
-| 首次使用与功能文档 | 已有内容；最终文档 Check 与链接复核待完成 | 根 README、配置/开发参考、架构/意图、评测状态及项目索引已更新；本次同步后再核对链接和云端状态 |
+| 桌面缺陷与产品入口 | 已实现，Linux 桌面验收通过 | 默认模型恢复、重命名草稿与 `1–3` 选区在状态更新时保持、图片/归档/恢复入口；开发版、安装包、AppImage、deb smoke 由 run 41680030634 验证 |
+| 首次使用与功能文档 | 本次已同步；提交后 Check 待运行 | README、开发参考、架构/意图与索引记载当前功能和 run 41679968530/41680030634 证据；最终文档提交后再核验三平台 Check |
 | 真实终端光标观感 | INCONCLUSIVE | Ptyxis 可访问树可读；Orca Linux provider 不支持截图且启动界面有本地会话文本，因此未输入或确认像素级光标位置。保留既有模拟终端测试结果 |
 | 当前配置的真实 Provider | 已有历史验收；本轮不扩展 | Anthropic/DeepSeek 固定任务 309 输出 token，见 run 41638870512；其余三种协议无各自真实端点证据。多模态 Provider 映射由离线协议测试覆盖 |
 | SWE-bench Lite 开发集 | 暂缓 | 历史 23 题无 resolved；第 0 题诊断未产出补丁。不是当前产品功能验收，详见 [评测说明](evaluation/README.md) |
@@ -117,9 +121,9 @@
 3. **关闭外部验收。** 先前版本三平台 `Check` 与 Linux desktop workflow 通过，真实 Provider E2E 通过。SWE-bench 单题两次未完成后修正 Agent shell Python 版本与轨迹诊断；最终第 0 题复验仍在 10 轮上限结束、空补丁，原因已记录。RSI 的依赖快照与 Anthropic 网关认证缺陷均已修复，目标网关测试 85 项通过；提交 `a4da145` 的三平台 Check 通过。最终有界 smoke 完成 preflight 与 30 次成功模型请求，但 Agent 达到 30 轮上限，部分补丁未评分，结果 `no_candidate`；完整用量及 artifact 已记录。
 4. **处理 TUI 与桌面目标范围。** 模拟光标/输入用例由三平台 Check 通过。Ptyxis 实机检查受 Orca Linux provider 不支持截图及本地已有会话内容影响，未发送输入，真实光标视觉验收记为 `INCONCLUSIVE`。Windows/macOS 桌面支持仍在现有范围之外。
 5. **记录安全处置。** 用户接受五项既有残留风险；在安全文档和 ADR 中记录范围与日期，风险事实及现有控制保持可见。
-6. **实现产品新增功能。** 三项范围和共享契约已确定；图片/provider、版本化会话交换与事务导入、检查点恢复及 TUI/桌面入口已接入。run 41669917762 的三平台全量检查和 SQLite 集成回归通过；等待 Linux 桌面 GUI/打包及本计划最终提交的 Check。云同步保持取消。
+6. **实现产品新增功能。** 三项范围和共享契约已确定；图片/provider、版本化会话交换与事务导入、检查点恢复及 TUI/桌面入口已接入。提交 `f66f293` 的三平台全量检查和 Linux 开发版、AppImage、deb smoke 全部通过，SQLite 集成回归通过。云同步保持取消；文档同步后的 Check 在最终提交后执行。
 7. **RSI 已暂停（以下保留历史执行记录）。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的硬预算。第一轮由安全符号链接快照问题在模型调用前中断；第二轮因 Anthropic 认证头不匹配在首请求失败（1 请求、0 tokens、无上游调用）。修正网关协议凭证并由 85 项测试覆盖后，`a4da145` 三平台 Check 通过，第三轮 run 41652747706 正常完成 preflight 和 baseline；网关 30/30 成功，计量 747,715 tokens。Agent 达 30 轮上限并留下部分补丁，但评测器按正常完成规则将其记录为 `agent_error`、不评分，最终 `no_candidate`。artifact 已核实，不自动合并、不重复同条件模型调用。
-8. **最终核验。** 每项保留证据或明确的延期理由；更新文档索引；确认测试、工作流、分支和工作区状态，并审阅决策轨迹。
+8. **最终核验。** 产品代码和桌面验收已通过；同步 README、架构、意图、开发说明、计划和审计轨迹后，跑文档提交的三平台 Check，最终核验仅有 `master` 且本地/远端 SHA 一致。真实终端视觉和真实图片 Provider 端点分别按范围记录为未验/不在本轮验收。
 
 ## 已完成的云端验收
 

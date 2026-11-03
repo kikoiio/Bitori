@@ -8,4 +8,4 @@ Bitori 面向在本地软件工作区中与模型协作的用户：通过对话�
 
 ## 非目标与验收方向
 
-多模态、会话导入和自动断点续跑已由用户明确纳入本轮产品建设并完成实现。首版范围是本地图片（桌面选择/粘贴、终端路径）、Bitori 版本化 JSON 会话导入/导出，以及基于持久化检查点的续跑；已完成工具不直接重放，不确定写入或命令先由用户确认。提交 `507d3d3` 的三平台完整 Check 和存储集成测试已通过；Linux 桌面 GUI/打包复验待完成。云同步已取消并保持不支持，见 [决策记录](decisions/0001-cloud-sync-out-of-scope.md)。真实终端光标视觉结论仍为 `INCONCLUSIVE`，见 [开发与测试](reference/development.md)。
+多模态、会话导入和自动断点续跑已由用户明确纳入本轮产品建设并完成实现。首版范围是本地图片（桌面选择/粘贴、终端路径）、Bitori 版本化 JSON 会话导入/导出，以及基于持久化检查点的续跑；已完成工具不直接重放，不确定写入或命令先由用户确认。提交 `f66f293` 的三平台完整 Check 和 Linux 桌面开发版/安装包验收已通过，证据见 [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 与 [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634)。云同步已取消并保持不支持，见 [决策记录](decisions/0001-cloud-sync-out-of-scope.md)。真实终端光标视觉结论仍为 `INCONCLUSIVE`，见 [开发与测试](reference/development.md)。
