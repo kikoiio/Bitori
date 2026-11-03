@@ -15,6 +15,9 @@ export function Message({message, selected, thinkingExpanded, spinner = '●', g
         <Text color={selected ? theme.accent : theme.dim}>❯ </Text>
         <Text color={theme.text} wrap="wrap">{content}</Text>
       </Box>
+      {message.attachments === undefined || message.attachments.length === 0 ? null : <Box flexDirection="column" paddingLeft={4}>
+        {message.attachments.map((attachment, index) => <Text key={`${attachment.name}:${attachment.mediaType}:${index}`} color={theme.faint} wrap="wrap">↳ {attachment.name} · {attachment.mediaType}</Text>)}
+      </Box>}
       {message.errorMessage ? <Text color={theme.red}>{message.errorMessage}</Text> : null}
     </Box>;
   }

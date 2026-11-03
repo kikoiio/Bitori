@@ -52,6 +52,18 @@ describe('parseCliArgs', () => {
     });
   });
 
+  it('解析会话归档导入与导出', () => {
+    expect(parseCliArgs(['sessions', 'export', 'abc', '--out', 'conversation.json'])).toEqual({
+      help: false, sessions: {action: 'export', sessionId: 'abc', out: 'conversation.json'},
+    });
+    expect(parseCliArgs(['sessions', 'import', 'conversation.json', '--profile', 'claude', '--json'])).toEqual({
+      help: false, profile: 'claude', sessions: {action: 'import', file: 'conversation.json', json: true},
+    });
+    expect(parseCliArgs(['--profile', 'claude', 'sessions', 'export', 'abc', '--out', 'conversation.json'])).toEqual({
+      help: false, profile: 'claude', sessions: {action: 'export', sessionId: 'abc', out: 'conversation.json'},
+    });
+  });
+
   it.each([
     ['trace'],
     ['trace', 'fly'],
@@ -59,6 +71,14 @@ describe('parseCliArgs', () => {
     ['usage', 'count'],
     ['sessions'],
     ['sessions', 'delete'],
+    ['sessions', 'export'],
+    ['sessions', 'export', 'abc'],
+    ['sessions', 'export', 'abc', '--out'],
+    ['sessions', 'export', 'abc', '--out', 'x', '--out', 'y'],
+    ['sessions', 'export', 'abc', '--json'],
+    ['sessions', 'import'],
+    ['sessions', 'import', 'x', '--out', 'y'],
+    ['sessions', 'import', 'x', '--json', '--json'],
     ['trace', 'show'],
     ['trace', 'show', 'abc', '--iteration', '0'],
     ['usage', 'stats', '--kind', 'other'],
@@ -97,6 +117,7 @@ describe('parseCliArgs', () => {
     ['--help', '--log-level', 'debug'],
     ['usage', 'tail', 'extra'],
     ['sessions', 'list', '--session', 'id'],
+    ['sessions', 'import', 'x', '--profile', 'a', '--profile', 'b'],
     ['--help', 'usage', 'tail'],
     ['--profile', 'a', 'sessions', 'list', '--profile', 'a'],
     ['exec', '--task', 'demo', '--max-iterations', '8garbage'],

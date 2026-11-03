@@ -51,6 +51,7 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
 | 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。历史证据覆盖 Qoder、OpenAI Chat 和 Anthropic，但未记录运行提交 SHA；验收脚本现记录 `commitSha` 和 `workingTreeClean`，OpenAI Responses 及当前提交的四协议验收仍待运行。 |
 | 桌面图形应用 | Linux 初版 | `src/desktop/` 提供 Electron 界面。最近一次成功 Linux CI 只验证开发入口和 `linux-unpacked`；当前工作流定义新增 AppImage 与解包 deb 启动步骤，需在 GitHub Actions 实际运行后才能记为通过。其他桌面平台和真实模型需另行验收。打包路径见 [开发与测试](reference/development.md)。 |
-| 多模态、云同步、会话导入、自动断点续跑 | 当前不支持 | 是否纳入后续版本尚未确定。 |
+| 多模态、会话导入、自动断点续跑 | 已纳入本轮，集成验收中 | 本地图片贯通四种 Provider 与 TUI/桌面；版本化 JSON 由 CLI/TUI/桌面交换；持久检查点恢复并要求不确定副作用确认。完整 Check、桌面 GUI/打包与恢复存储集成验证待完成，见[项目待办计划](../PLAN.md)。 |
+| 云同步 | 已取消，保持不支持 | 见 ADR 0001。 |
 
 状态依据 2026-11-03 的代码和历史验证记录，其中终端工具展示于 2026-10-30 更新；本次桌面工作流及真实端点验收须单独核实。

@@ -4,11 +4,14 @@ const $ = id => document.getElementById(id);
 const ui = {
   workspace: $('workspace-path'), workspaceName: $('workspace-name'), chooseWorkspace: $('choose-workspace'), profile: $('profile'),
   sessions: $('sessions'), sessionCount: $('session-count'), newSession: $('new-session'), title: $('chat-title'), profileDetail: $('profile-detail'),
+  importSession: $('import-session'), exportSession: $('export-session'), sessionFeedback: $('session-feedback'),
   status: $('request-status'), error: $('error'), messages: $('messages'), messageList: $('message-list'),
   approval: $('approval'), approvalEffect: $('approval-effect'), approvalTool: $('approval-tool'),
   approvalDetail: $('approval-detail'), approvalRisk: $('approval-risk'),
+  recovery: $('recovery'), recoveryMessage: $('recovery-message'), recoveryNote: $('recovery-note'), recoveryContinue: $('recovery-continue'),
   deny: $('deny'), allowOnce: $('allow-once'), allowSession: $('allow-session'), allowAlways: $('allow-always'),
   composer: $('composer'), input: $('input'), send: $('send'), cancel: $('cancel'), composerPlus: $('composer-plus'),
+  chooseImages: $('choose-images'), pasteImage: $('paste-image'), attachmentDrafts: $('attachment-drafts'),
   slashMenu: $('slash-menu'), modelMenu: $('model-menu'), modelButton: $('model-button'), modelName: $('model-name'),
   composerProfile: $('composer-profile'), composerMode: $('composer-mode'), composerPermission: $('composer-permission'),
   composerHelp: $('composer-help'), usageValue: $('usage-value'), zoomBadge: $('zoom-badge'), sessionSearch: $('session-search')
@@ -24,6 +27,10 @@ let changingContext = false;
 let actionPending = false;
 let sending = false;
 let approvalPending = false;
+let attachmentActionPending = false;
+let recoveryPending = false;
+let draftAttachments = [];
+let attachmentScope = '';
 let contextVersion = 0;
 let listVersion = 0;
 let listTimer = null;
@@ -40,6 +47,7 @@ let sessionFilter = '';
 let renamingSessionId = null;
 let renameDraft = '';
 let deleteArmedSessionId = null;
+let rebuildingSessionList = false;
 let zoomTimer = null;
 let currentZoom = 1;
 
@@ -103,6 +111,11 @@ function showError() {
 }
 function clearActionError() { actionError = ''; showError(); }
 function setActionError(error) { actionError = messageForError(error); showError(); }
+function setSessionFeedback(message, kind = '') {
+  ui.sessionFeedback.textContent = message;
+  ui.sessionFeedback.className = `session-feedback${kind ? ` ${kind}` : ''}`;
+  ui.sessionFeedback.hidden = !message;
+}
 function dateText(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'});
@@ -111,6 +124,111 @@ function baseName(path) {
   if (!path) return '未选择工作区';
   const parts = path.replace(/[\\/]+$/, '').split(/[\\/]/);
   return parts.at(-1) || path;
+}
+const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGE_BASE64_LENGTH = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
+function imageAttachmentByteLength(image) {
+  if (!image || typeof image.data !== 'string' || image.data.length === 0 || image.data.length > MAX_IMAGE_BASE64_LENGTH || image.data.length % 4 !== 0) return null;
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(image.data)) return null;
+  const padding = image.data.endsWith('==') ? 2 : image.data.endsWith('=') ? 1 : 0;
+  const byteLength = image.data.length / 4 * 3 - padding;
+  return byteLength > 0 && byteLength <= MAX_IMAGE_BYTES ? byteLength : null;
+}
+function isDisplayableImageAttachment(image) {
+  return Boolean(image && typeof image.name === 'string' && IMAGE_MEDIA_TYPES.has(image.mediaType) && imageAttachmentByteLength(image) !== null);
+}
+function imageDataUrl(image) { return `data:${image.mediaType};base64,${image.data}`; }
+function attachmentScopeForState() {
+  if (!workspace || !state || !state.profile || !state.session) return '';
+  return `${workspace}\u0000${state.profile.name}\u0000${state.session.id}`;
+}
+function syncAttachmentScope() {
+  const next = attachmentScopeForState();
+  if (next === attachmentScope) return;
+  attachmentScope = next;
+  draftAttachments = [];
+  renderDraftAttachments();
+}
+function renderImageAttachment(image, className) {
+  if (!isDisplayableImageAttachment(image)) return null;
+  const img = element('img', className);
+  img.src = imageDataUrl(image);
+  img.alt = image.name || '图片附件';
+  img.dataset.attachmentName = image.name;
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  return img;
+}
+function renderMessageAttachments(images) {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  const list = element('div', 'message-attachments');
+  for (const image of images) {
+    const img = renderImageAttachment(image, 'message-attachment');
+    if (!img) continue;
+    const item = element('div', 'message-attachment-item');
+    item.append(img, element('span', 'message-attachment-name', image.name || '图片附件'));
+    list.append(item);
+  }
+  return list.childElementCount ? list : null;
+}
+function renderDraftAttachments() {
+  ui.attachmentDrafts.replaceChildren();
+  ui.attachmentDrafts.hidden = draftAttachments.length === 0;
+  draftAttachments.forEach((image, index) => {
+    const img = renderImageAttachment(image, '');
+    if (!img) return;
+    const preview = element('div', 'attachment-preview');
+    img.alt = '';
+    preview.append(img, element('span', 'attachment-preview-name', image.name || '图片附件'));
+    const remove = element('button', 'attachment-remove', '×');
+    remove.type = 'button';
+    remove.title = `移除图片 ${image.name || index + 1}`;
+    remove.setAttribute('aria-label', `移除图片 ${image.name || index + 1}`);
+    remove.dataset.removeAttachment = String(index);
+    remove.disabled = !canUseSession() || attachmentActionPending;
+    remove.addEventListener('click', () => {
+      if (!canUseSession() || attachmentActionPending) return;
+      draftAttachments = draftAttachments.filter((_attachment, itemIndex) => itemIndex !== index);
+      renderDraftAttachments();
+      renderControls();
+    });
+    preview.append(remove);
+    ui.attachmentDrafts.append(preview);
+  });
+}
+function addDraftAttachments(value) {
+  const additions = Array.isArray(value) ? value : value ? [value] : [];
+  if (additions.length === 0) return;
+  if (additions.some(image => !isDisplayableImageAttachment(image))) throw new Error('收到无效的图片附件');
+  const next = [...draftAttachments, ...additions];
+  if (next.length > 4) throw new Error('最多附加 4 张图片');
+  const totalBytes = next.reduce((total, image) => total + imageAttachmentByteLength(image), 0);
+  if (totalBytes > 8 * 1024 * 1024) throw new Error('图片附件总大小不能超过 8 MiB');
+  draftAttachments = next;
+  renderDraftAttachments();
+  renderControls();
+}
+async function chooseImages() {
+  if (!canUseSession()) { setActionError(contextBlockReason()); return; }
+  attachmentActionPending = true;
+  clearActionError();
+  renderControls();
+  try { addDraftAttachments(await window.bitori.chooseImages()); }
+  catch (error) { setActionError(error); }
+  finally { attachmentActionPending = false; renderDraftAttachments(); renderControls(); }
+}
+async function pasteImage() {
+  if (!canUseSession()) { setActionError(contextBlockReason()); return; }
+  attachmentActionPending = true;
+  clearActionError();
+  renderControls();
+  try {
+    const image = await window.bitori.pasteImage();
+    if (!image) throw new Error('剪贴板中没有图片');
+    addDraftAttachments(image);
+  } catch (error) { setActionError(error); }
+  finally { attachmentActionPending = false; renderDraftAttachments(); renderControls(); }
 }
 /** 与 TUI src/shared/usage-format.ts 同语义:credits-only 用量不得显示成 0 tokens。 */
 function formatUsage(usage) {
@@ -274,9 +392,21 @@ function renderProfiles() {
   if (ui.profile.selectedIndex < 0) ui.profile.value = '';
 }
 function renderSessions() {
-  const focusedId = document.activeElement?.closest?.('[data-session-id]')?.dataset.sessionId;
+  const activeElement = document.activeElement;
+  const activeRenameInput = activeElement?.matches?.('.session-rename-input') && ui.sessions.contains(activeElement) ? activeElement : null;
+  const focusedRename = activeRenameInput ? {
+    id: activeRenameInput.dataset.sessionId,
+    selectionStart: activeRenameInput.selectionStart,
+    selectionEnd: activeRenameInput.selectionEnd,
+    selectionDirection: activeRenameInput.selectionDirection || 'none',
+  } : null;
+  if (activeRenameInput && renamingSessionId === activeRenameInput.dataset.sessionId) renameDraft = activeRenameInput.value;
+  const focusedId = activeElement?.closest?.('[data-session-id]')?.dataset.sessionId;
   let focusedButton = null;
-  ui.sessions.replaceChildren();
+  let renameInputToFocus = null;
+  rebuildingSessionList = true;
+  try { ui.sessions.replaceChildren(); }
+  finally { rebuildingSessionList = false; }
   const needle = sessionFilter.trim().toLowerCase();
   const visible = needle ? sessions.filter(session => String(session.title || '新会话').toLowerCase().includes(needle)) : sessions;
   ui.sessionCount.textContent = needle ? `${visible.length}/${sessions.length}` : (sessions.length ? String(sessions.length) : '');
@@ -296,11 +426,14 @@ function renderSessions() {
     if (renaming) {
       const input = element('input', 'session-rename-input');
       input.type = 'text';
+      input.dataset.sessionId = session.id;
       input.value = renameDraft;
       input.setAttribute('aria-label', '新会话标题');
       const commit = async () => {
+        if (renamingSessionId !== session.id) return;
         const title = input.value.trim();
         renamingSessionId = null;
+        renameDraft = '';
         if (title && title !== (session.title || '')) {
           try { await window.bitori.renameSession(session.id, title); await refreshSessions(); }
           catch (error) { setActionError(error); }
@@ -309,12 +442,16 @@ function renderSessions() {
       };
       input.addEventListener('keydown', event => {
         if (event.key === 'Enter') { event.preventDefault(); void commit(); }
-        else if (event.key === 'Escape') { renamingSessionId = null; renderSessions(); }
+        else if (event.key === 'Escape') { renamingSessionId = null; renameDraft = ''; renderSessions(); }
       });
-      input.addEventListener('blur', () => { if (renamingSessionId === session.id) void commit(); });
+      input.addEventListener('input', () => {
+        if (renamingSessionId === session.id) renameDraft = input.value;
+      });
+      input.addEventListener('blur', () => {
+        if (!rebuildingSessionList && input.isConnected && renamingSessionId === session.id) void commit();
+      });
       item.append(input);
-      window.setTimeout(() => { input.focus(); input.select(); }, 0);
-      renameDraft = '';
+      renameInputToFocus = input;
     } else {
       const button = element('button', 'session');
       button.type = 'button';
@@ -349,6 +486,21 @@ function renderSessions() {
       item.append(actions);
     }
     ui.sessions.append(item);
+  }
+  if (focusedRename && focusedRename.id === renamingSessionId) {
+    const input = renameInputToFocus;
+    if (input) {
+      input.focus({preventScroll: true});
+      if (focusedRename.selectionStart !== null && focusedRename.selectionEnd !== null) {
+        input.setSelectionRange(focusedRename.selectionStart, focusedRename.selectionEnd, focusedRename.selectionDirection);
+      }
+    }
+  } else if (renameInputToFocus) {
+    const input = renameInputToFocus;
+    const sessionId = input.dataset.sessionId;
+    window.setTimeout(() => {
+      if (renamingSessionId === sessionId && input.isConnected) { input.focus(); input.select(); }
+    }, 0);
   }
   if (focusedButton && !focusedButton.disabled) focusedButton.focus({preventScroll: true});
 }
@@ -500,7 +652,10 @@ function renderMessages() {
     if (message.role === 'user') {
       const article = element('article', 'message user');
       const bubble = element('div', 'user-bubble');
-      bubble.append(element('div', 'message-body', message.displayContent ?? message.content));
+      const content = message.displayContent ?? message.content;
+      if (content) bubble.append(element('div', 'message-body', content));
+      const attachments = renderMessageAttachments(message.attachments);
+      if (attachments) bubble.append(attachments);
       article.append(bubble);
       if (message.errorMessage) article.append(element('div', 'message-error', message.errorMessage));
       ui.messageList.append(article);
@@ -568,6 +723,17 @@ function renderApproval() {
   ui.approvalRisk.textContent = risk;
   ui.approvalRisk.hidden = !risk;
 }
+function renderRecovery() {
+  const recovery = state && state.recovery;
+  ui.recovery.hidden = !recovery;
+  if (!recovery) return;
+  ui.recoveryMessage.textContent = recovery.message || '发现可恢复的中断任务。';
+  ui.recoveryNote.textContent = recovery.requiresConfirmation
+    ? '请先检查中断前写入或命令的实际结果，再确认继续。桌面界面不会直接重放旧工具调用。'
+    : '继续将调用控制器的恢复流程；桌面界面不会直接重放旧工具调用。';
+  ui.recoveryContinue.textContent = recovery.requiresConfirmation ? '我已检查，继续恢复' : '继续恢复';
+  ui.recoveryContinue.disabled = recoveryPending || changingContext || isActive();
+}
 function parseArgumentSummary(text) {
   try {
     const value = JSON.parse(String(text || ''));
@@ -582,14 +748,19 @@ function renderControls() {
   ui.chooseWorkspace.disabled = !canWorkspace;
   ui.profile.disabled = !canProfile || !profiles.length;
   ui.newSession.disabled = !canSession;
+  ui.importSession.disabled = !canSession || actionPending;
+  ui.exportSession.disabled = !canSession || actionPending || !(state && state.session);
+  ui.chooseImages.disabled = !canSession || attachmentActionPending;
+  ui.pasteImage.disabled = !canSession || attachmentActionPending;
+  for (const remove of ui.attachmentDrafts.querySelectorAll('[data-remove-attachment]')) remove.disabled = !canSession || attachmentActionPending;
   ui.input.disabled = !ready || changingContext;
-  ui.send.disabled = ui.input.disabled || !workspace || !(state && state.profile) || active || sending || actionPending || !ui.input.value.trim();
+  ui.send.disabled = ui.input.disabled || !workspace || !(state && state.profile) || !(state && state.session) || Boolean(state && state.recovery) || active || sending || actionPending || (!ui.input.value.trim() && draftAttachments.length === 0);
   ui.composerPlus.disabled = !canSession;
   ui.cancel.hidden = !active;
   ui.cancel.disabled = state && state.requestStatus === 'cancelling';
   ui.deny.disabled = ui.allowOnce.disabled = ui.allowSession.disabled = ui.allowAlways.disabled = approvalPending || changingContext;
   ui.input.placeholder = !ready ? '正在连接…' : !workspace ? '请先选择并信任工作区' : !(state && state.profile) ? '请选择模型配置' : '描述任务，或向 Bitori 提问';
-  ui.composerHelp.textContent = !ready ? '正在读取本地配置…' : !workspace ? '先在左侧选择并信任工作区' : !(state && state.profile) ? '先在左侧选择模型配置' : 'Enter 发送 · Shift + Enter 换行 · / 命令 · Ctrl +/- 缩放';
+  ui.composerHelp.textContent = !ready ? '正在读取本地配置…' : !workspace ? '先在左侧选择并信任工作区' : !(state && state.profile) ? '先在左侧选择模型配置' : state && state.recovery ? '请先确认中断任务的恢复操作' : 'Enter 发送 · Shift + Enter 换行 · / 命令 · Ctrl +/- 缩放';
   ui.profile.title = !workspace ? '请先选择并信任工作区' : !profiles.length ? '没有可用模型配置；运行 bitori doctor 检查配置，或编辑 ~/.bitori/config.yaml 添加 profile' : canProfile ? '' : contextBlockReason();
   ui.newSession.title = canSession ? '' : contextBlockReason();
   ui.send.title = ui.send.disabled ? (contextBlockReason() || '输入消息后发送') : '发送';
@@ -603,6 +774,7 @@ function renderControls() {
   renderSessions();
 }
 function render() {
+  syncAttachmentScope();
   ui.workspace.textContent = workspace || '未选择工作区';
   ui.workspace.title = workspace || '未选择工作区';
   ui.workspaceName.textContent = baseName(workspace);
@@ -619,6 +791,7 @@ function render() {
   renderProfiles();
   renderMessages();
   renderApproval();
+  renderRecovery();
   showError();
   renderControls();
 }
@@ -815,7 +988,7 @@ function renderModelListing(profile, current) {
         useDefault.addEventListener('click', () => {
           if (!canChangeContext()) { setActionError(contextBlockReason()); return; }
           closeModelMenu();
-          if (!current) changeContext(() => window.bitori.selectProfile(profile.name));
+          if (!current || state.profile.model !== profile.model) changeContext(() => window.bitori.selectProfile(profile.name));
         });
         line.append(useDefault);
       }
@@ -895,6 +1068,46 @@ async function sessionAction(operation) {
   catch (error) { setActionError(error); }
   finally { actionPending = false; renderControls(); }
 }
+async function exportCurrentSession() {
+  if (!canUseSession() || actionPending || !state?.session) { setActionError(contextBlockReason()); return; }
+  actionPending = true;
+  clearActionError();
+  setSessionFeedback('');
+  renderControls();
+  try {
+    const result = await window.bitori.exportSession();
+    if (result) {
+      await refreshSessions();
+      setSessionFeedback(`会话已导出：${result.fileName || '归档文件'}`, 'success');
+    }
+  } catch (error) { setActionError(error); }
+  finally { actionPending = false; renderControls(); }
+}
+async function importSessionArchive() {
+  if (!canUseSession() || actionPending) { setActionError(contextBlockReason()); return; }
+  actionPending = true;
+  clearActionError();
+  setSessionFeedback('');
+  renderControls();
+  try {
+    const result = await window.bitori.importSession();
+    if (result) {
+      if (result.snapshot) applySnapshot(result.snapshot);
+      else await refreshSessions();
+      setSessionFeedback(`会话已导入：${result.fileName || '归档文件'}`, 'success');
+    }
+  } catch (error) { setActionError(error); }
+  finally { actionPending = false; render(); }
+}
+async function resumeRecovery() {
+  if (!state || !state.recovery || recoveryPending || isActive()) return;
+  recoveryPending = true;
+  clearActionError();
+  renderRecovery();
+  try { await window.bitori.resumeInterruptedRun(); }
+  catch (error) { setActionError(error); }
+  finally { recoveryPending = false; renderRecovery(); }
+}
 function newSession() { sessionAction(() => window.bitori.newSession()); }
 function switchSession(id) {
   if (state && state.session && state.session.id === id) return;
@@ -910,16 +1123,31 @@ async function decide(decision) {
   finally { approvalPending = false; renderControls(); }
 }
 async function sendText(text) {
-  if (!text || !ready || !workspace || !state || !state.profile || isActive() || sending) return;
+  const attachments = [...draftAttachments];
+  if ((!text && attachments.length === 0) || !ready || !workspace || !state || !state.profile || !state.session || state.recovery || isActive() || sending) return;
+  const previousVersion = stateVersion;
+  const previousMessageIds = new Set(state.messages.map(message => message.id));
   sending = true;
   clearActionError();
   ui.input.value = '';
   resizeInput();
   closeSlash();
   renderControls();
-  try { await window.bitori.send(text); }
+  try {
+    await window.bitori.send(text, attachments);
+    const hasNewUserMessage = state && Array.isArray(state.messages) && state.messages.some(message => message.role === 'user' && !previousMessageIds.has(message.id));
+    if (stateVersion !== previousVersion && state && state.visibleError && (state.requestStatus === 'failed' || !hasNewUserMessage)) {
+      throw new Error(state.visibleError);
+    }
+    if (stateVersion !== previousVersion && state && state.requestStatus === 'failed') throw new Error(state.visibleError || '请求失败');
+    if (attachments.length > 0) {
+      const sent = new Set(attachments);
+      draftAttachments = draftAttachments.filter(image => !sent.has(image));
+      renderDraftAttachments();
+    }
+  }
   catch (error) {
-    if (!ui.input.value) { ui.input.value = text; resizeInput(); }
+    if (text && !ui.input.value) { ui.input.value = text; resizeInput(); }
     setActionError(error);
   } finally {
     sending = false;
@@ -949,6 +1177,11 @@ document.addEventListener('keydown', event => {
   else if (key === 'n' || key === 'escape') { event.preventDefault(); void decide('deny'); }
 });
 ui.newSession.addEventListener('click', newSession);
+ui.importSession.addEventListener('click', importSessionArchive);
+ui.exportSession.addEventListener('click', exportCurrentSession);
+ui.chooseImages.addEventListener('click', chooseImages);
+ui.pasteImage.addEventListener('click', pasteImage);
+ui.recoveryContinue.addEventListener('click', resumeRecovery);
 ui.allowOnce.addEventListener('click', () => decide('allow_once'));
 ui.allowSession.addEventListener('click', () => decide('allow_session'));
 ui.allowAlways.addEventListener('click', () => decide('allow_always'));
@@ -977,6 +1210,15 @@ ui.input.addEventListener('input', () => {
   resizeInput();
   updateSlashFromInput();
   renderControls();
+});
+ui.input.addEventListener('paste', event => {
+  const clipboardData = event.clipboardData;
+  if (!clipboardData) return;
+  const imageItems = Array.from(clipboardData.items).some(item => item.kind === 'file' && item.type.toLowerCase().startsWith('image/'))
+    || Array.from(clipboardData.files).some(file => file.type.toLowerCase().startsWith('image/'));
+  if (!imageItems) return;
+  event.preventDefault();
+  void pasteImage();
 });
 ui.input.addEventListener('focus', updateSlashFromInput);
 ui.input.addEventListener('keydown', event => {
@@ -1009,7 +1251,7 @@ ui.input.addEventListener('keydown', event => {
 ui.composer.addEventListener('submit', async event => {
   event.preventDefault();
   const text = ui.input.value.trim();
-  if (!text || ui.send.disabled) return;
+  if ((!text && draftAttachments.length === 0) || ui.send.disabled) return;
   if (text.startsWith('/')) {
     const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text);
     if (match && runLocalCommand(match[1].toLowerCase(), (match[2] || '').trim())) {

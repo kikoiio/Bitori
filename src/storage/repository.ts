@@ -1,3 +1,5 @@
+import type {ImageAttachment} from '../attachments/images.js';
+import type {Usage} from '../providers/types.js';
 import {mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {configPaths} from '../config/loader.js';
@@ -29,6 +31,9 @@ export class SessionRepository implements SessionRepositoryContract {
   public async createSession(profileName: string): Promise<Session> {
     return this.#client.request({type: 'create_session', profileName}) as Promise<Session>;
   }
+  public async importConversation(profileName: string, conversation: StoredConversation): Promise<Session> { return this.#client.request({type: 'import_conversation', profileName, conversation}) as Promise<Session>; }
+  public async claimInterruptedRun(runId: string, allowUncertainEffects = false): Promise<AgentRunRecord | null> { return this.#client.request({type: 'claim_interrupted_run', runId, allowUncertainEffects}) as Promise<AgentRunRecord | null>; }
+  public async checkpointAgentRun(runId: string, iterationCount: number, usage: Usage): Promise<void> { await this.#client.request({type: 'checkpoint_agent_run', runId, iterationCount, usage}); }
   public async getSession(sessionId: string): Promise<Session | null> {
     return this.#client.request({type: 'get_session', sessionId}) as Promise<Session | null>;
   }
@@ -47,8 +52,8 @@ export class SessionRepository implements SessionRepositoryContract {
   public async setSessionMode(sessionId: string, mode: AgentMode): Promise<Session> { return this.#client.request({type: 'set_session_mode', sessionId, mode}) as Promise<Session>; }
   public async renameSession(sessionId: string, title: string): Promise<Session> { return this.#client.request({type: 'rename_session', sessionId, title}) as Promise<Session>; }
   public async deleteSession(sessionId: string): Promise<void> { await this.#client.request({type: 'delete_session', sessionId}); }
-  public async beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}> { return this.#client.request({type: 'begin_agent_run', ...input}) as Promise<{run: AgentRunRecord; userMessage: StoredMessage}>; }
-  public async appendSteerMessage(input: {runId: string; sessionId: string; content: string}): Promise<StoredMessage> { return this.#client.request({type: 'append_steer_message', ...input}) as Promise<StoredMessage>; }
+  public async beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode; attachments?: ImageAttachment[]}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}> { return this.#client.request({type: 'begin_agent_run', ...input}) as Promise<{run: AgentRunRecord; userMessage: StoredMessage}>; }
+  public async appendSteerMessage(input: {runId: string; sessionId: string; content: string; attachments?: ImageAttachment[]}): Promise<StoredMessage> { return this.#client.request({type: 'append_steer_message', ...input}) as Promise<StoredMessage>; }
   public async beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage> { return this.#client.request({type: 'begin_agent_iteration', ...input}) as Promise<StoredMessage>; }
   public async finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void> { await this.#client.request({type: 'finalize_iteration_with_tool_batch', messageId, update, records}); }
   public async abortAgentRun(runId: string, result: AgentRunResult, message: string): Promise<void> { await this.#client.request({type: 'abort_agent_run', runId, result, message}); }

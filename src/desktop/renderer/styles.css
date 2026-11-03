@@ -66,6 +66,11 @@ select {
 select:hover:not(:disabled) { border-color: #4a4a45; }
 .sessions-header { display: flex; justify-content: space-between; align-items: center; margin: 4px 8px 7px; color: var(--faint); font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .session-count { font-weight: 500; letter-spacing: 0; }
+.session-archive-actions { display: flex; gap: 6px; margin: 0 8px 3px; }
+.session-archive-actions button { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); padding: 5px 6px; font-size: 10.5px; }
+.session-archive-actions button:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
+.session-feedback { margin: 2px 8px 5px; color: var(--muted); font-size: 10.5px; overflow-wrap: anywhere; }
+.session-feedback.success { color: var(--green); }
 .sessions { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; padding: 0 2px 8px; }
 .sidebar-empty { color: var(--faint); font-size: 12px; padding: 10px 8px; line-height: 1.6; margin: 0; }
 .session {
@@ -102,6 +107,12 @@ select:hover:not(:disabled) { border-color: #4a4a45; }
   flex: none; margin: 12px auto 0; width: min(100% - 64px, 880px); padding: 10px 13px; border: 1px solid rgba(224, 113, 110, .35);
   border-radius: 9px; color: #e99b98; background: rgba(93, 35, 33, .22); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px;
 }
+.recovery { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 9px; padding: 12px 14px; border: 1px solid rgba(216, 179, 106, .45); border-radius: 12px; background: rgba(216, 179, 106, .08); }
+.recovery-copy { min-width: 0; }
+.recovery h2 { margin: 0 0 5px; color: var(--yellow); font-size: 13px; }
+.recovery p { margin: 0; color: var(--text); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.recovery .recovery-note { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.recovery .button { flex: none; }
 
 /* ── Conversation ────────────────────────────────────────── */
 .messages { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 0 8px; }
@@ -116,6 +127,10 @@ select:hover:not(:disabled) { border-color: #4a4a45; }
 
 .message { padding: 0 0 20px; margin-bottom: 20px; border-bottom: 1px solid var(--border-soft); }
 .message:last-child { border-bottom: 0; margin-bottom: 4px; }
+.message-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.message-attachment-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.message-attachment { display: block; max-width: min(280px, 62vw); max-height: 260px; border: 1px solid var(--border); border-radius: 9px; object-fit: contain; background: #171716; }
+.message-attachment-name { max-width: 280px; color: var(--faint); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .message-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; color: var(--faint); font-size: 11.5px; }
 .message-heading .brand-dot { color: var(--accent); font-size: 10px; }
 .message-meta { margin-left: auto; color: var(--faint); font-size: 10.5px; }
@@ -182,13 +197,15 @@ select:hover:not(:disabled) { border-color: #4a4a45; }
 }
 .composer:focus-within { border-color: #4d4c47; }
 .composer-input-row { display: flex; align-items: flex-end; gap: 7px; }
+.composer-tool-button { flex: none; min-height: 28px; margin-bottom: 2px; padding: 0 7px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: var(--muted); font-size: 10px; }
+.composer-tool-button:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
 .composer-plus {
   flex: none; width: 28px; height: 28px; margin-bottom: 2px; border: 1px solid var(--border); border-radius: 8px;
   background: transparent; color: var(--muted); font-size: 16px; line-height: 1;
 }
 .composer-plus:hover { background: var(--panel-2); color: var(--text); }
 .composer textarea {
-  flex: 1; min-height: 30px; max-height: 180px; resize: none; border: 0; outline: 0; background: transparent;
+  flex: 1; min-width: 0; min-height: 30px; max-height: 180px; resize: none; border: 0; outline: 0; background: transparent;
   color: var(--text); padding: 5px 2px; line-height: 1.55; font-size: 13.5px; overflow-y: auto;
 }
 .composer textarea::placeholder { color: var(--faint); }
@@ -206,6 +223,12 @@ select:hover:not(:disabled) { border-color: #4a4a45; }
 .composer-model:hover { background: var(--panel-2); color: var(--text); }
 .model-caret { color: var(--faint); font-size: 9px; }
 .composer-hint { margin: 6px 2px 0; color: var(--faint); font-size: 10px; }
+.attachment-drafts { display: flex; gap: 8px; max-width: 100%; overflow-x: auto; padding: 2px 1px 8px; }
+.attachment-preview { position: relative; display: flex; flex: none; flex-direction: column; align-items: center; gap: 3px; width: 72px; color: var(--faint); font-size: 9px; }
+.attachment-preview img { display: block; width: 64px; height: 54px; border: 1px solid var(--border); border-radius: 7px; object-fit: cover; background: #171716; }
+.attachment-preview-name { width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.attachment-remove { position: absolute; top: -3px; right: 0; width: 18px; height: 18px; border: 1px solid var(--border); border-radius: 50%; background: var(--panel-3); color: var(--text); line-height: 1; padding: 0; }
+.attachment-remove:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 /* ── Command / model menus ───────────────────────────────── */

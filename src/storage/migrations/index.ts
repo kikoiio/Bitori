@@ -6,20 +6,21 @@ import {ownershipCheckpointMigration} from './004-ownership-checkpoint.js';
 import {messageDisplayContentMigration} from './005-message-display-content.js';
 import {recoverLegacyLiveStateMigration} from './006-recover-legacy-live-state.js';
 import {usageCreditsMigration} from './007-usage-credits.js';
+import {imageAttachmentsMigration} from './008-image-attachments.js';
 
 export interface Migration {
   version: number;
   sql: string;
 }
 
-export const migrations: readonly Migration[] = [initialMigration, toolCallsMigration, agentLoopMigration, ownershipCheckpointMigration, messageDisplayContentMigration, recoverLegacyLiveStateMigration, usageCreditsMigration];
+export const migrations: readonly Migration[] = [initialMigration, toolCallsMigration, agentLoopMigration, ownershipCheckpointMigration, messageDisplayContentMigration, recoverLegacyLiveStateMigration, usageCreditsMigration, imageAttachmentsMigration];
 
 /** 只描述迁移器需要的最小数据库能力，避免它绑定到具体 SQLite 类。 */
 export interface MigrationDatabase {
   exec: (sql: string) => unknown;
   prepare: (sql: string) => {
-    all: (...parameters: unknown[]) => unknown;
-    run: (...parameters: unknown[]) => unknown;
+    all: () => unknown;
+    run: (version: number, appliedAt: number) => unknown;
   };
 }
 

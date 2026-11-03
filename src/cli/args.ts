@@ -13,7 +13,11 @@ export interface CliOptions {
   /** 只读观察子命令；与 exec/TUI 互斥。 */
   trace?: {action: 'show' | 'tail' | 'export' | 'replay'; sessionId?: string; file?: string; iteration?: number; out?: string; json?: boolean; raw?: boolean};
   usage?: {action: 'stats' | 'tail'; sessionId?: string; kind?: 'skill' | 'command'; json?: boolean};
-  sessions?: {action: 'list' | 'show'; sessionId?: string; json?: boolean};
+  sessions?:
+    | {action: 'list'; json?: boolean}
+    | {action: 'show'; sessionId: string; json?: boolean}
+    | {action: 'export'; sessionId: string; out: string}
+    | {action: 'import'; file: string; json?: boolean};
   /** 连接诊断子命令。 */
   doctor?: {json: boolean};
   /** 工作区信任清单子命令。 */
@@ -30,6 +34,8 @@ export const usage = `用法：bitori [--profile <name>] [--log-level <level>] [
        bitori usage tail
        bitori sessions list
        bitori sessions show <sessionId> [--json]
+       bitori sessions export <sessionId> --out <path>
+       bitori sessions import <path> [--profile <name>] [--json]
        bitori doctor [--profile <name>] [--json]
        bitori trust [path] [--revoke] [--json]
 
@@ -51,6 +57,8 @@ usage 子命令：
 sessions 子命令：
   list                    列出当前 profile 的会话
   show                    查看会话的消息、回合与工具调用摘要
+  export                  将会话导出为版本化、自包含 JSON 文件（已有文件不会覆盖）
+  import                  将 JSON 会话导入当前 profile；多 profile 时指定 --profile
 
 doctor：
   doctor                  检查配置、凭据、工作区、连通性与可用模型；默认探测全部 profile，输出不含密钥
@@ -126,6 +134,8 @@ function parseSubcommand(name: 'trace' | 'usage' | 'sessions', context: Subcomma
     'usage:tail': [],
     'sessions:list': ['--profile', '--json'],
     'sessions:show': ['--profile', '--json', '--session'],
+    'sessions:export': ['--profile', '--out'],
+    'sessions:import': ['--profile', '--json'],
   };
   const accepted = allowed[`${name}:${action}`];
   if (accepted !== undefined) {
@@ -177,7 +187,19 @@ function parseSubcommand(name: 'trace' | 'usage' | 'sessions', context: Subcomma
     if (sessionId === undefined) throw new UsageError('sessions show 需要 <sessionId>');
     return {sessions: {action, sessionId, json}};
   }
-  throw new UsageError('sessions 子命令需要 list|show');
+  if (action === 'export') {
+    const sessionId = positionals[1];
+    const out = flags.get('--out');
+    if (sessionId === undefined) throw new UsageError('sessions export 需要 <sessionId>');
+    if (typeof out !== 'string') throw new UsageError('sessions export 需要 --out <path>');
+    return {sessions: {action, sessionId, out}};
+  }
+  if (action === 'import') {
+    const file = positionals[1];
+    if (file === undefined) throw new UsageError('sessions import 需要 <path>');
+    return {sessions: {action, file, json}};
+  }
+  throw new UsageError('sessions 子命令需要 list|show|export|import');
 }
 
 export function parseCliArgs(argv: readonly string[]): CliOptions {

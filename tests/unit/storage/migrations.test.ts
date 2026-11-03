@@ -5,7 +5,6 @@ import {initialMigration} from '../../../src/storage/migrations/001-initial.js';
 import {toolCallsMigration} from '../../../src/storage/migrations/002-tool-calls.js';
 import {agentLoopMigration} from '../../../src/storage/migrations/003-agent-loop.js';
 import {ownershipCheckpointMigration} from '../../../src/storage/migrations/004-ownership-checkpoint.js';
-import type {MigrationDatabase} from '../../../src/storage/migrations/index.js';
 
 describe('runMigrations', () => {
   it('从版本 3 升级保留旧消息和无所有者的运行', () => {
@@ -19,7 +18,7 @@ describe('runMigrations', () => {
     database.exec("INSERT INTO agent_runs(id,session_id,user_message_id,mode,status,started_at,updated_at) VALUES('r','s','m','execute','running',1,1)");
     database.exec("INSERT INTO messages(id,session_id,role,content,thinking,status,agent_run_id,created_at,updated_at) VALUES('live','s','assistant','','','streaming','r',1,1)");
     database.exec("INSERT INTO tool_calls(id,session_id,assistant_message_id,provider_call_id,position,tool_name,arguments_json,approval_status,execution_status,result_json,created_at,updated_at,agent_run_id,arguments_text) VALUES('call','s','live',NULL,0,'write_file','{}','pending','queued',NULL,1,1,'r','{}')");
-    runMigrations(database as unknown as MigrationDatabase);
+    runMigrations(database);
     expect(database.prepare('SELECT content FROM messages WHERE id=?').get('m')).toMatchObject({content: '历史'});
     expect(database.prepare('SELECT status,owner_id,owner_pid FROM agent_runs WHERE id=?').get('r')).toMatchObject({status: 'interrupted', owner_id: null, owner_pid: null});
     expect(database.prepare('SELECT status FROM messages WHERE id=?').get('live')).toMatchObject({status: 'failed'});
@@ -30,11 +29,11 @@ describe('runMigrations', () => {
 
   it('创建 schema 并可重复调用', () => {
     const database = new DatabaseSync(':memory:');
-    runMigrations(database as unknown as MigrationDatabase);
-    runMigrations(database as unknown as MigrationDatabase);
+    runMigrations(database);
+    runMigrations(database);
     const rows = database.prepare('SELECT version FROM schema_migrations').all();
     // 重复初始化不得重复应用迁移。
-    expect(rows).toEqual([{version: 1}, {version: 2}, {version: 3}, {version: 4}, {version: 5}, {version: 6}, {version: 7}]);
+    expect(rows).toEqual([{version: 1}, {version: 2}, {version: 3}, {version: 4}, {version: 5}, {version: 6}, {version: 7}, {version: 8}]);
     expect(() => database.prepare(`INSERT INTO messages(id,session_id,role,content,thinking,status,created_at,updated_at) VALUES ('x','missing','bad','','','bad',1,1)`).run()).toThrow();
     const sessionColumns = database.prepare('PRAGMA table_info(sessions)').all() as Array<{name: string}>;
     expect(sessionColumns.map(column => column.name)).toEqual(expect.arrayContaining(['agent_mode', 'latest_plan_message_id']));

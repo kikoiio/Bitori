@@ -32,14 +32,14 @@ describe('Agent 中断恢复', () => {
     await observer.close(); await first.close();
   });
 
-  it('非终态统一中断且不自动续跑', async () => {
+  it('仓储将非终态标记为中断并等待控制器恢复检查', async () => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-recovery-')); roots.push(root); const path = join(root, 'db.sqlite');
     const repository = new SessionRepository(path); await repository.initialize(); const session = await repository.createSession('p');
     await repository.beginAgentRun({runId: 'run', sessionId: session.id, displayText: '任务', mode: 'execute'});
     await repository.beginAgentIteration({messageId: 'iteration', runId: 'run', sessionId: session.id, iteration: 1}); await repository.close();
     const restored = new SessionRepository(path); await restored.initialize(); const conversation = await restored.getConversation(session.id);
     expect(conversation?.agentRuns[0]).toMatchObject({status: 'interrupted', stopReason: 'process_interrupted'});
-    expect(conversation?.messages.find(message => message.id === 'iteration')).toMatchObject({status: 'failed', errorMessage: '程序中断，Agent 未自动续跑'});
+    expect(conversation?.messages.find(message => message.id === 'iteration')).toMatchObject({status: 'failed', errorMessage: '程序中断，等待恢复检查'});
     await restored.close();
   });
 });

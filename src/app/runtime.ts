@@ -33,6 +33,8 @@ export async function createApplicationRuntime(options: {
   workspace: string;
   databasePath?: string;
   maxIterations?: number;
+  /** 交互式运行时默认自动恢复安全中断任务；无头 exec 显式关闭。 */
+  autoResume?: boolean;
   /** Provider 内模型选择：只覆盖本次运行时的 model，不改配置文件。 */
   modelOverride?: string;
 }): Promise<ApplicationRuntime> {
@@ -74,7 +76,7 @@ export async function createApplicationRuntime(options: {
     await tools.services.hooks.fire('startup', {event: 'startup'});
     repository = options.databasePath === undefined ? new SessionRepository() : new SessionRepository(options.databasePath);
     const paths = configPaths();
-    controller = new ChatController(client, repository, tools, undefined, {workspaceRoot: workspace, observability: {traceDirectory: paths.traces, usagePath: join(paths.usage, 'skills.jsonl')}, ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
+    controller = new ChatController(client, repository, tools, undefined, {workspaceRoot: workspace, autoResume: options.autoResume ?? true, observability: {traceDirectory: paths.traces, usagePath: join(paths.usage, 'skills.jsonl')}, ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
     await controller.initialize(profile);
     return {controller, warnings: [...(config.notices ?? []), ...mcp.failed.map(item => `MCP Server ${item.name} 启动失败：${item.error.message}`)], close};
   } catch (error) {

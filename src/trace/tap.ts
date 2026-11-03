@@ -29,6 +29,15 @@ interface PendingRequest {
   preparedAt: number;
 }
 
+function traceItems(items: readonly ModelContextItem[]): ModelContextItem[] {
+  return items.map(item => {
+    if (item.type !== 'message' || !item.attachments?.length) return item;
+    const {attachments, ...message} = item;
+    const summary = attachments.map(image => `[图片附件：${image.name} · ${image.mediaType} · 内容未写入 trace]`).join('\n');
+    return {...message, content: `${message.content}\n${summary}`};
+  });
+}
+
 function callOf(event: Extract<AgentEvent, {type: 'tool_call_ready'}>): {internalId: string; name: string; argumentsText: string; arguments: Record<string, unknown>} {
   if (event.call.availability === 'available') {
     const call = event.call.call;
@@ -55,7 +64,7 @@ export class AgentTraceTap {
     this.#options = options;
   }
 
-  runHeader(sessionId: string, runId: string, mode: 'plan' | 'execute', trigger: 'message' | 'do'): void {
+  runHeader(sessionId: string, runId: string, mode: 'plan' | 'execute', trigger: 'message' | 'do' | 'resume'): void {
     this.#writer.append({v: TRACE_VERSION, at: now(), sessionId, type: 'run_header', runId, profileName: this.#options.profileName, model: this.#options.model, protocol: this.#options.protocol, mode, trigger, workspaceRoot: this.#options.workspaceRoot});
     this.#debugPush(`run 开始 ${mode}/${trigger}`);
   }
@@ -89,7 +98,7 @@ export class AgentTraceTap {
       case 'request_prepared': {
         this.#pending.set(event.runId, {items: event.items, system: event.system, preparedAt: event.at});
         if (event.toolDefinitions.length > 0) this.#lastToolDefinitions = event.toolDefinitions;
-        this.#writer.append({v: TRACE_VERSION, at: event.at, sessionId: event.sessionId, type: 'request_prepared', runId: event.runId, iterationId: event.iterationId, iteration: event.iteration, items: event.items, system: event.system, toolDefinitions: event.toolDefinitions, toolDefinitionDigest: event.toolDefinitionDigest});
+        this.#writer.append({v: TRACE_VERSION, at: event.at, sessionId: event.sessionId, type: 'request_prepared', runId: event.runId, iterationId: event.iterationId, iteration: event.iteration, items: traceItems(event.items), system: event.system, toolDefinitions: event.toolDefinitions, toolDefinitionDigest: event.toolDefinitionDigest});
         this.#debugPush(`it${event.iteration} 请求 ${event.items.length} 项`);
         return;
       }

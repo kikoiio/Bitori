@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type {ProviderProfile, ThinkingConfig} from '../config/types.js';
+import type {ImageAttachment} from '../attachments/images.js';
 import {isAbortError, isAdaptiveThinkingUnsupported, normalizeProviderError} from './errors.js';
 import type {ChatRequest, FinishReason, LLMClient, ProviderState, StreamEvent} from './types.js';
 import {anthropicReplayPayloadSchema, isAnthropicReplayPayload} from './types.js';
@@ -7,6 +8,24 @@ import {anthropicReplayPayloadSchema, isAnthropicReplayPayload} from './types.js
 /** 历史可能来自旧存储或检查点，在请求边界校验后原样重放。 */
 function replayContent(state: ProviderState | undefined) {
   return state?.protocol === 'anthropic' && isAnthropicReplayPayload(state.payload) ? state.payload : undefined;
+}
+
+function messageContent(content: string | unknown[], attachments: readonly ImageAttachment[] | undefined): string | unknown[] {
+  if (!attachments?.length) return content;
+  const blocks: unknown[] = typeof content === 'string' ? (content ? [{type: 'text', text: content}] : []) : [...content];
+  return [...blocks, ...attachments.map(image => ({type: 'image', source: {type: 'base64', media_type: image.mediaType, data: image.data}}))];
+}
+
+function requestHasImages(request: ChatRequest): boolean {
+  return request.items === undefined
+    ? request.messages.some(message => (message.attachments?.length ?? 0) > 0)
+    : request.items.some(item => item.type === 'message' && (item.attachments?.length ?? 0) > 0);
+}
+
+function normalizeRequestError(error: unknown, profile: ProviderProfile, request: ChatRequest) {
+  const normalized = normalizeProviderError(error, profile);
+  if (!requestHasImages(request) || (normalized.code !== 'invalid_request' && normalized.code !== 'model_not_found')) return normalized;
+  return {...normalized, message: `${normalized.message} 当前请求包含图片；请改用支持视觉输入的模型，或移除图片附件后重试。`};
 }
 
 /** 将 Anthropic 的 stop_reason 翻译成项目统一的 FinishReason。 */
@@ -47,7 +66,7 @@ export class AnthropicClient implements LLMClient {
         yield* this.#attempt(request, signal, {type: 'manual', budgetTokens: 4096, maxTokens: 8192});
         return;
       }
-      yield {type: 'error', error: normalizeProviderError(error, this.#profile)};
+      yield {type: 'error', error: normalizeRequestError(error, this.#profile, request)};
     }
   }
 
@@ -55,7 +74,7 @@ export class AnthropicClient implements LLMClient {
     try {
       yield* this.#rawAttempt(request, signal, config);
     } catch (error) {
-      if (!isAbortError(error, signal)) yield {type: 'error', error: normalizeProviderError(error, this.#profile)};
+      if (!isAbortError(error, signal)) yield {type: 'error', error: normalizeRequestError(error, this.#profile, request)};
     }
   }
 
@@ -70,7 +89,7 @@ export class AnthropicClient implements LLMClient {
     // 对象展开只在 thinking 存在时加入字段，避免把 thinking: undefined 发给 SDK。
     const messages: unknown[] = [];
     for (const item of request.items ?? []) {
-      if (item.type === 'message') messages.push({role: item.role, content: item.role === 'assistant' ? replayContent(item.providerState) ?? item.content : item.content});
+      if (item.type === 'message') messages.push({role: item.role, content: messageContent(item.role === 'assistant' ? replayContent(item.providerState) ?? item.content : item.content, item.attachments)});
       else if (item.type === 'assistant_iteration') messages.push({role: 'assistant', content: replayContent(item.providerState) ?? [
         ...(item.content ? [{type: 'text', text: item.content}] : []),
         ...item.toolCalls.map(call => ({type: 'tool_use', id: call.providerCallId ?? call.callId, name: call.name, input: call.arguments ?? {}})),
@@ -80,7 +99,7 @@ export class AnthropicClient implements LLMClient {
       else messages.push({role: 'user', content: item.results.map(entry => ({type: 'tool_result', tool_use_id: entry.providerCallId ?? entry.callId, content: JSON.stringify(entry.result), is_error: entry.result.status !== 'success'}))});
     }
     if (request.items === undefined) {
-      for (const message of request.messages) messages.push({role: message.role, content: message.role === 'assistant' ? replayContent(message.providerState) ?? message.content : message.content});
+      for (const message of request.messages) messages.push({role: message.role, content: messageContent(message.role === 'assistant' ? replayContent(message.providerState) ?? message.content : message.content, message.attachments)});
     }
     const parameters = {
       model: this.#profile.model,

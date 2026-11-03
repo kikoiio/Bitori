@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import {imageDataUrl} from '../attachments/images.js';
+import type {ImageAttachment} from '../attachments/images.js';
 import type {ProviderProfile} from '../config/types.js';
 import {isAbortError, normalizeProviderError} from './errors.js';
 import {isReplayPayload} from './types.js';
@@ -17,6 +19,26 @@ interface ResponsesEvent {
   error?: unknown;
 }
 
+function requestHasImages(request: ChatRequest): boolean {
+  return request.items === undefined
+    ? request.messages.some(message => (message.attachments?.length ?? 0) > 0)
+    : request.items.some(item => item.type === 'message' && (item.attachments?.length ?? 0) > 0);
+}
+
+function normalizeRequestError(error: unknown, profile: ProviderProfile, request: ChatRequest) {
+  const normalized = normalizeProviderError(error, profile);
+  if (!requestHasImages(request) || (normalized.code !== 'invalid_request' && normalized.code !== 'model_not_found')) return normalized;
+  return {...normalized, message: `${normalized.message} 当前请求包含图片；请改用支持视觉输入的模型，或移除图片附件后重试。`};
+}
+
+function messageContent(content: string, attachments: readonly ImageAttachment[] | undefined): string | unknown[] {
+  if (!attachments?.length) return content;
+  return [
+    ...(content ? [{type: 'input_text', text: content}] : []),
+    ...attachments.map(image => ({type: 'input_image', image_url: imageDataUrl(image)})),
+  ];
+}
+
 export class OpenAIResponsesClient implements LLMClient {
   readonly #profile: ProviderProfile;
   readonly #client: OpenAI;
@@ -32,7 +54,7 @@ export class OpenAIResponsesClient implements LLMClient {
       // 若数据库里保存了原始 items，就原样回放；否则用普通 role/content 消息。
       const input: unknown[] = [];
       if (request.items) for (const item of request.items) {
-        if (item.type === 'message') input.push({role: item.role, content: item.content});
+        if (item.type === 'message') input.push({role: item.role, content: messageContent(item.content, item.attachments)});
         else if (item.type === 'assistant_iteration') {
           if (item.providerState?.protocol === 'openai-responses' && isReplayPayload(item.providerState.payload)) input.push(...item.providerState.payload);
           else {
@@ -48,7 +70,7 @@ export class OpenAIResponsesClient implements LLMClient {
           if (message.role === 'assistant' && message.providerState?.protocol === 'openai-responses' && isReplayPayload(message.providerState.payload)) {
             // 纯文本请求可重放非工具项；工具循环始终通过 items 精确重建调用与结果。
             input.push(...message.providerState.payload.filter(item => typeof item !== 'object' || item === null || !('type' in item) || (item.type !== 'function_call' && item.type !== 'function_call_output')));
-          } else input.push({role: message.role, content: message.content});
+          } else input.push({role: message.role, content: messageContent(message.content, message.attachments)});
         }
       }
       const stream = await this.#client.responses.create({
@@ -88,7 +110,7 @@ export class OpenAIResponsesClient implements LLMClient {
       }
     } catch (error) {
       // 用户取消是正常控制流，不向 UI 显示为供应商错误。
-      if (!isAbortError(error, signal)) yield {type: 'error', error: normalizeProviderError(error, this.#profile)};
+      if (!isAbortError(error, signal)) yield {type: 'error', error: normalizeRequestError(error, this.#profile, request)};
     }
   }
 }

@@ -1,3 +1,4 @@
+import type {ImageAttachment} from '../attachments/images.js';
 import type {ProviderError, ProviderErrorCode} from '../providers/errors.js';
 import type {MessageRole, ModelContextItem, ProviderState, Usage} from '../providers/types.js';
 import type {ApprovalStatus, JsonObject, ToolExecutionResult, ToolExecutionStatus} from '../tools/types.js';
@@ -31,6 +32,7 @@ export interface StoredMessage {
   sessionId: string;
   role: MessageRole;
   content: string;
+  attachments?: ImageAttachment[];
   /** 用户界面显示文本；缺省时回退到模型正文，助手消息通常为空。 */
   displayContent?: string;
   thinking: string;
@@ -72,6 +74,9 @@ export interface SessionRepositoryContract {
   findLatestSession(profileName: string): Promise<Session | null>;
   listSessions(profileName: string): Promise<Session[]>;
   createSession(profileName: string): Promise<Session>;
+  importConversation(profileName: string, conversation: StoredConversation): Promise<Session>;
+  claimInterruptedRun(runId: string, allowUncertainEffects?: boolean): Promise<AgentRunRecord | null>;
+  checkpointAgentRun(runId: string, iterationCount: number, usage: Usage): Promise<void>;
   getSession(sessionId: string): Promise<Session | null>;
   getMessages(sessionId: string): Promise<StoredMessage[]>;
   getConversation(sessionId: string): Promise<StoredConversation | null>;
@@ -82,9 +87,9 @@ export interface SessionRepositoryContract {
   setSessionMode(sessionId: string, mode: AgentMode): Promise<Session>;
   renameSession(sessionId: string, title: string): Promise<Session>;
   deleteSession(sessionId: string): Promise<void>;
-  beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}>;
+  beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode; attachments?: ImageAttachment[]}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}>;
   /** 生成中排队的用户消息：挂在当前 run 下并进入会话上下文。 */
-  appendSteerMessage(input: {runId: string; sessionId: string; content: string}): Promise<StoredMessage>;
+  appendSteerMessage(input: {runId: string; sessionId: string; content: string; attachments?: ImageAttachment[]}): Promise<StoredMessage>;
   beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage>;
   finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void>;
   abortAgentRun(runId: string, result: AgentRunResult, message: string): Promise<void>;

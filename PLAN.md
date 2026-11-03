@@ -1,22 +1,52 @@
 # Bitori 项目级待办执行计划
 
 更新时间：2026-11-03
-基线：`master`，`e6dc8d5e0a03740b567fafbb1d8841e7bfb2c39c`。工作区在开始时干净。
+基线：`master`，`a354503bc75633091943b0818abe47beb7d25d8e`。实现尚未提交。
+
+## 当前优先级（用户最新决定）
+
+用户明确要求“先暂停 RSI，完成产品本身先”。RSI 现暂停，历史 smoke 报告保留；不启动新的 RSI、候选生成或基准扩跑。当前主线转为既有产品范围的首次配置、TUI/桌面对话、工具审批、会话保存和终端光标验收。用户已明确将多模态、会话导入与自动断点续跑三项全部纳入本轮；首版已确认并直接进入开发：本地图片、Bitori JSON 导入/导出、检查点续跑且不确定副作用先确认。云同步继续取消。
+
+本轮并行：图片/provider、会话归档、恢复逻辑、TUI、桌面和文档分属独立文件边界。主执行者集成存储、处理交叉审查问题、更新计划并统一验证。重型构建、全量测试、桌面 GUI 和打包放在 GitHub Actions。
 
 ## 完成条件
 
-项目文档中每项未完成工作都要有可核对的状态和证据。状态只能是已验证、已完成、经用户决定暂缓，或因明确的产品决定和权限等待。未决定的功能不当作已批准需求；RSI 按用户 2026-11-03 的恢复决定进入有界 smoke。
+本轮产品工作完成条件：图片从 TUI/桌面入口进入存储和有图片能力的 Provider；不支持图片的协议明确报错且不降级重发；版本化 JSON 可从 CLI/TUI/桌面导出与导入，导入事务失败不留下半个会话；断点续跑使用持久检查点、遵守累计预算，已完成工具不重复执行，不确定的写入/命令先确认；首次使用与功能边界写入文档；相关回归、三平台 Check、Linux 桌面 smoke/打包通过。最后提交并推送 master，确认远端与本地只有 master 且 SHA 相同。
 
 ## 工作规模与严谨度
 
-本轮覆盖 3 个只读审查、桌面与 Provider 验收证据、4 种 Provider 协议、SWE-bench Lite 23 题历史未解决结果、4 个产品方向、5 条安全残留风险、RSI smoke，以及桌面“本会话允许”越过对话边界的实现缺陷。用户取消云同步、接受五项安全残留风险、要求继续 RSI，并授权调用任意可用模型。多模态、会话导入和自动断点续跑仍待决定；当前 GitHub 仅配置 Anthropic/DeepSeek 通用 profile。
+历史记录仍包括桌面和 Provider 验收、四种 Provider 协议、SWE-bench Lite 23 题、五项已接受的安全残留风险、RSI smoke，以及桌面临时审批范围缺陷。本轮 RSI 不运行；SWE-bench、更多真实 Provider 端点、Windows/macOS 桌面和真实终端视觉检查不属于当前已确认的产品功能范围，分别保留在待决/受限状态中。
 
 ## 吞吐安排
 
-- **先决步骤。** 汇总只读审查，核对当前状态；任何收费 Provider 请求、云端任务、产品功能实现和安全模型变更都要先过对应门槛。
-- **并行工作。** TUI/桌面、Provider、风险/产品/RSI 三个资料审查彼此独立。
-- **共享写入。** 主执行者负责 `PLAN.md`、`.audit/`、文档、权限代码和工作流；审查代理只返回报告。汇总后另派一名实现代理只改 Provider 证据脚本，主执行者审查后再扩展其工作目录选项；文件写入不重叠。
-- **最小拆分。** 先用 3 个轻量审查代理收集互不重叠的证据；汇总后发现“本会话允许”存在明确越界，作为有文档规格的独立代码切片由主执行者修复。文件写入串行整合；免费云端 GUI 已通过；用户确认可调用 GitHub 已配置模型后，单端点 Provider E2E 已通过，并将 SWE-bench 定为单题诊断。
+- **并行工作。** 图片/provider、会话交换、恢复、TUI、桌面和文档按不重叠路径推进；主执行者负责存储 worker、事务、trace 脱敏和跨切片集成。
+- **资源安排。** 本机只运行定向单测、TUI 测试、类型检查和静态语法检查；GitHub Actions 承担完整三平台 Check、Electron GUI、打包与构件启动。
+- **外部验证。** 用户已授权本轮免费 GitHub Actions 工作流。模型/RSI 实验保持暂停；不把历史单端点 E2E 当作本轮多模态 Provider 的实时端点验收。
+
+## 本轮产品工作清单
+
+- [x] RSI 暂停、云同步取消及本轮功能范围决策已写入计划与意图文档。
+- [x] 空统计下 `usage stats --json` 保持合法 JSON，相关 9 项定向测试通过。
+- [x] 修复 TUI 会话草稿跨会话污染、发送过渡期丢消息；加入图片/归档/恢复入口与对应测试。
+- [x] 修复桌面默认模型恢复及重命名草稿/焦点丢失；加入图片、归档和恢复入口与 smoke。
+- [x] 图片附件存储、四种 Provider 请求映射、尺寸/格式限制及 trace 内容脱敏已接入。
+- [x] 版本化会话归档、CLI 与 UI 入口、ID 重映射和导入事务已接入。
+- [ ] 自动断点续跑的存储与运行逻辑已接入；预算累计回归与崩溃轮次恢复已修正，等待 SQLite 集成和云端验证。
+- [ ] SQLite 集成回归、三平台 Check、Linux 桌面 GUI/打包、分支同步与最终云端证据核对。
+
+
+### 新功能实现分工
+
+| 负责人 | 文件边界与交付 | 依赖 |
+|---|---|---|
+| 主执行者 | `src/storage/` 仓储/worker/迁移与导入事务；trace 附件脱敏；计划/文档/集成 | 统一存储协议与附件类型 |
+| 图片核心代理 | `src/attachments/`、Provider adapters、有序上下文与图片预算 | ImageAttachment 结构固定 |
+| 会话交换代理 | `src/storage/archive.ts`、CLI sessions/args、格式校验回归 | 图片 schema、事务 importConversation |
+| 恢复代理 | controller/state、runner、projector、runtime 与 exec 隔离 | claim/checkpoint 仓储接口 |
+| TUI 代理 | 聊天页、输入/历史附件展示、导入导出与恢复命令 | controller/附件/归档接口 |
+| 桌面代理 | Electron main/preload/renderer、文件与剪贴板入口、smoke | controller/附件/归档接口 |
+
+轻量分析和非冲突编辑并行；存储与共享契约由主执行者整合。代理不运行构建、GUI、全量测试或云端任务；主执行者在定向检查后统一安排 GitHub Actions 全量验证和桌面 smoke。RSI 与基准扩跑不参与本轮验收。
 
 ## 当前证据
 
@@ -32,48 +62,40 @@
 - 提交 `8ac6b32` 上第 0 题在 run [41640309946](https://github.com/kikoiio/Bitori/actions/runs/41640309946)（5 次迭代）与 [41641115352](https://github.com/kikoiio/Bitori/actions/runs/41641115352)（10 次迭代）均以 `agent_error` 结束、补丁为空。轨迹证明初始 Git ownership 报错随后由 Agent 自行加入精确 `safe.directory` 配置并恢复；不能将它当作持续根因。第二次轨迹还显示 Agent shell 的 `python` 是系统 3.11.5，复现代码因 `collections.Mapping` 失败；gold grader 使用镜像内 `/opt/miniconda3/envs/testbed/bin/python`。随后为 Agent shell 统一 testbed `PATH`，并修正合法 U+FFFD 字符被误判为轨迹截断及固定写死“20 次”的迭代上限错误提示。补丁和 9 项 Python runner 测试、17 项 AgentRunner 测试已通过；提交 `1eb870f` 的 Check 已由 run 41644656315 全平台通过。单题复验将在最终文档/证据提交的 Check 通过后派发。
 - TUI 的模拟终端测试覆盖光标行列、中文折行、输入、排队和取消，且已由修复后提交 `7bca1f1` 的三平台 `Check` 运行并通过。它没有启动 CLI 做真实终端交互验收。
 - 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前实现改为会话 ID 作用域，引擎与 AgentRunner 回归测试通过，桌面跨会话审批 smoke 也在 run 41637023628 通过。
-- 用户于 2026-11-03 取消云同步；决定见 [ADR 0001](docs/decisions/0001-cloud-sync-out-of-scope.md)。多模态、会话导入和自动断点续跑仍不支持且待决定。
+- 用户于 2026-11-03 取消云同步；决定见 [ADR 0001](docs/decisions/0001-cloud-sync-out-of-scope.md)。多模态、会话导入和自动断点续跑已纳入当前首版范围，具体状态见下表。
 - 用户于 2026-11-03 接受安全文档列出的五项当前残留风险；决定见 [ADR 0002](docs/decisions/0002-accept-current-security-residual-risks.md)。
-- 用户要求继续 RSI 并允许调用可用模型。受控 workflow 使用 GitHub 已配置的 Anthropic/DeepSeek profile。run 41647782174 在 preflight 因依赖快照拒绝 `node_modules/.bin` 安全相对符号链接而中断；artifact 确认 0 请求、0 tokens。`tree_digest` 已记录目录、文件模式/内容和链接目标，仅接受严格解析在依赖根目录内的链接，并在目录扫描失败时中止；14 项 sandbox 测试通过。新 Check 和 RSI 重跑待完成。
+- RSI 历史 run 41647782174 在 preflight 因依赖快照拒绝 `node_modules/.bin` 安全相对符号链接而中断；artifact 确认 0 请求、0 tokens。`tree_digest` 随后记录目录、文件模式/内容和链接目标，仅接受严格解析在依赖根目录内的链接，并在目录扫描失败时中止；14 项 sandbox 测试通过。后续 RSI 实验也已结束并记录，用户现已要求暂停，不启动新实验。
 - Anthropic SDK 在自定义 base URL 后请求 `/v1/messages`；RSI gateway 归一化原本会丢失自定义 `/anthropic` 前缀的 `/v1`。现已在 `upstream_base` 为该协议补齐版本段，并由测试覆盖根地址、自定义前缀和完整 endpoint 地址。
 - 本机 `/usr/bin/x-terminal-emulator` 指向 Ptyxis。新窗口成功显示 Bitori TUI 的可访问树；Orca Linux provider 报告截图能力不支持，且启动时出现已有本地会话文本。为避免更改该会话，没有输入；真实光标视觉验收为 `INCONCLUSIVE`。
 
 ## 并行安排
 
-主执行者拥有 `PLAN.md`、最终汇总、文档改动和所有集成验证。三个只读审查分别检查互不重叠的资料，报告路径、当前证据、明确的缺口和所需权限。审查者不运行测试、不访问凭据、不触发云端工作流，也不修改仓库文件。
-
-| 审查 | 范围 | 输出 |
-|---|---|---|
-| A | TUI、桌面平台、GitHub Actions 验收 | 哪些平台和提交已有证据，哪些验收可在现有工作流执行，哪些需要新增规格或流程 |
-| B | Provider E2E 证据与测试范围 | 三种协议证据的提交和覆盖，当前提交的缺口，重跑所需凭据、费用与上传范围 |
-| C | 安全残留风险、未决产品功能、暂停中的 RSI | 将明确待办、需用户决策、接受风险和暂停事项分开，并列出对应门槛 |
-| D | Provider 证据提交 SHA 字段 | 只修改 `tests/acceptance/e2e-providers.ts`；读取 GitHub SHA 或本地 HEAD，不运行 Provider、不接触凭据 |
-
-审查结果合并后再修改产品文档或代码。D 完成并通过主执行者审查后，主执行者再补上工作树洁净标记和独立结果目录。共享文件由主执行者串行整合。大规模检查和 GUI 演练不在本机并发运行。
+本轮已完成的并行切片分别包括 TUI、桌面、Provider/图片、会话交换、恢复和文档。主执行者审阅并整合存储 worker、计划/索引、trace 脱敏、归档事务和跨层验证。重型验证统一由 GitHub Actions 运行，不在本机并行启动。
 
 ## 待办状态
 
 | 项目 | 当前状态 | 完成证据或门槛 |
 |---|---|---|
-| 全平台代码检查 | 已验证 | RSI 网关代码修复提交 `a4da1458442fff7a4b971f24abb57b5777faea1e` 的 Ubuntu/Windows/macOS 完整 `Check` 全通过，见 run 41652289996；此前 `1eb870f` 与 `7bca1f1` 也已通过 |
-| 临时会话授权边界 | 已验证 | 23 项定向单测及 Linux 桌面跨会话 smoke 通过，见 run 41637023628 |
-| Linux 桌面 smoke 与打包 | 已验证 | 开发版、`linux-unpacked`、AppImage 与 deb 启动 smoke 通过；构件和截图已上传，见 run 41637023628 |
-| 桌面审批选项 | 已验证 | 一次/本会话/永久/拒绝、授权范围与持久化 smoke 均通过，见 run 41637023628 |
-| Provider 证据可追溯性 | 已验证 | Anthropic 结果含完整 commit SHA、干净工作树和用量，见 run 41638870512 与 `e2e-evidence-auto` artifact |
-| 真实 Provider 验收 | 当前 GitHub 配置的 Anthropic profile 已通过 | 模型 `DeepSeek-V4.1-Flash-1017-Event`；309 输出 token；另三种协议没有各自 endpoint/key 配置，见 run 41638870512 |
-| SWE-bench Lite 开发集 | 两次单题诊断未完成，修复后待复验 | run 41640309946 与 41641115352 均为空补丁；已修正 testbed Python 环境和轨迹诊断，下一轮在新提交上最多 10 次迭代/600 秒；详见 [评测说明](evaluation/README.md) |
-| 真实终端光标观感 | INCONCLUSIVE | 本机默认终端是 Ptyxis，Bitori TUI 可访问树可读；Orca Linux provider 不支持截图，启动界面已有本地会话文本，因此未输入或确认像素级光标位置 |
-| Windows/macOS 桌面支持 | 文档目标范围之外 | 产品目标是跨平台终端和 Linux 桌面；新增桌面平台要另作决定 |
-| 多模态 | 等产品决定 | 继续不支持、支持或调研 |
+| 当前三平台代码检查 | 待运行 | 提交全部实现后，通过 GitHub Actions `Check` 的 Ubuntu/Windows/macOS jobs |
+| Linux 桌面 GUI/打包 | 待运行 | 用户已授权免费 GitHub Actions；运行 `Linux desktop`，核对开发/打包 smoke、AppImage/deb 启动及截图 artifact |
+| 本机定向检查 | 已验证 | `npm run typecheck` 通过；18 个定向 Vitest 文件共 193 项通过；改动 TS/TSX 文件 ESLint、桌面 JS `node --check` 与 `git diff --check` 通过 |
+| 多模态 | 已实现，集成验收中 | 本地 PNG/JPEG/GIF/WebP，单图 4 MiB、最多 4 张且合计 8 MiB；桌面选图/粘贴、终端 `/attach`；四种 Provider adapter 有单测。完成条件为 Check 和桌面/TUI 回归通过 |
+| 会话导入/导出 | 已实现，集成验收中 | 版本 1 自包含 JSON；消息、工具记录、图片，排除凭据/provider state；CLI 与 TUI/桌面入口；导入重映射 ID 且数据库事务保护。归档/参数单测已通过，worker 集成验证待新构建后的 Check |
+| 自动断点续跑 | 已实现，集成验收待完成 | 恢复沿用 run 和检查点，保留已完成工具结果且不直接重放；不确定写入/命令要求显式确认；未落盘完成的轮次重试同一轮，已落盘最终回答不再次请求模型；预算回归已修复，恢复/Runner 测试 24/24 通过 |
+| TUI 缺陷与产品入口 | 已实现，定向验收通过 | `chat-screen` 30 项、`message-list` 测试通过；会话草稿隔离、过渡期排队、附件/归档/恢复入口。全量 Check 待运行 |
+| 桌面缺陷与产品入口 | 已实现，CI 验收待运行 | 默认模型恢复、重命名草稿保留、图片/归档/恢复入口和 smoke 覆盖；本机 `node --check` 通过；GUI/打包只在 GitHub Actions 验证 |
+| 首次使用与功能文档 | 已完成，最终 CI 待验证 | 根 README、配置/开发参考、架构/意图、评测状态及项目索引已更新；描述与首版行为一致，最终提交后再核对链接和云端状态 |
+| 真实终端光标观感 | INCONCLUSIVE | Ptyxis 可访问树可读；Orca Linux provider 不支持截图且启动界面有本地会话文本，因此未输入或确认像素级光标位置。保留既有模拟终端测试结果 |
+| 当前配置的真实 Provider | 已有历史验收；本轮不扩展 | Anthropic/DeepSeek 固定任务 309 输出 token，见 run 41638870512；其余三种协议无各自真实端点证据。多模态 Provider 映射由离线协议测试覆盖 |
+| SWE-bench Lite 开发集 | 暂缓 | 历史 23 题无 resolved；第 0 题诊断未产出补丁。不是当前产品功能验收，详见 [评测说明](evaluation/README.md) |
+| Windows/macOS 桌面支持 | 目标范围之外 | 当前目标为跨平台终端及 Linux 桌面；新增桌面平台需另行决定 |
 | 云同步 | 用户取消，保持不支持 | [ADR 0001](docs/decisions/0001-cloud-sync-out-of-scope.md) |
-| 会话导入 | 等产品决定 | 继续不支持、支持或调研 |
-| 自动断点续跑 | 等产品决定 | 继续不支持、支持或调研 |
 | 仓库说明/skills/命令进入模型上下文 | 用户接受当前风险 | [ADR 0002](docs/decisions/0002-accept-current-security-residual-risks.md)；克隆仓库前仍需审查 |
 | 模型诱导用户批准 | 用户接受当前风险 | 审批继续显示真实调用参数，见 ADR 0002 |
 | 本地工作区信任清单无密码学保护 | 用户接受当前风险 | 当前为本地文件，路径移动需重新信任，见 ADR 0002 |
 | bypass 档跳过逐次审批 | 用户接受当前风险 | 仅在受信环境使用并持续显示提示，见 ADR 0002 |
 | trace/历史包含未知机密 | 用户接受当前风险 | 已知配置密钥会脱敏；分享前仍需人工检查未知内容，见 ADR 0002 |
-| RSI | 有界 smoke 已完成；未产出候选 | run 41652747706（基线 `a4da145`）：offline tests 通过；preflight 与 baseline 完成，网关 30/30 请求成功、0 失败，实际计量 747,715 tokens。Agent 达到 30 轮上限，产生 2,682 字节部分补丁后以 `iteration_limit` 停止；gold 验证和完整轨迹均通过，但按既有评测规则归为 `agent_error`、未评分，最终 `no_candidate`。artifact `rsi-smoke-41652747706`（33,754 bytes）已核验；不重复同配置调用 |
+| RSI | 用户明确暂停；产品本身优先 | run 41652747706：网关 30/30 请求成功、计量 747,715 tokens；Agent 达 30 轮上限，部分补丁未评分，最终 `no_candidate`。artifact 已核验；不重复同配置调用 |
 
 ## 阶段
 
@@ -82,8 +104,8 @@
 3. **关闭外部验收。** 先前版本三平台 `Check` 与 Linux desktop workflow 通过，真实 Provider E2E 通过。SWE-bench 单题两次未完成后修正 Agent shell Python 版本与轨迹诊断；最终第 0 题复验仍在 10 轮上限结束、空补丁，原因已记录。RSI 的依赖快照与 Anthropic 网关认证缺陷均已修复，目标网关测试 85 项通过；提交 `a4da145` 的三平台 Check 通过。最终有界 smoke 完成 preflight 与 30 次成功模型请求，但 Agent 达到 30 轮上限，部分补丁未评分，结果 `no_candidate`；完整用量及 artifact 已记录。
 4. **处理 TUI 与桌面目标范围。** 模拟光标/输入用例由三平台 Check 通过。Ptyxis 实机检查受 Orca Linux provider 不支持截图及本地已有会话内容影响，未发送输入，真实光标视觉验收记为 `INCONCLUSIVE`。Windows/macOS 桌面支持仍在现有范围之外。
 5. **记录安全处置。** 用户接受五项既有残留风险；在安全文档和 ADR 中记录范围与日期，风险事实及现有控制保持可见。
-6. **处理产品方向。** 用户取消云同步；多模态、会话导入和自动断点续跑继续等产品决定。获准方向另拆为有范围、有测试和验收条件的实现阶段。
-7. **执行有界 RSI smoke。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的硬预算。第一轮由安全符号链接快照问题在模型调用前中断；第二轮因 Anthropic 认证头不匹配在首请求失败（1 请求、0 tokens、无上游调用）。修正网关协议凭证并由 85 项测试覆盖后，`a4da145` 三平台 Check 通过，第三轮 run 41652747706 正常完成 preflight 和 baseline；网关 30/30 成功，计量 747,715 tokens。Agent 达 30 轮上限并留下部分补丁，但评测器按正常完成规则将其记录为 `agent_error`、不评分，最终 `no_candidate`。artifact 已核实，不自动合并、不重复同条件模型调用。
+6. **实现产品新增功能。** 三项范围和共享契约已确定；图片/provider、版本化会话交换与事务导入、检查点恢复及 TUI/桌面入口已接入，当前进行恢复用量回归与跨平台/桌面最终验证。云同步保持取消。
+7. **RSI 已暂停（以下保留历史执行记录）。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的硬预算。第一轮由安全符号链接快照问题在模型调用前中断；第二轮因 Anthropic 认证头不匹配在首请求失败（1 请求、0 tokens、无上游调用）。修正网关协议凭证并由 85 项测试覆盖后，`a4da145` 三平台 Check 通过，第三轮 run 41652747706 正常完成 preflight 和 baseline；网关 30/30 成功，计量 747,715 tokens。Agent 达 30 轮上限并留下部分补丁，但评测器按正常完成规则将其记录为 `agent_error`、不评分，最终 `no_candidate`。artifact 已核实，不自动合并、不重复同条件模型调用。
 8. **最终核验。** 每项保留证据或明确的延期理由；更新文档索引；确认测试、工作流、分支和工作区状态，并审阅决策轨迹。
 
 ## 已完成的云端验收
@@ -94,9 +116,9 @@
 ## 剩余范围与成本边界
 
 - **Provider 覆盖范围。** 当前 Anthropic/DeepSeek 配置已通过一次固定任务；25k token / 1 credit 阈值是运行后检查，不是硬限制。若要验收 Qoder、OpenAI Chat 或 OpenAI Responses，需分别配置正确 endpoint/key，不能把 Anthropic endpoint 直接当作这些协议。
-- **SWE-bench Lite 开发集。** 工作流已接入仓库通用模型配置，默认单题，最多 5 次迭代/600 秒；下一轮单题诊断将设 10 次迭代/600 秒。工作流没有总 token/美元硬上限。Docker runner 会下载固定公开数据和镜像，将公开任务发送给 Provider；隔离容器中的 Agent 可访问配置凭据和网络。结果、轨迹、诊断、补丁和汇总 artifact 保留 7 天。完整 23 题集仍未授权。
+- **SWE-bench Lite 开发集。** 工作流可运行单题，历史计划的下一次第 0 题诊断最多 10 次迭代/600 秒；当前先完成产品主线，未派发新任务。工作流没有总 token/美元硬上限。Docker runner 会下载固定公开数据和镜像，将公开任务发送给 Provider；隔离容器中的 Agent 可访问配置凭据和网络。结果、轨迹、诊断、补丁和汇总 artifact 保留 7 天。完整 23 题集仍未授权。
 - **RSI smoke。** 用户授权使用可用模型。实验配置为 Docker、90 分钟、100 次请求、2,000,000 累计 tokens，每次请求最多输出 32,000 tokens。run 41647782174 在 preflight 因依赖树内安全相对链接失败，0 请求；`tree_digest` 修复并通过 14 项 sandbox 测试。run 41650351744 在 Anthropic SDK 的 `x-api-key` 与网关 Bearer 不匹配时以 1 请求、0 tokens、0 上游调用中断；网关已按协议校验临时凭证，目标测试 85 项通过。最终 run 41652747706 完成 preflight/baseline，30 次请求均成功、计量 747,715 tokens；Agent 达迭代上限，提交了部分补丁，但按评测契约未正常完成，因此 `agent_error`、跳过评分、没有 RSI 候选。artifact `rsi-smoke-41652747706`（33,754 bytes）已核实，保留 7 天；不自动合并、不重复同配置调用。额度是实验硬上限，不是价格承诺。
-- **产品功能。** 云同步已由用户取消，保持不支持。多模态、会话导入、自动断点续跑仍待决定，未获选择的方向保持未实现。
+- **产品功能。** 云同步已由用户取消，保持不支持。多模态、会话导入和自动断点续跑已获确认并纳入本轮；当前状态见本计划表格。
 - **安全风险处置。** 用户接受 `docs/reference/security.md` 列出的五项当前残留风险：仓库说明/skills/命令进入模型上下文；模型可能诱导用户批准；本地工作区信任清单无密码学保护；bypass 档跳过逐次审批；trace/历史可能包含未知机密。事实和现有控制保留在安全文档，见 ADR 0002。
 - **终端与桌面范围。** 已将本机默认终端 Ptyxis 设为真实光标/输入验收目标；实际显示仍未核验。Windows/macOS 桌面支持仍在现有范围之外。
 

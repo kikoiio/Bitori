@@ -1,4 +1,5 @@
 import type {ProviderError} from './errors.js';
+import type {ImageAttachment} from '../attachments/images.js';
 import type {ToolDefinition} from '../tools/types.js';
 import type {JsonObject, ToolExecutionResult} from '../tools/types.js';
 import type {PromptBlock} from '../prompt/builder.js';
@@ -28,6 +29,7 @@ export type ProviderState =
 export interface ChatMessage {
   role: MessageRole;
   content: string;
+  attachments?: ImageAttachment[];
   providerState?: ProviderState;
   messageId?: string;
 }
@@ -38,6 +40,7 @@ export interface ModelMessageItem {
   messageId: string;
   role: MessageRole;
   content: string;
+  attachments?: ImageAttachment[];
   providerState?: ProviderState;
 }
 

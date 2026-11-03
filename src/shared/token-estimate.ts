@@ -2,14 +2,19 @@ import type {ModelContextItem, Usage} from '../providers/types.js';
 
 /** 共享的上下文 token 估算器。 */
 export const CHARS_PER_TOKEN = 3.5;
+export const IMAGE_ATTACHMENT_TOKEN_ESTIMATE = 1024;
+const IMAGE_ESTIMATE_PADDING = ' '.repeat(IMAGE_ATTACHMENT_TOKEN_ESTIMATE * CHARS_PER_TOKEN);
 
 export interface UsageAnchor {tokens: number; itemLength: number}
 
 export function serializedItem(item: ModelContextItem): string {
-  if (item.type === 'message') return item.content;
-  if (item.type === 'reminder') return item.text;
-  if (item.type === 'assistant_iteration') return item.content + item.thinking + JSON.stringify(item.toolCalls);
-  return JSON.stringify(item.results);
+  const text = item.type === 'message' ? item.content
+    : item.type === 'reminder' ? item.text
+      : item.type === 'assistant_iteration' ? item.content + item.thinking + JSON.stringify(item.toolCalls)
+        : JSON.stringify(item.results);
+  const imageCount = item.type === 'message' ? item.attachments?.length ?? 0 : 0;
+  // 图像按固定 token 预算计入估算；base64 本身不应视为可读文本或展开成巨量 token。
+  return imageCount === 0 ? text : text + IMAGE_ESTIMATE_PADDING.repeat(imageCount);
 }
 
 export function byteLengthOf(items: readonly ModelContextItem[]): number {

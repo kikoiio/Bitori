@@ -35,7 +35,7 @@ export async function runExec(config: AppConfig, profile: ProviderProfile, optio
   let exitCode = 0;
   let runId: string | null = null;
   try {
-    runtime = await createApplicationRuntime({config, profileName: profile.name, workspace, databasePath: join(workspace, '.bitori', 'bitori.db'), ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
+    runtime = await createApplicationRuntime({config, profileName: profile.name, workspace, databasePath: join(workspace, '.bitori', 'bitori.db'), autoResume: false, ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
     const {controller} = runtime;
     controller.subscribe(state => {
       if (state.activeRunId) runId = state.activeRunId;

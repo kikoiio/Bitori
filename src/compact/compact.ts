@@ -64,6 +64,8 @@ export function computeKeepStartIndex(items: readonly ModelContextItem[]): numbe
     const previous = items[index - 1];
     if (previous?.type === 'assistant_iteration' && previous.messageId === first.assistantMessageId) index--;
   }
+  const firstImageMessage = items.findIndex(item => item.type === 'message' && (item.attachments?.length ?? 0) > 0);
+  if (firstImageMessage >= 0 && firstImageMessage < index) index = firstImageMessage;
   return index;
 }
 

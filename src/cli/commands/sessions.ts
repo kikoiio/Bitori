@@ -1,16 +1,17 @@
 import {configPaths, loadConfig, resolveProfile} from '../../config/loader.js';
 import {UsageError} from '../../shared/errors.js';
+import {readSessionArchive, writeSessionArchive} from '../../storage/archive.js';
 import {SessionRepository} from '../../storage/repository.js';
 import type {CliOptions} from '../args.js';
 
-/** `bitori sessions …` 只读命令入口；返回进程退出码。 */
+/** `bitori sessions …` 命令入口；会话归档导入与导出限定在当前 profile。 */
 export async function runSessionsCommand(options: NonNullable<CliOptions['sessions']>, profileOption?: string): Promise<number> {
   const config = loadConfig();
   const profile = resolveProfile(config, profileOption);
   if (profile === null) throw new UsageError('多 profile 时 sessions 命令需要 --profile 指定');
   const repository = new SessionRepository(configPaths().database);
   try {
-    // 只读命令不应把其他进程留下的活动回合改写成中断状态。
+    // sessions 命令不应把其他进程留下的活动回合改写成中断状态。
     await repository.initialize({recover: false});
     if (options.action === 'list') {
       const sessions = await repository.listSessions(profile.name);
@@ -26,11 +27,35 @@ export async function runSessionsCommand(options: NonNullable<CliOptions['sessio
       }
       return 0;
     }
-    // show
-    if (options.sessionId === undefined) throw new UsageError('sessions show 需要 <sessionId>');
+
+    if (options.action === 'import') {
+      const conversation = await readSessionArchive(options.file);
+      const session = await repository.importConversation(profile.name, conversation);
+      if (options.json === true) {
+        process.stdout.write(`${JSON.stringify({
+          session,
+          messageCount: conversation.messages.length,
+          toolCallCount: conversation.toolCalls.length,
+          agentRunCount: conversation.agentRuns.length,
+        }, null, 2)}\n`);
+      } else {
+        process.stdout.write(`已导入会话 ${session.id} 到 profile ${profile.name}（${conversation.messages.length} 条消息）\n`);
+      }
+      return 0;
+    }
+
+    if (options.sessionId === undefined) throw new UsageError(`sessions ${options.action} 需要 <sessionId>`);
     const session = await repository.getSession(options.sessionId);
     if (!session || session.profileName !== profile.name) { process.stdout.write('会话不存在或不属于当前 profile\n'); return 1; }
     const conversation = await repository.getConversation(session.id);
+    if (options.action === 'export') {
+      if (conversation === null) { process.stdout.write('会话不存在或不属于当前 profile\n'); return 1; }
+      await writeSessionArchive(options.out, conversation);
+      process.stdout.write(`已导出会话 ${session.id} 到 ${options.out}\n`);
+      return 0;
+    }
+
+    // show
     if (options.json === true) {
       process.stdout.write(`${JSON.stringify({session, conversation}, null, 2)}\n`);
       return 0;

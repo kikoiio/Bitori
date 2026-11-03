@@ -19,4 +19,17 @@ describe('MessageList', () => {
     expect(first === -1 || first < last).toBe(true);
     view.unmount();
   });
+
+  it('图片名称折行计入消息高度，不让较旧消息挤进视口', () => {
+    const older = message('older', 'user', '较旧消息');
+    const latest = {
+      ...message('latest', 'user', ''),
+      attachments: [{name: 'very-long-diagram-filename-for-wrapping.png', mediaType: 'image/png' as const, data: ''}],
+    };
+    const view = render(<MessageList messages={[older, latest]} height={7} offset={0} selectedMessageId={null} expandedThinkingIds={new Set()} width={30} />);
+    const frame = view.lastFrame() ?? '';
+    expect(frame).toContain('very-long-diagram-filename-for-wrapping.png');
+    expect(frame).not.toContain('较旧消息');
+    view.unmount();
+  });
 });

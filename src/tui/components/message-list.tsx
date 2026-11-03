@@ -52,7 +52,11 @@ function wrappedLines(text: string, width: number): number {
 function estimateHeight(message: StoredMessage, calls: ToolCallRecord[], live: LiveToolCall[], width: number, thinkingExpanded: boolean, gap: number): number {
   const content = message.displayContent ?? message.content;
   const textWidth = Math.max(12, width - 6);
-  if (message.role === 'user') return wrappedLines(content, textWidth) + 2 + gap;
+  if (message.role === 'user') {
+    const attachmentLines = (message.attachments ?? []).reduce((total, attachment) =>
+      total + wrappedLines(`↳ ${attachment.name} · ${attachment.mediaType}`, textWidth), 0);
+    return wrappedLines(content, textWidth) + 2 + attachmentLines + gap;
+  }
   let lines = 1 + gap;
   if (message.thinking) lines += 1 + (thinkingExpanded || message.status === 'streaming' ? wrappedLines(message.thinking, textWidth) : 0);
   lines += content.length > 0 ? wrappedLines(content, textWidth) : 1;

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Bitori</title>
   <link rel="stylesheet" href="styles.css">
   <script src="markdown.js" defer></script>
@@ -27,6 +27,11 @@
         <select id="profile" data-testid="profile-select" aria-label="选择配置"><option value="">加载中…</option></select>
       </div>
       <div class="sessions-header"><span>会话</span><span id="session-count" class="session-count"></span></div>
+      <div class="session-archive-actions">
+        <button id="import-session" data-testid="import-session" type="button">导入会话</button>
+        <button id="export-session" data-testid="export-session" type="button">导出当前</button>
+      </div>
+      <div id="session-feedback" data-testid="session-feedback" class="session-feedback" role="status" aria-live="polite" hidden></div>
       <div class="sessions-search"><input id="session-search" type="search" placeholder="搜索会话标题…" data-testid="session-search" aria-label="搜索会话"></div>
       <nav id="sessions" data-testid="session-list" class="sessions" aria-label="会话列表"></nav>
       <div class="sidebar-footer">
@@ -49,6 +54,14 @@
         <div id="message-list" data-testid="message-list" class="message-list"></div>
       </div>
       <div class="bottom-area">
+        <section id="recovery" data-testid="recovery" class="recovery" aria-labelledby="recovery-title" hidden>
+          <div class="recovery-copy">
+            <h2 id="recovery-title">检测到中断任务</h2>
+            <p id="recovery-message"></p>
+            <p id="recovery-note" class="recovery-note"></p>
+          </div>
+          <button id="recovery-continue" data-testid="recovery-continue" class="button primary" type="button">继续恢复</button>
+        </section>
         <section id="approval" data-testid="approval" class="approval" aria-labelledby="approval-title" hidden>
           <div class="approval-heading"><h2 id="approval-title">需要你的批准</h2><span id="approval-effect" class="effect"></span></div>
           <p id="approval-tool" class="approval-tool"></p>
@@ -59,8 +72,11 @@
         <div id="slash-menu" class="slash-menu" hidden></div>
         <div id="model-menu" class="model-menu" hidden></div>
         <form id="composer" data-testid="composer" class="composer">
+          <div id="attachment-drafts" data-testid="attachment-drafts" class="attachment-drafts" hidden></div>
           <div class="composer-input-row">
             <button id="composer-plus" class="composer-plus" type="button" aria-label="打开命令 ( / )" title="打开命令 ( / )">⌘</button>
+            <button id="choose-images" data-testid="choose-images" class="composer-tool-button" type="button" aria-label="选择图片" title="选择图片">图片</button>
+            <button id="paste-image" data-testid="paste-image" class="composer-tool-button" type="button" aria-label="粘贴图片" title="粘贴图片">粘贴</button>
             <label class="visually-hidden" for="input">输入消息</label>
             <textarea id="input" data-testid="message-input" rows="1" placeholder="描述任务，或向 Bitori 提问" aria-describedby="composer-help"></textarea>
             <div class="composer-actions">

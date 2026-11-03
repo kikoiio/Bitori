@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import {imageDataUrl} from '../attachments/images.js';
+import type {ImageAttachment} from '../attachments/images.js';
 import type {ProviderProfile} from '../config/types.js';
 import {isAbortError, normalizeProviderError} from './errors.js';
 import type {ChatRequest, FinishReason, LLMClient, StreamEvent} from './types.js';
@@ -6,6 +8,26 @@ import type {ChatRequest, FinishReason, LLMClient, StreamEvent} from './types.js
 interface ChatChunk {
   choices?: Array<{delta?: {content?: string | null; tool_calls?: Array<{index: number; id?: string; function?: {name?: string; arguments?: string}}>}; finish_reason?: string | null}>;
   usage?: {prompt_tokens?: number; completion_tokens?: number} | null;
+}
+
+function requestHasImages(request: ChatRequest): boolean {
+  return request.items === undefined
+    ? request.messages.some(message => (message.attachments?.length ?? 0) > 0)
+    : request.items.some(item => item.type === 'message' && (item.attachments?.length ?? 0) > 0);
+}
+
+function normalizeRequestError(error: unknown, profile: ProviderProfile, request: ChatRequest) {
+  const normalized = normalizeProviderError(error, profile);
+  if (!requestHasImages(request) || (normalized.code !== 'invalid_request' && normalized.code !== 'model_not_found')) return normalized;
+  return {...normalized, message: `${normalized.message} 当前请求包含图片；请改用支持视觉输入的模型，或移除图片附件后重试。`};
+}
+
+function messageContent(content: string, attachments: readonly ImageAttachment[] | undefined): string | unknown[] {
+  if (!attachments?.length) return content;
+  return [
+    ...(content ? [{type: 'text', text: content}] : []),
+    ...attachments.map(image => ({type: 'image_url', image_url: {url: imageDataUrl(image), detail: 'auto'}})),
+  ];
 }
 
 /** 将 Chat Completions 的 finish_reason 映射到项目内部枚举。 */
@@ -31,14 +53,14 @@ export class OpenAIChatClient implements LLMClient {
       // Chat Completions 只需要普通 role/content 历史，不使用 Responses 专属的 providerState。
       const messages: unknown[] = [];
       for (const item of request.items ?? []) {
-        if (item.type === 'message') messages.push({role: item.role, content: item.content});
+        if (item.type === 'message') messages.push({role: item.role, content: messageContent(item.content, item.attachments)});
         else if (item.type === 'assistant_iteration') {
           messages.push({role: 'assistant', content: item.content || null, ...(item.toolCalls.length === 0 ? {} : {tool_calls: item.toolCalls.map(call => ({id: call.providerCallId ?? call.callId, type: 'function', function: {name: call.name, arguments: call.argumentsText}}))})});
         // 请求级提醒渲染为用户角色消息；文本已含标签，由 prompt 模块生成。
         } else if (item.type === 'reminder') messages.push({role: 'user', content: item.text});
         else for (const entry of item.results) messages.push({role: 'tool', tool_call_id: entry.providerCallId ?? entry.callId, content: JSON.stringify(entry.result)});
       }
-      if (request.items === undefined) for (const message of request.messages) messages.push({role: message.role, content: message.content});
+      if (request.items === undefined) for (const message of request.messages) messages.push({role: message.role, content: messageContent(message.content, message.attachments)});
       // 系统提示全文放在首条 system 消息；该协议无显式缓存标记，依赖服务端自动前缀缓存。
       if (request.system?.length) messages.unshift({role: 'system', content: request.system.map(block => block.text).join('\n\n')});
       const stream = await this.#client.chat.completions.create({
@@ -73,7 +95,7 @@ export class OpenAIChatClient implements LLMClient {
       // SDK 流结束不等于业务层已收到结束事件，因此在这里统一补一条。
       yield {type: 'completed', finishReason: reason};
     } catch (error) {
-      if (!isAbortError(error, signal)) yield {type: 'error', error: normalizeProviderError(error, this.#profile)};
+      if (!isAbortError(error, signal)) yield {type: 'error', error: normalizeRequestError(error, this.#profile, request)};
     }
   }
 }

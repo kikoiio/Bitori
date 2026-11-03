@@ -107,6 +107,13 @@ export class QoderClient implements LLMClient {
   }
 
   public async *streamChat(request: ChatRequest, signal: AbortSignal): AsyncIterable<StreamEvent> {
+    const hasImages = request.items === undefined
+      ? request.messages.some(message => (message.attachments?.length ?? 0) > 0)
+      : request.items.some(item => item.type === 'message' && (item.attachments?.length ?? 0) > 0);
+    if (hasImages) {
+      yield {type: 'error', error: {code: 'invalid_request', message: 'Qoder 不支持图片附件，图片未发送。', retryable: false}};
+      return;
+    }
     try {
       yield* this.#run(request, signal);
     } catch (error) {

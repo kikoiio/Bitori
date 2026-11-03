@@ -1,4 +1,6 @@
-import type {ContextCheckpoint, FinalMessageUpdate, ToolCallRecord} from './types.js';
+import type {ImageAttachment} from '../attachments/images.js';
+import type {Usage} from '../providers/types.js';
+import type {ContextCheckpoint, FinalMessageUpdate, ToolCallRecord, StoredConversation} from './types.js';
 import type {AgentMode, AgentRunResult} from '../agent/types.js';
 
 /** 主线程允许发给存储 Worker 的全部命令，是一个以 type 区分的联合类型。 */
@@ -7,6 +9,9 @@ export type StorageOperation =
   | {type: 'find_latest_session'; profileName: string}
   | {type: 'list_sessions'; profileName: string}
   | {type: 'create_session'; profileName: string}
+  | {type: 'import_conversation'; profileName: string; conversation: StoredConversation}
+  | {type: 'claim_interrupted_run'; runId: string; allowUncertainEffects: boolean}
+  | {type: 'checkpoint_agent_run'; runId: string; iterationCount: number; usage: Usage}
   | {type: 'get_session'; sessionId: string}
   | {type: 'get_messages'; sessionId: string}
   | {type: 'get_conversation'; sessionId: string}
@@ -17,8 +22,8 @@ export type StorageOperation =
   | {type: 'set_session_mode'; sessionId: string; mode: AgentMode}
   | {type: 'rename_session'; sessionId: string; title: string}
   | {type: 'delete_session'; sessionId: string}
-  | {type: 'begin_agent_run'; runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}
-  | {type: 'append_steer_message'; runId: string; sessionId: string; content: string}
+  | {type: 'begin_agent_run'; runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode; attachments?: ImageAttachment[]}
+  | {type: 'append_steer_message'; runId: string; sessionId: string; content: string; attachments?: ImageAttachment[]}
   | {type: 'begin_agent_iteration'; messageId: string; runId: string; sessionId: string; iteration: number}
   | {type: 'finalize_iteration_with_tool_batch'; messageId: string; update: FinalMessageUpdate; records: ToolCallRecord[]}
   | {type: 'abort_agent_run'; runId: string; result: AgentRunResult; message: string}

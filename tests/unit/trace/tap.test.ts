@@ -25,12 +25,30 @@ function readEvents(directory: string, sessionId = 's1'): Array<Record<string, u
 }
 
 describe('AgentTraceTap', () => {
+  it('records image metadata without writing image bytes or changing model context', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'bitori-tap-images-')); directories.push(directory);
+    const tap = new AgentTraceTap(new TraceWriter(directory), {profileName: 'p', model: 'm', protocol: 'anthropic', workspaceRoot: '/tmp'});
+    const data = 'cHJpdmF0ZS1pbWFnZS1wcm9iZQ==';
+    const event: Extract<AgentEvent, {type: 'request_prepared'}> = {
+      at: 1, runId: 'r1', sessionId: 's1', type: 'request_prepared', iterationId: 'it1', iteration: 1,
+      items: [{type: 'message', messageId: 'u1', role: 'user', content: '看图', attachments: [{name: 'private.png', mediaType: 'image/png', data}]}],
+      system: [], toolDefinitions: [], toolDefinitionDigest: 'd1',
+    };
+    tap.record(event);
+    await tap.flush();
+    const trace = readFileSync(join(directory, 's1.jsonl'), 'utf8');
+    expect(trace).not.toContain(data);
+    expect(trace).toContain('private.png');
+    expect(trace).toContain('image/png');
+    expect(event.items[0]).toMatchObject({attachments: [{data}]});
+  });
+
   it('request_prepared 与 iteration_finished 投影为请求/响应/组成三类事件', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'bitori-tap-')); directories.push(directory);
     const tap = new AgentTraceTap(new TraceWriter(directory), {profileName: 'p', model: 'm', protocol: 'anthropic', workspaceRoot: '/tmp'});
     tap.runHeader('s1', 'r1', 'execute', 'message');
     tap.record({v: 1, at: 2, runId: 'r1', sessionId: 's1', type: 'request_prepared', iterationId: 'it1', iteration: 1, items: [{type: 'message', messageId: 'u1', role: 'user', content: '任务'}], system: [{text: 'sys', cacheable: true, sectionId: 'fixed_system'}], toolDefinitions: [], toolDefinitionDigest: 'd1'} as AgentEvent);
-    tap.record({v: 1, at: 12, runId: 'r1', sessionId: 's1', type: 'iteration_finished', iterationId: 'it1', iteration: 1, response: iteration([])} as AgentEvent);
+    tap.record({v: 1, at: 12, runId: 'r1', sessionId: 's1', type: 'iteration_finished', iterationId: 'it1', iteration: 1, response: iteration([]), totalUsage: {inputTokens: 100, outputTokens: 5}} as AgentEvent);
     await tap.flush();
     const events = readEvents(directory);
     expect(events.map(event => event.type)).toEqual(['run_header', 'request_prepared', 'response', 'context_composition']);

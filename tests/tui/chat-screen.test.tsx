@@ -1,11 +1,39 @@
 import React from 'react';
+import {readFileSync} from 'node:fs';
 import {render} from 'ink-testing-library';
 import {describe, expect, it, vi} from 'vitest';
 import {Message} from '../../src/tui/components/message.js';
+import {imageAttachmentFromBytes} from '../../src/attachments/images.js';
+import type * as ImageAttachmentsModule from '../../src/attachments/images.js';
+import type * as ArchiveModule from '../../src/storage/archive.js';
+import type {ImageAttachment} from '../../src/attachments/images.js';
+import type {StoredConversation} from '../../src/storage/types.js';
 import type {StoredMessage} from '../../src/storage/types.js';
 import {ChatScreen} from '../../src/tui/screens/chat-screen.js';
 import {initialAppState} from '../../src/chat/state.js';
 import type {ChatController} from '../../src/chat/agent-controller.js';
+
+const {loadImageAttachmentMock, readSessionArchiveMock, writeSessionArchiveMock} = vi.hoisted(() => ({
+  loadImageAttachmentMock: vi.fn(),
+  readSessionArchiveMock: vi.fn(),
+  writeSessionArchiveMock: vi.fn(),
+}));
+
+vi.mock('../../src/attachments/images.js', async importOriginal => ({
+  ...(await importOriginal<typeof ImageAttachmentsModule>()),
+  loadImageAttachment: loadImageAttachmentMock,
+}));
+
+vi.mock('../../src/storage/archive.js', async importOriginal => ({
+  ...(await importOriginal<typeof ArchiveModule>()),
+  readSessionArchive: readSessionArchiveMock,
+  writeSessionArchive: writeSessionArchiveMock,
+}));
+
+function testImage(name: string): ImageAttachment {
+  const bytes = readFileSync(new URL('../../src/desktop/icon.png', import.meta.url));
+  return imageAttachmentFromBytes(bytes, name);
+}
 
 const message: StoredMessage = {id: 'm', sessionId: 's', role: 'assistant', content: '中文\n```ts\nconst x = 1\n```',
   thinking: '分析', status: 'completed', errorCode: null, errorMessage: null, usage: null, providerState: null,
@@ -17,6 +45,13 @@ describe('Message', () => {
     expect(view.lastFrame()).toContain('中文');
     expect(view.lastFrame()).toContain('const x = 1');
     expect(view.lastFrame()).toContain('分析');
+    view.unmount();
+  });
+
+  it('用户消息展示图片附件文件名和媒体类型', () => {
+    const view = render(<Message message={{...message, role: 'user', attachments: [{name: 'diagram.png', mediaType: 'image/png', data: ''}]}} selected={false} thinkingExpanded={false} />);
+    expect(view.lastFrame()).toContain('diagram.png');
+    expect(view.lastFrame()).toContain('image/png');
     view.unmount();
   });
 });
@@ -42,6 +77,44 @@ describe('ChatScreen 工具审批键盘优先级', () => {
 describe('ChatScreen 异步操作', () => {
   const state = initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'});
   const tick = () => new Promise(resolve => setTimeout(resolve, 25));
+
+  it('切换会话后隔离草稿，并在切回时恢复', async () => {
+    const sessionA = {id: 'session-a', profileName: 'p', title: '会话 A', createdAt: 1, updatedAt: 1, agentMode: 'execute' as const, latestPlanMessageId: null};
+    const sessionB = {id: 'session-b', profileName: 'p', title: '会话 B', createdAt: 2, updatedAt: 2, agentMode: 'execute' as const, latestPlanMessageId: null};
+    const sessionC = {id: 'session-c', profileName: 'p', title: '会话 C', createdAt: 3, updatedAt: 3, agentMode: 'execute' as const, latestPlanMessageId: null};
+    const stateFor = (session: typeof sessionA) => ({...state, session});
+    const listSessions = vi.fn().mockResolvedValue([sessionB]);
+    const switchSession = vi.fn().mockResolvedValue(undefined);
+    const createSession = vi.fn().mockResolvedValue(undefined);
+    const controller = {listSessions, switchSession, createSession} as unknown as ChatController;
+    const view = render(<ChatScreen state={stateFor(sessionA)} controller={controller} height={24} onExit={vi.fn()} />);
+
+    view.stdin.write('会话 A 的未发送草稿');
+    await tick();
+    view.stdin.write('\x13');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(switchSession).toHaveBeenCalledWith(sessionB.id);
+
+    view.rerender(<ChatScreen state={stateFor(sessionB)} controller={controller} height={24} onExit={vi.fn()} />);
+    expect(view.lastFrame()).not.toContain('会话 A 的未发送草稿');
+    view.stdin.write('会话 B 的草稿');
+    await tick();
+
+    view.rerender(<ChatScreen state={stateFor(sessionA)} controller={controller} height={24} onExit={vi.fn()} />);
+    expect(view.lastFrame()).toContain('会话 A 的未发送草稿');
+    view.rerender(<ChatScreen state={stateFor(sessionB)} controller={controller} height={24} onExit={vi.fn()} />);
+    expect(view.lastFrame()).toContain('会话 B 的草稿');
+    expect(view.lastFrame()).not.toContain('会话 A 的未发送草稿');
+
+    view.stdin.write('\x0e');
+    await tick();
+    expect(createSession).toHaveBeenCalledOnce();
+    view.rerender(<ChatScreen state={stateFor(sessionC)} controller={controller} height={24} onExit={vi.fn()} />);
+    expect(view.lastFrame()).not.toContain('会话 B 的草稿');
+    view.unmount();
+  });
 
   it('等待新建会话时忽略重复操作，并在失败后允许重试', async () => {
     let rejectFirst: ((error: Error) => void) | undefined;
@@ -93,7 +166,7 @@ describe('ChatScreen 异步操作', () => {
 
   it('发送失败被捕获，之后可以继续发送', async () => {
     const sendMessage = vi.fn().mockRejectedValueOnce(new Error('发送失败')).mockResolvedValue(undefined);
-    const controller = {sendMessage} as unknown as ChatController;
+    const controller = {sendMessage, getState: () => state} as unknown as ChatController;
     const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={vi.fn()} />);
     view.stdin.write('hello');
     await tick();
@@ -105,7 +178,7 @@ describe('ChatScreen 异步操作', () => {
     view.stdin.write('\r');
     await tick();
     expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage).toHaveBeenLastCalledWith('again');
+    expect(sendMessage).toHaveBeenLastCalledWith('helloagain', []);
     view.unmount();
   });
 
@@ -134,8 +207,177 @@ describe('ChatScreen 异步操作', () => {
   });
 });
 
+describe('ChatScreen 新功能入口', () => {
+  const tick = () => new Promise(resolve => setTimeout(resolve, 25));
+  const profile = {name: 'p', protocol: 'openai-chat' as const, model: 'm'};
+
+  it('附件随会话隔离，可清除，并支持纯图片发送', async () => {
+    loadImageAttachmentMock.mockReset().mockResolvedValue(testImage('diagram.png'));
+    const sessionA = {id: 'session-a', profileName: 'p', title: '会话 A', createdAt: 1, updatedAt: 1, agentMode: 'execute' as const, latestPlanMessageId: null};
+    const sessionB = {id: 'session-b', profileName: 'p', title: '会话 B', createdAt: 2, updatedAt: 2, agentMode: 'execute' as const, latestPlanMessageId: null};
+    const stateFor = (session: typeof sessionA) => ({...initialAppState(profile), session});
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const controller = {
+      listSessions: vi.fn().mockResolvedValue([sessionB]),
+      switchSession: vi.fn().mockResolvedValue(undefined),
+      sendMessage,
+      getState: () => initialAppState(profile),
+    } as unknown as ChatController;
+    const view = render(<ChatScreen state={stateFor(sessionA)} controller={controller} height={30} onExit={vi.fn()} />);
+
+    view.stdin.write('/attach "image path with spaces.png"');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(loadImageAttachmentMock).toHaveBeenCalledWith('image path with spaces.png');
+    expect(view.lastFrame()).toContain('diagram.png');
+
+    view.stdin.write('\x13');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    view.rerender(<ChatScreen state={stateFor(sessionB)} controller={controller} height={30} onExit={vi.fn()} />);
+    expect(view.lastFrame()).not.toContain('diagram.png');
+    view.rerender(<ChatScreen state={stateFor(sessionA)} controller={controller} height={30} onExit={vi.fn()} />);
+    expect(view.lastFrame()).toContain('diagram.png');
+
+    view.stdin.write('/attachments clear');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(view.lastFrame()).not.toContain('diagram.png');
+
+    view.stdin.write('/attach "image path with spaces.png"');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(sendMessage).toHaveBeenCalledWith('', [expect.objectContaining({name: 'diagram.png', mediaType: 'image/png'})]);
+    view.unmount();
+  });
+
+  it('发送失败时恢复文本草稿和图片附件', async () => {
+    loadImageAttachmentMock.mockReset().mockResolvedValue(testImage('diagram.png'));
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    const controller = {
+      sendMessage,
+      getState: () => ({...initialAppState(profile), requestStatus: 'failed' as const, visibleError: '发送失败'}),
+    } as unknown as ChatController;
+    const view = render(<ChatScreen state={initialAppState(profile)} controller={controller} height={30} onExit={vi.fn()} />);
+
+    view.stdin.write('/attach "image path.png"');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    view.stdin.write('分析这张图');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(view.lastFrame()).toContain('发送失败');
+    expect(view.lastFrame()).toContain('分析这张图');
+    expect(view.lastFrame()).toContain('diagram.png');
+    view.unmount();
+  });
+
+  it('图片读取失败时保留附加命令草稿', async () => {
+    loadImageAttachmentMock.mockReset().mockRejectedValue(new Error('无法读取图片'));
+    const view = render(<ChatScreen state={initialAppState(profile)} controller={{} as ChatController} height={30} onExit={vi.fn()} />);
+
+    view.stdin.write('/attach "missing image.png"');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(view.lastFrame()).toContain('无法读取图片');
+    expect(view.lastFrame()).toContain('/attach "missing image.png"');
+    view.unmount();
+  });
+
+  it('导入导出路径支持引号中的空格', async () => {
+    readSessionArchiveMock.mockReset();
+    writeSessionArchiveMock.mockReset().mockResolvedValue(undefined);
+    const session = {id: 'session-a', profileName: 'p', title: '会话 A', createdAt: 1, updatedAt: 1, agentMode: 'execute' as const, latestPlanMessageId: null};
+    const conversation: StoredConversation = {session, messages: [], toolCalls: [], agentRuns: []};
+    readSessionArchiveMock.mockResolvedValue(conversation);
+    const exportSession = vi.fn().mockResolvedValue(conversation);
+    const importSession = vi.fn().mockResolvedValue(undefined);
+    const controller = {exportSession, importSession} as unknown as ChatController;
+    const view = render(<ChatScreen state={{...initialAppState(profile), session}} controller={controller} height={30} onExit={vi.fn()} />);
+
+    view.stdin.write('/export "my archive.json"');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(exportSession).toHaveBeenCalledOnce();
+    expect(writeSessionArchiveMock).toHaveBeenCalledWith('my archive.json', conversation);
+
+    view.stdin.write('/import "shared archive.json"');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(readSessionArchiveMock).toHaveBeenCalledWith('shared archive.json');
+    expect(importSession).toHaveBeenCalledWith(conversation);
+    view.unmount();
+  });
+
+  it('/resume 显示待确认恢复并只调用恢复接口', async () => {
+    const resumeInterruptedRun = vi.fn().mockResolvedValue(undefined);
+    const sendMessage = vi.fn();
+    const controller = {resumeInterruptedRun, sendMessage} as unknown as ChatController;
+    const state = {...initialAppState(profile), recovery: {runId: 'run-12345678', requiresConfirmation: true, message: '工具执行期间进程中断'}};
+    const view = render(<ChatScreen state={state} controller={controller} height={30} onExit={vi.fn()} />);
+
+    expect(view.lastFrame()).toContain('工具执行期间进程中断');
+    expect(view.lastFrame()).toContain('/resume');
+    view.stdin.write('/resume');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(resumeInterruptedRun).toHaveBeenCalledOnce();
+    expect(sendMessage).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it('/resume 在没有待确认回合时只显示提示', async () => {
+    const resumeInterruptedRun = vi.fn();
+    const view = render(<ChatScreen state={initialAppState(profile)} controller={{resumeInterruptedRun} as unknown as ChatController} height={30} onExit={vi.fn()} />);
+
+    view.stdin.write('/resume');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(resumeInterruptedRun).not.toHaveBeenCalled();
+    expect(view.lastFrame()).toContain('当前没有待确认的中断回合');
+    view.unmount();
+  });
+});
+
 describe('ChatScreen 斜杠命令与模型选择', () => {
   const tick = () => new Promise(resolve => setTimeout(resolve, 25));
+
+  it('同一 profile 使用模型覆盖值时，可选回配置默认模型', async () => {
+    const listModels = vi.fn().mockResolvedValue({models: [{id: 'other-model', enabled: true}]});
+    const onSwitchProfile = vi.fn().mockResolvedValue(undefined);
+    const profiles = [{name: 'p', protocol: 'openai-chat' as const, model: 'default-model'}];
+    const controller = {commandCatalog: () => []} as unknown as ChatController;
+    const view = render(<ChatScreen state={initialAppState({name: 'p', protocol: 'openai-chat', model: 'custom-model'})} controller={controller} height={30} onExit={vi.fn()} profiles={profiles} onSwitchProfile={onSwitchProfile} listModels={listModels} />);
+
+    view.stdin.write('/');
+    await tick();
+    view.stdin.write('model');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(listModels).toHaveBeenCalledWith('p');
+    expect(view.lastFrame()).toContain('保持配置默认（default-model）');
+
+    view.stdin.write('\r');
+    await tick();
+    expect(onSwitchProfile).toHaveBeenCalledWith('p', undefined);
+    view.unmount();
+  });
 
   it('输入 / 展示命令面板，/model 打开配置选择', async () => {
     const controller = {commandCatalog: () => []} as unknown as ChatController;
@@ -146,10 +388,11 @@ describe('ChatScreen 斜杠命令与模型选择', () => {
     const view = render(<ChatScreen state={initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'})} controller={controller} height={30} onExit={vi.fn()} profiles={profiles} onSwitchProfile={vi.fn()} />);
     view.stdin.write('/');
     await tick();
-    expect(view.lastFrame()).toContain('/model');
-    expect(view.lastFrame()).toContain('切换模型配置');
+    expect(view.lastFrame()).toContain('/attach');
     view.stdin.write('model');
     await tick();
+    expect(view.lastFrame()).toContain('/model');
+    expect(view.lastFrame()).toContain('切换模型配置');
     view.stdin.write('\r');
     await tick();
     expect(view.lastFrame()).toContain('选择模型配置');
@@ -256,18 +499,43 @@ describe('ChatScreen 会话搜索/重命名/删除', () => {
 describe('ChatScreen 生成中输入', () => {
   const tick = () => new Promise(resolve => setTimeout(resolve, 25));
 
+  it('首条发送尚未发布忙碌状态时，第二条消息仍进入队列', async () => {
+    let finishSend: (() => void) | undefined;
+    const sendMessage = vi.fn().mockImplementation(() => new Promise<void>(resolve => { finishSend = resolve; }));
+    const steerMessage = vi.fn().mockResolvedValue(undefined);
+    const controller = {sendMessage, steerMessage, getState: () => initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'})} as unknown as ChatController;
+    const view = render(<ChatScreen state={initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'})} controller={controller} height={24} onExit={vi.fn()} />);
+
+    view.stdin.write('第一条');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(sendMessage).toHaveBeenCalledWith('第一条', []);
+
+    view.stdin.write('第二条');
+    await tick();
+    view.stdin.write('\r');
+    await tick();
+    expect(steerMessage).toHaveBeenCalledWith('第二条', []);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    finishSend?.();
+    await tick();
+    view.unmount();
+  });
+
   it('生成中输入框不锁死：可以打字，Enter 排队发送，Esc 中断当前生成', async () => {
     const steerMessage = vi.fn().mockResolvedValue(undefined);
     const cancelActiveRequest = vi.fn().mockResolvedValue(undefined);
     const sendMessage = vi.fn().mockResolvedValue(undefined);
-    const controller = {steerMessage, cancelActiveRequest, sendMessage} as unknown as ChatController;
     const state = {...initialAppState({name: 'p', protocol: 'openai-chat', model: 'm'}), requestStatus: 'streaming' as const};
+    const controller = {steerMessage, cancelActiveRequest, sendMessage, getState: () => state} as unknown as ChatController;
     const view = render(<ChatScreen state={state} controller={controller} height={24} onExit={vi.fn()} />);
     view.stdin.write('顺便把 README 也改了'); await tick();
     expect(view.lastFrame()).toContain('顺便把 README 也改了');
     expect(view.lastFrame()).toContain('▌');
     view.stdin.write('\r'); await tick();
-    expect(steerMessage).toHaveBeenCalledWith('顺便把 README 也改了');
+    expect(steerMessage).toHaveBeenCalledWith('顺便把 README 也改了', []);
     expect(sendMessage).not.toHaveBeenCalled();
     expect(view.lastFrame()).not.toContain('顺便把 README 也改了');
     view.stdin.write('\u001B'); await tick();

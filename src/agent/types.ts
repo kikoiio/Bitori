@@ -11,11 +11,15 @@ export type AgentPhase = 'preparing' | 'streaming' | 'scheduling_tools' | 'await
 export interface AgentRunInput {
   runId: string;
   sessionId: string;
-  trigger: 'message' | 'do';
+  trigger: 'message' | 'do' | 'resume';
   mode: AgentMode;
   instruction: string;
   /** 本次显示消息的标识；模型请求使用 instruction，持久化仍保留用户输入。 */
   userMessageId?: string;
+  /** 恢复时从已持久化轮数之后继续；仍受 limits.maxIterations 总预算约束。 */
+  iterationOffset?: number;
+  /** 恢复时从仓储中的累计用量继续。 */
+  usageOffset?: Usage;
   context: ModelContextItem[];
   /** 控制器在会话激活时冻结的系统提示；缺省时不发送系统提示。 */
   system?: PromptBlock[];
@@ -55,7 +59,7 @@ export interface CollectedIteration {
 
 interface AgentEventBase {runId: string; sessionId: string; at: number}
 export type AgentEvent =
-  | (AgentEventBase & {type: 'run_started'; mode: AgentMode; maxIterations: number})
+  | (AgentEventBase & {type: 'run_started'; mode: AgentMode; maxIterations: number; iterationOffset: number; totalUsage: Usage})
   | (AgentEventBase & {type: 'iteration_started'; iterationId: string; iteration: number})
   | (AgentEventBase & {type: 'text_delta' | 'thinking_delta'; iterationId: string; delta: string})
   | (AgentEventBase & {type: 'usage_updated'; iterationId: string; iterationUsage: Usage; totalUsage: Usage})
@@ -66,7 +70,7 @@ export type AgentEvent =
   | (AgentEventBase & {type: 'tool_status'; iterationId: string; callId: string; status: ToolExecutionStatus})
   | (AgentEventBase & {type: 'tool_result'; iterationId: string; callId: string; result: ToolExecutionResult})
   | (AgentEventBase & {type: 'progress'; iteration: number; maxIterations: number; phase: AgentPhase; completedTools: number; totalTools: number})
-  | (AgentEventBase & {type: 'iteration_finished'; iterationId: string; iteration: number; response: CollectedIteration})
+  | (AgentEventBase & {type: 'iteration_finished'; iterationId: string; iteration: number; response: CollectedIteration; totalUsage: Usage})
   // 请求级可观察性：完整请求载荷、重试序列与压缩事实只在此处可见。
   | (AgentEventBase & {type: 'request_prepared'; iterationId: string; iteration: number; items: ModelContextItem[]; system: PromptBlock[]; toolDefinitions: ToolDefinition[]; toolDefinitionDigest: string})
   | (AgentEventBase & {type: 'request_retry'; iterationId: string; iteration: number; attempt: number; delayMs: number; error: ProviderError})

@@ -1,5 +1,12 @@
 import type {ModelAssistantIterationItem, ModelContextItem, ModelMessageItem, ModelReminderItem, ModelToolResultsItem} from '../providers/types.js';
+import {imageAttachmentsSchema} from '../attachments/images.js';
 import type {StoredConversation} from '../storage/types.js';
+
+function attachmentsFromStoredMessage(message: StoredConversation['messages'][number]): ModelMessageItem['attachments'] | undefined {
+  if (!('attachments' in message) || message.attachments === undefined) return undefined;
+  const attachments = imageAttachmentsSchema.parse(message.attachments);
+  return attachments.length === 0 ? undefined : attachments;
+}
 
 /** Agent 内存上下文保持助手调用与对应结果相邻。 */
 export class AgentContext {
@@ -16,13 +23,14 @@ export class AgentContext {
     for (const message of [...conversation.messages].sort((a, b) => a.createdAt - b.createdAt)) {
       const replayable = message.status === 'completed' || (message.status === 'cancelled' && message.content.length > 0);
       if (!replayable) continue;
+      const attachments = attachmentsFromStoredMessage(message);
       if (message.role === 'user') {
-        items.push({type: 'message', messageId: message.id, role: 'user', content: message.content});
+        items.push({type: 'message', messageId: message.id, role: 'user', content: message.content, ...(attachments === undefined ? {} : {attachments})});
         continue;
       }
       const calls = [...(callsByMessage.get(message.id) ?? [])].sort((a, b) => a.position - b.position);
       if (calls.length === 0) {
-        items.push({type: 'message', messageId: message.id, role: 'assistant', content: message.content, ...(message.providerState === null ? {} : {providerState: message.providerState})});
+        items.push({type: 'message', messageId: message.id, role: 'assistant', content: message.content, ...(attachments === undefined ? {} : {attachments}), ...(message.providerState === null ? {} : {providerState: message.providerState})});
         continue;
       }
       items.push({type: 'assistant_iteration', messageId: message.id, content: message.content, ...(message.thinking ? {thinking: message.thinking} : {}), ...(message.providerState === null ? {} : {providerState: message.providerState}), toolCalls: calls.map(call => ({callId: call.id, providerCallId: call.providerCallId, name: call.toolName, argumentsText: call.argumentsText ?? JSON.stringify(call.arguments), arguments: call.arguments}))});

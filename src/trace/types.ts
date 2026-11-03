@@ -17,7 +17,7 @@ interface TraceEventBase {
 export interface TraceToolCallSummary {callId: string; providerCallId: string | null; name: string; argumentsText: string}
 
 export type TraceEvent =
-  | (TraceEventBase & {type: 'run_header'; runId: string; profileName: string; model: string; protocol: string; mode: AgentMode; trigger: 'message' | 'do'; workspaceRoot: string})
+  | (TraceEventBase & {type: 'run_header'; runId: string; profileName: string; model: string; protocol: string; mode: AgentMode; trigger: 'message' | 'do' | 'resume'; workspaceRoot: string})
   | (TraceEventBase & {type: 'request_prepared'; runId: string; iterationId: string; iteration: number; items: ModelContextItem[]; system: PromptBlock[]; toolDefinitions: ToolDefinition[]; toolDefinitionDigest: string})
   | (TraceEventBase & {type: 'response'; runId: string; iterationId: string; iteration: number; text: string; thinking: string; toolCalls: TraceToolCallSummary[]; usage: Usage; finishReason: FinishReason | null; providerState: ProviderState | null; errorCode: string | null; errorMessage: string | null; durationMs: number})
   | (TraceEventBase & {type: 'request_retry'; runId: string; iterationId: string; iteration: number; attempt: number; delayMs: number; errorCode: string; errorMessage: string})

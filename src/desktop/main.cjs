@@ -1,8 +1,8 @@
 'use strict';
 
-const {app, BrowserWindow, dialog, ipcMain, shell} = require('electron');
+const {app, BrowserWindow, clipboard, dialog, ipcMain, shell} = require('electron');
 const {homedir} = require('node:os');
-const {join, resolve} = require('node:path');
+const {basename, join, resolve} = require('node:path');
 const {pathToFileURL} = require('node:url');
 
 let window;
@@ -20,10 +20,11 @@ let startupError;
 async function loadCore() {
   const base = resolve(__dirname, '../../dist');
   const load = name => import(pathToFileURL(join(base, name)).href);
-  const [application, loader, types, diagnostics, trust] = await Promise.all([
+  const [application, loader, types, diagnostics, trust, images, archive] = await Promise.all([
     load('app/runtime.js'), load('config/loader.js'), load('config/types.js'), load('diagnostics/connection.js'), load('config/trust.js'),
+    load('attachments/images.js'), load('storage/archive.js'),
   ]);
-  return {...application, ...loader, ...types, ...diagnostics, ...trust};
+  return {...application, ...loader, ...types, ...diagnostics, ...trust, ...images, ...archive};
 }
 
 async function dispose() {
@@ -110,6 +111,10 @@ function checkedText(value, name, max = 100000) {
   if (typeof value !== 'string' || value.length === 0 || value.length > max) throw new Error(`${name}无效`);
   return value;
 }
+function archiveBaseName(title) {
+  const safe = String(title || '会话').replace(/[\u0000-\u001f<>:"/\\|?*]/g, '_').trim().slice(0, 80);
+  return safe || '会话';
+}
 function handle(channel, fn) {
   ipcMain.handle(channel, async (event, ...args) => {
     if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('无效的请求来源');
@@ -161,7 +166,41 @@ function registerHandlers() {
     await core.trustWorkspace(workspace);
     return initialize();
   }));
-  handle('bitori:send', text => activeController().sendMessage(checkedText(text, '消息')));
+  handle('bitori:choose-images', async () => {
+    const result = await dialog.showOpenDialog(window, {
+      title: '选择图片',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp']}],
+    });
+    if (result.canceled || result.filePaths.length === 0) return [];
+    if (result.filePaths.length > 4) throw new Error('最多附加 4 张图片');
+    const attachments = [];
+    for (const path of result.filePaths) {
+      attachments.push(await core.loadImageAttachment(path));
+      core.imageAttachmentsSchema.parse(attachments);
+    }
+    return core.imageAttachmentsSchema.parse(attachments);
+  });
+  handle('bitori:paste-image', () => {
+    const image = clipboard.readImage();
+    if (image.isEmpty()) return null;
+    const attachment = core.imageAttachmentFromBytes(new Uint8Array(image.toPNG()), 'clipboard.png');
+    return core.imageAttachmentsSchema.parse([attachment])[0];
+  });
+  handle('bitori:send', (text, attachments) => {
+    if (typeof text !== 'string' || text.length > 100000) throw new Error('消息无效');
+    const checkedAttachments = core.imageAttachmentsSchema.parse(attachments === undefined ? [] : attachments);
+    if (!text.trim() && checkedAttachments.length === 0) throw new Error('消息或图片附件不能为空');
+    const active = activeController();
+    const priorMessageIds = new Set(active.getState().messages.map(message => message.id));
+    return active.sendMessage(text, checkedAttachments).then(result => {
+      const next = active.getState();
+      const accepted = next.messages.some(message => message.role === 'user' && !priorMessageIds.has(message.id));
+      if (next.requestStatus === 'failed' && next.visibleError) throw new Error(next.visibleError);
+      if (!accepted && next.visibleError) throw new Error(next.visibleError);
+      return result;
+    });
+  });
   handle('bitori:cancel', () => activeController().cancelActiveRequest());
   handle('bitori:new-session', () => activeController().createSession());
   handle('bitori:switch-session', id => activeController().switchSession(checkedText(id, '会话 ID', 200)));
@@ -172,6 +211,39 @@ function registerHandlers() {
     return activeController().renameSession(checkedId, checkedTitle);
   });
   handle('bitori:delete-session', id => activeController().deleteSession(checkedText(id, '会话 ID', 200)));
+  handle('bitori:export-session', () => {
+    const active = activeController();
+    return changeContext(async () => {
+      const result = await dialog.showSaveDialog(window, {
+        title: '导出当前会话',
+        defaultPath: join(app.getPath('documents'), `${archiveBaseName(active.getState().session?.title)}.bitori-session`),
+        filters: [{name: 'Bitori 会话归档', extensions: ['bitori-session']}],
+      });
+      if (result.canceled || !result.filePath || closing) return null;
+      const conversation = await active.exportSession();
+      await core.writeSessionArchive(result.filePath, conversation);
+      return {ok: true, fileName: basename(result.filePath)};
+    });
+  });
+  handle('bitori:import-session', () => {
+    const active = activeController();
+    return changeContext(async () => {
+      const result = await dialog.showOpenDialog(window, {
+        title: '导入会话',
+        properties: ['openFile'],
+        filters: [{name: 'Bitori 会话归档', extensions: ['bitori-session', 'json']}],
+      });
+      if (result.canceled || !result.filePaths[0] || closing) return null;
+      const conversation = await core.readSessionArchive(result.filePaths[0]);
+      await active.importSession(conversation);
+      return {ok: true, fileName: basename(result.filePaths[0]), snapshot: await currentSnapshot()};
+    });
+  });
+  handle('bitori:resume-interrupted-run', () => {
+    const active = activeController();
+    if (!active.getState().recovery) throw new Error('当前没有待恢复任务');
+    return active.resumeInterruptedRun();
+  });
   handle('bitori:commands', () => activeController().commandCatalog());
   handle('bitori:external', url => {
     if (typeof url !== 'string' || url.length > 2048) throw new Error('链接无效');

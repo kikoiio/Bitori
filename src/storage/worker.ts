@@ -1,10 +1,11 @@
+import {imageAttachmentsSchema} from '../attachments/images.js';
+import {insertImportedConversation} from './import-conversation.js';
 import {parentPort, workerData} from 'node:worker_threads';
 import {DatabaseSync} from 'node:sqlite';
 import {createId, now} from '../shared/ids.js';
 import {getLogger} from '../shared/logger.js';
 import {isProviderState} from '../providers/types.js';
 import {runMigrations} from './migrations/index.js';
-import type {MigrationDatabase} from './migrations/index.js';
 import {serializeWorkerError} from './worker-client.js';
 import type {StorageOperation, StorageRequest, StorageResponse} from './worker-protocol.js';
 import type {AgentRunRecord, ContextCheckpoint, FinalMessageUpdate, Session, StoredConversation, StoredMessage, ToolCallRecord} from './types.js';
@@ -17,6 +18,7 @@ interface SessionRow {id: string; profile_name: string; title: string; created_a
 interface MessageRow {
   id: string; session_id: string; role: 'user' | 'assistant'; content: string; thinking: string;
   display_content: string | null;
+  attachments_json: string;
   status: 'streaming' | 'completed' | 'cancelled' | 'failed'; error_code: StoredMessage['errorCode'];
   error_message: string | null; input_tokens: number | null; output_tokens: number | null; credits: number | null;
   provider_state: string | null; agent_run_id: string | null; iteration: number | null; created_at: number; updated_at: number;
@@ -72,6 +74,7 @@ function message(row: MessageRow): StoredMessage {
     ? null : {inputTokens: row.input_tokens ?? 0, outputTokens: row.output_tokens ?? 0, ...(row.credits === null ? {} : {credits: row.credits})};
   return {
     id: row.id, sessionId: row.session_id, role: row.role, content: row.content, ...(row.display_content === null ? {} : {displayContent: row.display_content}), thinking: row.thinking,
+    attachments: imageAttachmentsSchema.parse(JSON.parse(row.attachments_json)),
     status: row.status, errorCode: row.error_code, errorMessage: row.error_message, usage, providerState, agentRunId: row.agent_run_id, iteration: row.iteration,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
@@ -95,7 +98,7 @@ function insertToolBatch(records: ToolCallRecord[]): void {
 function interruptRun(runId: string): void {
   transaction(() => {
     const timestamp = now();
-    database.prepare(`UPDATE messages SET status='failed', error_code='stream_interrupted', error_message='程序中断，Agent 未自动续跑', updated_at=? WHERE agent_run_id=? AND status='streaming'`).run(timestamp, runId);
+    database.prepare(`UPDATE messages SET status='failed', error_code='stream_interrupted', error_message='程序中断，等待恢复检查', updated_at=? WHERE agent_run_id=? AND status='streaming'`).run(timestamp, runId);
     database.prepare(`UPDATE tool_calls SET approval_status=CASE WHEN approval_status='pending' THEN 'denied' ELSE approval_status END, execution_status='interrupted', result_json=?, updated_at=? WHERE agent_run_id=? AND (execution_status IN ('queued','running') OR approval_status='pending')`).run(JSON.stringify({status: 'interrupted', error: {code: 'interrupted', message: '程序中断，工具未自动重试', retryable: false}}), timestamp, runId);
     database.prepare(`UPDATE agent_runs SET status='interrupted', stop_reason='process_interrupted', finished_at=?, updated_at=? WHERE id=? AND status='running'`).run(timestamp, timestamp, runId);
   });
@@ -105,7 +108,7 @@ function interruptLegacyMessage(messageId: string): void {
   transaction(() => {
     const timestamp = now();
     database.prepare(`UPDATE tool_calls SET approval_status=CASE WHEN approval_status='pending' THEN 'denied' ELSE approval_status END, execution_status='interrupted', result_json=?, updated_at=? WHERE assistant_message_id=? AND agent_run_id IS NULL AND (execution_status IN ('queued','running') OR approval_status='pending')`).run(JSON.stringify({status:'interrupted', error:{code:'interrupted',message:'程序中断，工具未自动重试',retryable:false}}), timestamp, messageId);
-    database.prepare(`UPDATE messages SET status='failed',error_code='stream_interrupted',error_message='程序中断，Agent 未自动续跑',updated_at=? WHERE id=? AND status='streaming'`).run(timestamp, messageId);
+    database.prepare(`UPDATE messages SET status='failed',error_code='stream_interrupted',error_message='程序中断，等待恢复检查',updated_at=? WHERE id=? AND status='streaming'`).run(timestamp, messageId);
   });
 }
 
@@ -125,7 +128,7 @@ function execute(operation: StorageOperation): unknown {
   if (closed && operation.type !== 'close') throw new Error('存储已经关闭');
   switch (operation.type) {
     case 'initialize':
-      runMigrations(database as unknown as MigrationDatabase);
+      runMigrations(database);
       if (operation.recover !== false) recoverDeadOwners();
       return null;
     case 'find_latest_session': {
@@ -140,6 +143,29 @@ function execute(operation: StorageOperation): unknown {
       database.prepare('INSERT INTO sessions(id, profile_name, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
         .run(value.id, value.profileName, value.title, value.createdAt, value.updatedAt);
       return value;
+    }
+    case 'import_conversation': return transaction(() => insertImportedConversation(database, operation.profileName, operation.conversation));
+    case 'claim_interrupted_run': return transaction(() => {
+      const row = database.prepare("SELECT * FROM agent_runs WHERE id=? AND status='interrupted' AND stop_reason='process_interrupted'").get(operation.runId) as AgentRunRow | undefined;
+      if (!row) return null;
+      const other = database.prepare("SELECT id FROM agent_runs WHERE session_id=? AND status='running'").get(row.session_id);
+      if (other) return null;
+      if (!operation.allowUncertainEffects) {
+        const uncertain = database.prepare("SELECT id FROM tool_calls WHERE agent_run_id=? AND execution_status IN ('interrupted','queued','running') AND tool_name NOT IN ('read_file','search_text','find_files')").get(row.id);
+        if (uncertain) return null;
+      }
+      const timestamp = now();
+      database.prepare("UPDATE agent_runs SET status='running', stop_reason=NULL, finished_at=NULL, updated_at=?, owner_id=?, owner_pid=? WHERE id=? AND status='interrupted'").run(timestamp, ownerId, process.pid, row.id);
+      return agentRun({...row, status: 'running', stop_reason: null, finished_at: null, updated_at: timestamp});
+    });
+    case 'checkpoint_agent_run': {
+      const {usage, iterationCount} = operation;
+      if (!Number.isSafeInteger(iterationCount) || iterationCount < 0 || ![usage.inputTokens, usage.outputTokens].every(value => Number.isSafeInteger(value) && value >= 0)
+        || (usage.credits !== undefined && (!Number.isFinite(usage.credits) || usage.credits < 0))) throw new Error('回合检查点预算无效');
+      const updated = database.prepare("UPDATE agent_runs SET iteration_count=?,input_tokens=?,output_tokens=?,credits=COALESCE(?,credits),updated_at=? WHERE id=? AND status='running' AND owner_id=? AND iteration_count<=? AND input_tokens<=? AND output_tokens<=? AND (credits IS NULL OR ? IS NULL OR credits<=?)")
+        .run(iterationCount, usage.inputTokens, usage.outputTokens, usage.credits ?? null, now(), operation.runId, ownerId, iterationCount, usage.inputTokens, usage.outputTokens, usage.credits ?? null, usage.credits ?? null);
+      if (Number(updated.changes) === 0) throw new Error('回合检查点未写入：任务不属于当前运行实例或累计预算倒退');
+      return null;
     }
     case 'get_session': {
       const row = database.prepare('SELECT * FROM sessions WHERE id = ?').get(operation.sessionId) as SessionRow | undefined;
@@ -207,9 +233,12 @@ function execute(operation: StorageOperation): unknown {
     case 'begin_agent_run': return transaction(() => {
       const current = database.prepare('SELECT * FROM sessions WHERE id=?').get(operation.sessionId) as SessionRow | undefined;
       if (!current) throw new Error('会话不存在');
+      if (database.prepare("SELECT id FROM agent_runs WHERE session_id=? AND status='running'").get(operation.sessionId)) throw new Error('会话已有运行中的任务，请等待结束或新建会话');
+      const attachments = imageAttachmentsSchema.parse(operation.attachments ?? []);
       const timestamp = now(); const userId = createId();
       const count = (database.prepare('SELECT COUNT(*) AS count FROM messages WHERE session_id=?').get(operation.sessionId) as {count: number}).count;
       database.prepare(`INSERT INTO messages(id,session_id,role,content,display_content,thinking,status,error_code,error_message,input_tokens,output_tokens,credits,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?, 'user',?,?,'','completed',NULL,NULL,NULL,NULL,NULL,NULL,?,NULL,?,?,?,?)`).run(userId, operation.sessionId, operation.instruction ?? operation.displayText, operation.displayText, operation.runId, timestamp, timestamp, ownerId, process.pid);
+      database.prepare('UPDATE messages SET attachments_json=? WHERE id=?').run(JSON.stringify(attachments), userId);
       database.prepare(`INSERT INTO agent_runs(id,session_id,user_message_id,mode,status,stop_reason,iteration_count,input_tokens,output_tokens,credits,started_at,finished_at,updated_at,owner_id,owner_pid) VALUES(?,?,?,?,'running',NULL,0,0,0,NULL,?,NULL,?,?,?)`).run(operation.runId, operation.sessionId, userId, operation.mode, timestamp, timestamp, ownerId, process.pid);
       const title = operation.displayText.trim().replace(/\s+/g, ' ').slice(0, 60) || '新会话';
       database.prepare(`UPDATE sessions SET updated_at=?, title=CASE WHEN ?=0 THEN ? ELSE title END WHERE id=?`).run(timestamp, count, title, operation.sessionId);
@@ -219,8 +248,10 @@ function execute(operation: StorageOperation): unknown {
       // 生成中排队的用户消息：挂在当前 run 下，作为普通 user 消息进入会话上下文。
       const current = database.prepare('SELECT * FROM sessions WHERE id=?').get(operation.sessionId) as SessionRow | undefined;
       if (!current) throw new Error('会话不存在');
+      const attachments = imageAttachmentsSchema.parse(operation.attachments ?? []);
       const timestamp = now(); const messageId = createId();
       database.prepare(`INSERT INTO messages(id,session_id,role,content,display_content,thinking,status,error_code,error_message,input_tokens,output_tokens,credits,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?, 'user',?,?,'','completed',NULL,NULL,NULL,NULL,NULL,NULL,?,NULL,?,?,?,?)`).run(messageId, operation.sessionId, operation.content, operation.content, operation.runId, timestamp, timestamp, ownerId, process.pid);
+      database.prepare('UPDATE messages SET attachments_json=? WHERE id=?').run(JSON.stringify(attachments), messageId);
       database.prepare('UPDATE sessions SET updated_at=? WHERE id=?').run(timestamp, operation.sessionId);
       return message(database.prepare('SELECT * FROM messages WHERE id=?').get(messageId) as unknown as MessageRow);
     });

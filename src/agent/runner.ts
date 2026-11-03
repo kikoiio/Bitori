@@ -36,6 +36,17 @@ function addUsage(a: Usage, b: Usage): Usage {
   };
 }
 
+/** Provider 的流式快照可能修正或省略字段；已观察到的预算不能撤回。 */
+function maximumUsage(a: Usage, b: Usage): Usage {
+  return {
+    inputTokens: Math.max(a.inputTokens, b.inputTokens),
+    outputTokens: Math.max(a.outputTokens, b.outputTokens),
+    ...(a.cacheReadInputTokens !== undefined || b.cacheReadInputTokens !== undefined ? {cacheReadInputTokens: Math.max(a.cacheReadInputTokens ?? 0, b.cacheReadInputTokens ?? 0)} : {}),
+    ...(a.cacheCreationInputTokens !== undefined || b.cacheCreationInputTokens !== undefined ? {cacheCreationInputTokens: Math.max(a.cacheCreationInputTokens ?? 0, b.cacheCreationInputTokens ?? 0)} : {}),
+    ...(a.credits !== undefined || b.credits !== undefined ? {credits: Math.max(a.credits ?? 0, b.credits ?? 0)} : {}),
+  };
+}
+
 /** 唯一的自主 Agent 循环入口，不依赖存储或界面。 */
 export class AgentRunner {
   constructor(readonly client: LLMClient, readonly registry: ToolRegistry, readonly collector: StreamCollector, readonly scheduler: SafetyBatchScheduler, readonly hooks: HookEngine | null = null) {}
@@ -50,7 +61,8 @@ export class AgentRunner {
     // 提醒注入位于最后一条用户消息之后，随后续每次迭代请求一起发送。
     for (const text of input.reminders ?? []) context.appendReminder({type: 'reminder', text});
     const policy = new ToolPolicy(this.registry, input.mode);
-    let total: Usage = {inputTokens: 0, outputTokens: 0}; let unknownIterations = 0; let finalIterationId: string | null = null;
+    const iterationOffset = input.iterationOffset ?? 0;
+    let total: Usage = input.usageOffset ?? {inputTokens: 0, outputTokens: 0}; let unknownIterations = 0; let finalIterationId: string | null = null;
     const replacementState = new ToolResultReplacementState(); const tracking = {consecutiveFailures: 0}; let usageAnchor: UsageAnchor | null = null;
     const retryBaseDelayMs = input.limits?.retryBaseDelayMs ?? 5_000;
     let retryDelayMs = retryBaseDelayMs;
@@ -59,8 +71,12 @@ export class AgentRunner {
     const base = () => ({runId: input.runId, sessionId: input.sessionId, at: now()});
     await this.hooks?.fire('turn_start', {event: 'turn_start', message: input.instruction});
     try {
-      yield {...base(), type: 'run_started', mode: input.mode, maxIterations};
-      for (let iteration = 1; iteration <= maxIterations; iteration++) {
+      yield {...base(), type: 'run_started', mode: input.mode, maxIterations, iterationOffset, totalUsage: total};
+      if (iterationOffset >= maxIterations) {
+        const result: AgentRunResult = {runId: input.runId, status: 'stopped', stopReason: 'iteration_limit', iterationCount: iterationOffset, usage: total, finalIterationId};
+        yield {...base(), type: 'run_finished', result}; return result;
+      }
+      for (let iteration = iterationOffset + 1; iteration <= maxIterations; iteration++) {
       if (signal.aborted) {
         const result: AgentRunResult = {runId: input.runId, status: 'cancelled', stopReason: 'user_cancelled', iterationCount: iteration - 1, usage: total, finalIterationId};
         yield {...base(), type: 'run_finished', result}; return result;
@@ -97,13 +113,17 @@ export class AgentRunner {
       let attempt = 1;
       while (true) {
         let visible = false;
+        let observedUsage: Usage = {inputTokens: 0, outputTokens: 0};
         const generator = this.collector.collect({runId: input.runId, sessionId: input.sessionId, iterationId, iteration, stream: this.client.streamChat({items: requestItems, messages: [], tools: policy.definitions(), ...(input.system ? {system: input.system} : {})}, signal), toolPolicy: policy, signal});
         while (true) {
           const step = await generator.next();
-          if (step.done) { response = step.value; break; }
+          if (step.done) { response = {...step.value, usage: maximumUsage(observedUsage, step.value.usage)}; break; }
           const event = step.value;
           if (event.type === 'text_delta' || event.type === 'thinking_delta' || event.type === 'tool_call_started' || event.type === 'tool_arguments_delta') visible = true;
-          if (event.type === 'usage_updated') yield {...event, totalUsage: addUsage(total, event.iterationUsage)};
+          if (event.type === 'usage_updated') {
+            observedUsage = maximumUsage(observedUsage, event.iterationUsage);
+            yield {...event, iterationUsage: observedUsage, totalUsage: addUsage(total, observedUsage)};
+          }
           else yield event;
         }
         // 429/网络/5xx 属于瞬时故障：指数退避后重发同一迭代，而不是终止整个任务。
@@ -123,7 +143,7 @@ export class AgentRunner {
         retryDelayMs = Math.min(retryDelayMs * 2, 60_000);
       }
       total = addUsage(total, response.usage); usageAnchor = usageAnchorFrom(response.usage, requestItems);
-      yield {...base(), type: 'iteration_finished', iterationId, iteration, response};
+      yield {...base(), type: 'iteration_finished', iterationId, iteration, response, totalUsage: total};
       if (response.error) await this.hooks?.fire('error', {event: 'error', error: response.error.message});
       else await this.hooks?.fire('post_receive', {event: 'post_receive', message: response.text});
       if (response.cancelled || signal.aborted) {
