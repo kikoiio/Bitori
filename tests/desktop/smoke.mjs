@@ -155,7 +155,7 @@ try {
     await page.getByTestId('import-session').click();
     await page.getByTestId('session-feedback').getByText(/会话已导入/).waitFor();
     await page.waitForFunction(count => document.querySelectorAll('[data-testid="session-item"]').length === count + 1, sessionCount);
-    await page.locator('.message.user img[alt="icon.png"]').waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('.message.user img[alt="icon.png"]').length === 2);
   }
   {
     await page.locator('#composer-plus').click();
