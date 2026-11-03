@@ -69,6 +69,8 @@
 - [桌面复验 run 41674058906](https://github.com/kikoiio/Bitori/actions/runs/41674058906) 在补入默认模型的 fixture 后仍未显示回退选项，根因是连接探测只标准化配置模型名、未对比标准化 Provider 返回的 ID；修复双侧规范化并添加单测。同期三平台 run 41674024320 的 Ubuntu 还暴露 `/proc/<pid>/stat` 读取进程刚退出时的 `ESRCH` 竞态，fixture 清理现已按进程不存在处理，完整 Check 待复验。
 - 最终代码复验 [run 41674972528](https://github.com/kikoiio/Bitori/actions/runs/41674972528) 已通过图片、归档导入、默认模型回退及 Markdown/链接渲染步骤；原安全断言全局统计 `<img>`，误把当前会话恢复的两张用户附件当成助手 HTML 图片。现改为仅检查助手消息内没有 `<img>`，桌面与打包余下步骤待重跑。
 - [桌面复验 run 41675603751](https://github.com/kikoiio/Bitori/actions/runs/41675603751) 已通过图片、归档导入、模型回退、Markdown 安全及首次审批；失败于后续会话切换测试依赖 `.last()` 列表顺序。现保存“你好”所在 session ID 并按 ID 切换，余下 smoke/打包待复跑。
+- [桌面复验 run 41676241422](https://github.com/kikoiio/Bitori/actions/runs/41676241422) 已通过 session ID 切换、跨会话审批等前序场景，重命名状态刷新用例报告 caret 变成整段选择 `0–5`。现将焦点与 `1–3` 选区在同一 renderer 操作中设置并先断言前置状态，确认最终光标恢复结果。
+- 提交 `417bb35f23920c74fa681302c3abb6b2b268f377` 的三平台 Check [run 41676188537](https://github.com/kikoiio/Bitori/actions/runs/41676188537)：Ubuntu 与 macOS 通过；Windows 的 4 个 `run-command` 用例因 timeout 失败，`tool-turn` 临时目录清理另报 `EPERM`。较早 Windows 完整 Check 通过；随当前重命名 smoke 修正提交再复验。
 - 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前实现改为会话 ID 作用域，引擎与 AgentRunner 回归测试通过，桌面跨会话审批 smoke 也在 run 41637023628 通过。
 - 用户于 2026-11-03 取消云同步；决定见 [ADR 0001](docs/decisions/0001-cloud-sync-out-of-scope.md)。多模态、会话导入和自动断点续跑已纳入当前首版范围，具体状态见下表。
 - 用户于 2026-11-03 接受安全文档列出的五项当前残留风险；决定见 [ADR 0002](docs/decisions/0002-accept-current-security-residual-risks.md)。

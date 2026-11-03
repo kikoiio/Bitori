@@ -311,23 +311,33 @@ try {
     await firstSession.locator('[aria-label="重命名会话"]').click();
     const renameInput = page.getByLabel('新会话标题');
     await renameInput.fill('未提交草稿');
-    await renameInput.evaluate(input => input.setSelectionRange(1, 3));
     const redrawState = await page.evaluate(async () => {
       const previousInput = document.querySelector('.session-rename-input');
       if (previousInput?.tagName !== 'INPUT') throw new Error('重命名回归前置条件缺失');
+      previousInput.focus();
+      previousInput.setSelectionRange(1, 3);
+      const before = {
+        focused: document.activeElement === previousInput,
+        selectionStart: previousInput.selectionStart,
+        selectionEnd: previousInput.selectionEnd,
+      };
       await window.bitori.send('重命名期间触发桌面状态刷新');
       await new Promise(resolve => setTimeout(resolve, 500));
       const nextInput = document.querySelector('.session-rename-input');
       const isInput = nextInput?.tagName === 'INPUT';
       return {
-        replaced: nextInput !== previousInput,
-        focused: document.activeElement === nextInput,
-        value: isInput ? nextInput.value : null,
-        selectionStart: isInput ? nextInput.selectionStart : null,
-        selectionEnd: isInput ? nextInput.selectionEnd : null,
+        before,
+        after: {
+          replaced: nextInput !== previousInput,
+          focused: document.activeElement === nextInput,
+          value: isInput ? nextInput.value : null,
+          selectionStart: isInput ? nextInput.selectionStart : null,
+          selectionEnd: isInput ? nextInput.selectionEnd : null,
+        },
       };
     });
-    assert.deepEqual(redrawState, {replaced: true, focused: true, value: '未提交草稿', selectionStart: 1, selectionEnd: 3});
+    assert.deepEqual(redrawState.before, {focused: true, selectionStart: 1, selectionEnd: 3});
+    assert.deepEqual(redrawState.after, {replaced: true, focused: true, value: '未提交草稿', selectionStart: 1, selectionEnd: 3});
     await page.getByTestId('message-list').getByText('测试回复 重命名期间触发桌面状态刷新 <img src=x>', {exact: true}).waitFor();
     await page.keyboard.press('Escape');
     await page.getByTestId('session-list').getByText(originalTitle, {exact: true}).waitFor();
