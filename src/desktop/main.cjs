@@ -1,6 +1,6 @@
 'use strict';
 
-const {app, BrowserWindow, dialog, ipcMain} = require('electron');
+const {app, BrowserWindow, dialog, ipcMain, shell} = require('electron');
 const {homedir} = require('node:os');
 const {join, resolve} = require('node:path');
 const {pathToFileURL} = require('node:url');
@@ -20,10 +20,10 @@ let startupError;
 async function loadCore() {
   const base = resolve(__dirname, '../../dist');
   const load = name => import(pathToFileURL(join(base, name)).href);
-  const [application, loader, types] = await Promise.all([
-    load('app/runtime.js'), load('config/loader.js'), load('config/types.js'),
+  const [application, loader, types, diagnostics, trust] = await Promise.all([
+    load('app/runtime.js'), load('config/loader.js'), load('config/types.js'), load('diagnostics/connection.js'), load('config/trust.js'),
   ]);
-  return {...application, ...loader, ...types};
+  return {...application, ...loader, ...types, ...diagnostics, ...trust};
 }
 
 async function dispose() {
@@ -51,18 +51,31 @@ async function currentSnapshot(error) {
   return result;
 }
 
-async function selectProfile(name) {
+async function selectProfile(name, modelOverride) {
   if (!config) throw new Error('配置未加载，请检查配置文件');
+  if (!workspace) throw new Error('请先选择并信任工作区');
   const profile = core.resolveProfileWithApiKey(config, name);
   if (!profile) throw new Error('请选择模型配置');
   await dispose();
-  const next = await core.createApplicationRuntime({config, profileName: profile.name, workspace});
+  const next = await core.createApplicationRuntime({config, profileName: profile.name, workspace, ...(modelOverride ? {modelOverride} : {})});
   runtime = next;
   controller = next.controller;
   unsubscribe = controller.subscribe(state => {
     if (window && !window.isDestroyed()) window.webContents.send('bitori:state', state);
   });
   return currentSnapshot(next.warnings.join('\n'));
+}
+
+async function loadConfiguration() {
+  try {
+    config = core.loadConfig(undefined, workspace);
+    core.configureApplicationLogging(config);
+    startupError = undefined;
+    return await currentSnapshot();
+  } catch (error) {
+    startupError = error instanceof Error ? error.message : String(error);
+    return snapshot(startupError);
+  }
 }
 
 async function initialize() {
@@ -115,17 +128,37 @@ async function changeContext(operation) {
 }
 
 function registerHandlers() {
-  handle('bitori:init', () => currentSnapshot(startupError));
-  handle('bitori:profile', name => changeContext(async () => {
-    try { return await selectProfile(checkedText(name, '配置名称', 200)); }
+  // 启动时只加载配置（展示 profile），不创建工作区运行时；工具需要用户先信任工作区。
+  handle('bitori:init', () => config ? currentSnapshot(startupError) : loadConfiguration());
+  handle('bitori:profile', (name, modelOverride) => changeContext(async () => {
+    try {
+      const override = typeof modelOverride === 'string' && modelOverride ? checkedText(modelOverride, '模型名称', 200) : undefined;
+      return await selectProfile(checkedText(name, '配置名称', 200), override);
+    }
     catch (error) { return currentSnapshot(error instanceof Error ? error.message : String(error)); }
   }));
+  handle('bitori:models', async name => {
+    if (!config) throw new Error('配置未加载');
+    const wanted = checkedText(name, '配置名称', 200);
+    const profile = config.profiles.find(item => item.name === wanted);
+    if (!profile) return {models: [], error: `找不到配置：${wanted}`};
+    if (!profile.apiKey) return {models: [], error: `请在 .env 中填写 ${profile.apiKeyVariable || 'API key'}`};
+    const probe = await core.probeProfile(profile);
+    if (!probe.ok) return {models: [], error: `${probe.error ? probe.error.code : 'network'}：${probe.error ? probe.error.message : ''}。${probe.guidance || ''}`};
+    const listing = {models: probe.models || [], note: probe.note || '', latencyMs: probe.latencyMs, error: ''};
+    if (probe.modelAvailable === false) {
+      listing.error = `配置的模型 “${probe.model}” 不在可用列表。${probe.guidance || ''}`;
+      listing.note = '';
+    }
+    return listing;
+  });
   handle('bitori:workspace', () => changeContext(async () => {
     const result = await dialog.showOpenDialog(window, {title: '选择工作区', defaultPath: workspace || homedir(), properties: ['openDirectory']});
     if (result.canceled || !result.filePaths[0] || closing) return null;
     const choice = await dialog.showMessageBox(window, {type: 'warning', buttons: ['取消', '信任并打开'], defaultId: 0, cancelId: 0, message: '确认信任此工作区？', detail: '工作区配置和 Hook 可能在启动时运行命令，工具也可以读取此目录。'});
     if (choice.response !== 1 || closing) return null;
     workspace = result.filePaths[0];
+    await core.trustWorkspace(workspace);
     return initialize();
   }));
   handle('bitori:send', text => activeController().sendMessage(checkedText(text, '消息')));
@@ -133,20 +166,63 @@ function registerHandlers() {
   handle('bitori:new-session', () => activeController().createSession());
   handle('bitori:switch-session', id => activeController().switchSession(checkedText(id, '会话 ID', 200)));
   handle('bitori:sessions', () => activeController().listSessions());
+  handle('bitori:rename-session', (id, title) => {
+    const checkedId = checkedText(id, '会话 ID', 200);
+    const checkedTitle = checkedText(title, '会话标题', 120);
+    return activeController().renameSession(checkedId, checkedTitle);
+  });
+  handle('bitori:delete-session', id => activeController().deleteSession(checkedText(id, '会话 ID', 200)));
+  handle('bitori:commands', () => activeController().commandCatalog());
+  handle('bitori:external', url => {
+    if (typeof url !== 'string' || url.length > 2048) throw new Error('链接无效');
+    let parsed;
+    try { parsed = new URL(url); } catch { throw new Error('链接无效'); }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'mailto:') throw new Error('只允许打开 HTTP(S) 或邮件链接');
+    return shell.openExternal(parsed.href);
+  });
+  handle('bitori:zoom', factor => {
+    if (typeof factor !== 'number' || !Number.isFinite(factor)) throw new Error('缩放比例无效');
+    return applyZoom(factor);
+  });
   handle('bitori:approval', (decision, callId) => {
-    if (decision !== 'allow' && decision !== 'deny') throw new Error('审批决定无效');
+    const decisions = {allow_once: 'approved_once', allow_session: 'approved_session', allow_always: 'approved_permanent', deny: 'denied'};
+    if (!(decision in decisions)) throw new Error('审批决定无效');
     const active = activeController();
     if (active.getState().approvalPrompt?.callId !== checkedText(callId, '工具调用 ID', 200)) throw new Error('审批已过期，请重新确认');
-    active.resolveToolApproval(decision === 'allow' ? 'approved_once' : 'denied');
+    active.resolveToolApproval(decisions[decision]);
   });
+  handle('bitori:undo', path => {
+    const wanted = path === undefined || path === null || path === '' ? undefined : checkedText(String(path), '文件路径', 1000);
+    return activeController().undoLastEdit(wanted);
+  });
+}
+
+function applyZoom(next) {
+  if (!window || window.isDestroyed()) return 1;
+  const clamped = Math.min(2, Math.max(0.6, Math.round(next * 10) / 10));
+  window.webContents.setZoomFactor(clamped);
+  window.webContents.send('bitori:zoom', clamped);
+  return clamped;
 }
 
 async function start() {
   core = await loadCore();
   registerHandlers();
-  window = new BrowserWindow({width: 1200, height: 800, minWidth: 720, minHeight: 520, show: false, title: 'Bitori', icon: join(__dirname, 'icon.png'), backgroundColor: '#f4f6fa', webPreferences: {preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false}});
+  window = new BrowserWindow({width: 1200, height: 800, minWidth: 720, minHeight: 520, show: false, title: 'Bitori', icon: join(__dirname, 'icon.png'), backgroundColor: '#1f1f1e', webPreferences: {preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false}});
   window.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
   window.webContents.on('will-navigate', event => event.preventDefault());
+  // Ctrl +/- 调整页面缩放；Ctrl+0 恢复 100%。
+  window.webContents.on('before-input-event', (event, input) => {
+    if ((input.type !== 'keyDown' && input.type !== 'rawKeyDown') || (!input.control && !input.meta) || input.alt) return;
+    const factor = window.webContents.getZoomFactor();
+    let next;
+    if (input.key === '=' || input.key === '+') next = factor + 0.1;
+    else if (input.key === '-') next = factor - 0.1;
+    else if (input.key === '0') next = 1;
+    else return;
+    event.preventDefault();
+    applyZoom(next);
+  });
   window.on('close', event => {
     if (closing) return;
     event.preventDefault();
