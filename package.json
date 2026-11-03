@@ -12,7 +12,7 @@
   },
   "scripts": {
     "dev": "tsx src/bin/bitori.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('fs').chmodSync('dist/bin/bitori.js', 0o755)\"",
     "start": "node dist/bin/bitori.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
