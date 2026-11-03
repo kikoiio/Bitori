@@ -3,7 +3,9 @@ import {configureApplicationLogging, createApplicationRuntime} from '../app/runt
 import type {ApplicationRuntime} from '../app/runtime.js';
 import type {ChatController} from '../chat/agent-controller.js';
 import {loadConfig, resolveProfileWithApiKey} from '../config/loader.js';
+import {isWorkspaceTrusted, workspaceHasProjectExtensions} from '../config/trust.js';
 import {toProfileSummary} from '../config/types.js';
+import {probeProfile} from '../diagnostics/connection.js';
 import {getLogger} from '../shared/logger.js';
 import {createShutdownOnce} from '../terminal/shutdown.js';
 import {TerminalSession} from '../terminal/session.js';
@@ -11,6 +13,8 @@ import {renderApp} from '../tui/render.js';
 import {usage} from './args.js';
 import type {CliOptions} from './args.js';
 import {runExec} from './exec.js';
+import {runDoctorCommand} from './commands/doctor.js';
+import {runTrustCommand} from './commands/trust.js';
 import {runSessionsCommand} from './commands/sessions.js';
 import {runTraceCommand} from './commands/trace.js';
 import {runUsageCommand} from './commands/usage.js';
@@ -24,6 +28,12 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   if (options.help) { process.stdout.write(`${usage}\n`); return; }
   assertRuntime();
   const workspace = resolve(options.exec?.workspace ?? process.cwd());
+  if (options.trust !== undefined) { process.exitCode = await runTrustCommand(options.trust); return; }
+  // doctor 必须在 loadConfig 之前：配置本身坏掉时它正是来报告的。
+  if (options.doctor !== undefined) { process.exitCode = await runDoctorCommand({...(options.profile === undefined ? {} : {profile: options.profile}), json: options.doctor.json}, workspace); return; }
+  if (workspaceHasProjectExtensions(workspace) && !isWorkspaceTrusted(workspace)) {
+    process.stderr.write(`工作区 ${workspace} 含项目级 MCP/Hooks 且未信任：已默认拒载。确认后运行 bitori trust（详见 docs/reference/security.md）。\n`);
+  }
   const config = loadConfig(undefined, workspace);
   configureApplicationLogging(config, options.logLevel);
   if (options.trace !== undefined || options.usage !== undefined || options.sessions !== undefined) {
@@ -43,13 +53,24 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   let activeController: ChatController | null = null;
   let terminal: TerminalSession | null = null;
   let stopping = false;
-  const createController = async (name: string): Promise<ChatController> => {
-    const next = await createApplicationRuntime({config, profileName: name, workspace});
+  const createController = async (name: string, modelOverride?: string): Promise<ChatController> => {
+    const previous = runtime;
+    const next = await createApplicationRuntime({config, profileName: name, workspace, ...(modelOverride === undefined ? {} : {modelOverride})});
     if (stopping) { await next.close(); throw new Error('应用正在关闭'); }
     runtime = next;
     activeController = next.controller;
+    // /model 等切换会创建新运行时；旧运行时必须关闭数据库与 MCP 子进程。
+    if (previous) await previous.close().catch(error => { getLogger('cli').warn('关闭旧运行时失败', {error: String(error)}); });
     for (const warning of next.warnings) getLogger('cli').warn(warning);
     return next.controller;
+  };
+  const listModels = async (name: string): Promise<{models: Array<{id: string; displayName?: string; enabled: boolean}>; note?: string; error?: string}> => {
+    const candidate = config.profiles.find(item => item.name === name);
+    if (candidate === undefined) return {models: [], error: `找不到 profile：${name}`};
+    if (candidate.apiKey.length === 0) return {models: [], error: `请在 .env 中填写 ${candidate.apiKeyVariable ?? 'API key'}`};
+    const probe = await probeProfile(candidate);
+    if (!probe.ok) return {models: [], error: `${probe.error?.code ?? 'network'}：${probe.error?.message ?? ''}。${probe.guidance ?? ''}`};
+    return {models: probe.models ?? [], ...(probe.note === undefined ? {} : {note: probe.note}), ...(probe.modelAvailable === false ? {error: `配置的模型 “${probe.model}” 不在可用列表。${probe.guidance ?? ''}`} : {})};
   };
   const shutdown = createShutdownOnce(() => activeController, () => terminal, async () => {
     stopping = true;
@@ -61,8 +82,10 @@ export async function bootstrap(options: CliOptions): Promise<void> {
       profiles: config.profiles.map(toProfileSummary),
       initialController: activeController,
       createController,
+      listModels,
       onController: controller => { activeController = controller; },
       onExit: () => { stopping = true; void shutdown('user').catch(error => { getLogger('cli').error('关闭失败', {error: String(error)}); }); },
+      workspace,
     });
     terminal = new TerminalSession(instance);
     const fatalHandler = (error: unknown) => {

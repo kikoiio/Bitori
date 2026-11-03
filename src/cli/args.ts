@@ -14,6 +14,10 @@ export interface CliOptions {
   trace?: {action: 'show' | 'tail' | 'export' | 'replay'; sessionId?: string; file?: string; iteration?: number; out?: string; json?: boolean; raw?: boolean};
   usage?: {action: 'stats' | 'tail'; sessionId?: string; kind?: 'skill' | 'command'; json?: boolean};
   sessions?: {action: 'list' | 'show'; sessionId?: string; json?: boolean};
+  /** 连接诊断子命令。 */
+  doctor?: {json: boolean};
+  /** 工作区信任清单子命令。 */
+  trust?: {path?: string; revoke: boolean; json: boolean};
 }
 
 export const usage = `用法：bitori [--profile <name>] [--log-level <level>] [--help]
@@ -26,6 +30,8 @@ export const usage = `用法：bitori [--profile <name>] [--log-level <level>] [
        bitori usage tail
        bitori sessions list
        bitori sessions show <sessionId> [--json]
+       bitori doctor [--profile <name>] [--json]
+       bitori trust [path] [--revoke] [--json]
 
 选项：
   --profile <name>        直接使用指定模型配置
@@ -45,6 +51,14 @@ usage 子命令：
 sessions 子命令：
   list                    列出当前 profile 的会话
   show                    查看会话的消息、回合与工具调用摘要
+
+doctor：
+  doctor                  检查配置、凭据、工作区、连通性与可用模型；默认探测全部 profile，输出不含密钥
+
+trust：
+  trust [path]            把工作区加入信任清单（项目级 MCP/Hooks 需要信任后才会启动）
+  --revoke                从信任清单移除
+  --json                  机器可读输出
 
 exec 选项：
   --profile <name>      指定模型配置
@@ -171,6 +185,8 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
   let help = false;
   let logLevelOption: LogLevel | undefined;
   let exec: CliOptions['exec'];
+  let doctor: CliOptions['doctor'];
+  let trust: CliOptions['trust'];
   let subcommand: {trace?: CliOptions['trace']; usage?: CliOptions['usage']; sessions?: CliOptions['sessions']} | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -195,6 +211,41 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
       }
       if (task === undefined) throw new UsageError('exec 需要 --task');
       exec = {task, ...(workspace === undefined ? {} : {workspace}), ...(maxIterations === undefined ? {} : {maxIterations}), json};
+      break;
+    }
+    if (argument === 'trust') {
+      if (exec !== undefined || subcommand !== undefined || doctor !== undefined) throw new UsageError('trust 不能与其他子命令同时使用');
+      let revoke = false;
+      let json = false;
+      let path: string | undefined;
+      for (let cursor = index + 1; cursor < argv.length; cursor += 1) {
+        const option = argv[cursor]!;
+        if (option === '--revoke') { if (revoke) throw new UsageError('--revoke 不能重复'); revoke = true; }
+        else if (option === '--json') { if (json) throw new UsageError('--json 不能重复'); json = true; }
+        else if (option.startsWith('--')) throw new UsageError(`未知 trust 参数：${option}`);
+        else {
+          if (path !== undefined) throw new UsageError('trust 只接受一个工作区路径');
+          path = option;
+        }
+      }
+      trust = {revoke, json, ...(path === undefined ? {} : {path})};
+      break;
+    }
+    if (argument === 'doctor') {
+      if (exec !== undefined || subcommand !== undefined) throw new UsageError('doctor 不能与其他子命令同时使用');
+      let json = false;
+      for (let cursor = index + 1; cursor < argv.length; cursor += 1) {
+        const option = argv[cursor];
+        if (option === '--json') { if (json) throw new UsageError('--json 不能重复'); json = true; }
+        else if (option === '--profile') {
+          const value = argv[cursor + 1];
+          if (value === undefined || value.startsWith('--')) throw new UsageError('--profile 缺少名称');
+          if (profile !== undefined) throw new UsageError('--profile 不能重复');
+          profile = value; cursor += 1;
+        }
+        else throw new UsageError(`未知 doctor 参数：${option}`);
+      }
+      doctor = {json};
       break;
     }
     if (argument === 'trace' || argument === 'usage' || argument === 'sessions') {
@@ -231,6 +282,9 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
 
   if (exec && help) throw new UsageError('exec 不能和 --help 同时使用');
   if (subcommand && help) throw new UsageError('子命令不能和 --help 同时使用');
+  if (doctor && help) throw new UsageError('doctor 不能和 --help 同时使用');
+  if (doctor && (exec !== undefined || subcommand !== undefined || trust !== undefined)) throw new UsageError('doctor 不能与其他子命令同时使用');
+  if (trust && help) throw new UsageError('trust 不能和 --help 同时使用');
   if (help && profile !== undefined) throw new UsageError('--help 不能和 --profile 同时使用');
   if (help && logLevelOption !== undefined) throw new UsageError('--help 不能和 --log-level 同时使用');
   if (subcommand !== undefined) {
@@ -243,6 +297,8 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
       ...(subcommand.sessions === undefined ? {} : {sessions: subcommand.sessions}),
     };
   }
+  if (doctor !== undefined) return {help: false, ...(profile === undefined ? {} : {profile}), doctor};
+  if (trust !== undefined) return {help: false, trust};
   if (exec) return {help: false, ...(profile === undefined ? {} : {profile}), ...(logLevelOption === undefined ? {} : {logLevel: logLevelOption}), exec};
   return {help, ...(profile === undefined ? {} : {profile}), ...(logLevelOption === undefined ? {} : {logLevel: logLevelOption})};
 }
