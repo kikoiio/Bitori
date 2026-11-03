@@ -49,7 +49,7 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 | 桌面工作台 | 已实现 | `src/desktop/`；Claude Desktop 风格深色布局、斜杠命令、流式工具卡片与 `Ctrl+/-` 页面缩放。edit/write 卡片默认展开行级 diff（与 TUI 同语义）并提供撤销按钮；审批为一次/本会话/永久/拒绝四选项（按钮 + Y/S/P/N）；模型菜单含 Provider 模型列表与连接测试；会话支持搜索、重命名、两步删除。开发入口与打包形态由 `tests/desktop/smoke.mjs` 覆盖。 |
 | 多轮工具、Plan/Do、权限、MCP | 已实现 | `src/agent/`、`src/tools/`、`src/mcp/`；命令和 MCP 不构成操作系统沙箱。 |
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
-| 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。Qoder（Cloud Agents，credits 计费）与 OpenAI 兼容协议（Groq `openai/gpt-oss-120b`，token 计费）已各跑通一次真实编码任务闭环，脱敏证据见 `evaluation/results/e2e-providers/`；统一验收脚本 `npm run test:e2e:providers` 可本地或由手动 E2E 工作流运行。 |
+| 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。Qoder（Cloud Agents，credits 计费）、OpenAI 兼容协议（Groq `openai/gpt-oss-120b`，token 计费）与 Anthropic 兼容网关均已跑通一次真实编码任务闭环，脱敏证据见 `evaluation/results/e2e-providers/`；统一验收脚本 `npm run test:e2e:providers` 可本地或由手动 E2E 工作流运行。 |
 | 桌面图形应用 | Linux 初版 | `src/desktop/` 提供 Electron 界面；Linux CI 验证开发入口、会话与审批及打包后启动。其他桌面平台和真实模型需另行验收。打包路径见 [开发与测试](reference/development.md)。 |
 | 多模态、云同步、会话导入、自动断点续跑 | 当前不支持 | 是否纳入后续版本尚未确定。 |
 

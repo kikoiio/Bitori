@@ -37,7 +37,7 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:provider
 
 脚本在临时工作区跑“读取 → pwd → 编辑 → 校验 → 回答”的完整编码任务，断言工具链、diff、回复与用量（tokens 或 credits 至少其一真实非零），证据写入 `evaluation/results/e2e-providers/`（自动脱敏，日志不打印密钥）。`BITORI_E2E_PRESET=fix-test|add-test|refactor` 另跑「修复失效测试 / 补测试 / 小重构」三类真实编码场景（2026-11-01 全部用 Qoder 通过）。旧的 `tests/acceptance/e2e-openrouter.ts` 保留可用。
 
-两种协议都已有真实闭环证据：Qoder 见 `2026-11-01-qoder*.json`（credits 计费），OpenAI 兼容协议见 `2026-11-03-openai-chat.json`（Groq `openai/gpt-oss-120b`，token 计费）。没有本地凭据时，用手动 E2E 工作流跑同一个脚本：选择供应商与模型，证据目录作为 artifact 上传（保留 7 天），下载后按同样格式归档到 `evaluation/results/e2e-providers/`。
+三种协议都已有真实闭环证据：Qoder 见 `2026-11-01-qoder*.json`（credits 计费），OpenAI 兼容协议见 `2026-11-03-openai-chat.json`（Groq `openai/gpt-oss-120b`，token 计费），Anthropic 兼容网关见 `2026-11-03-anthropic.json`。没有本地凭据时，用手动 E2E 工作流跑同一个脚本：它读 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 三个变量，协议在运行时选择，证据目录作为 artifact 上传（保留 7 天），下载后按同样格式归档到 `evaluation/results/e2e-providers/`。
 
 Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-capture.ts --out /tmp/qoder-capture`（录制 busy 409、版本冲突 409、Last-Event-ID 重连、内置工具 requires_action、credits 用量等），再 `npx tsx tests/acceptance/sanitize-qoder-capture.ts` 脱敏输出到 `tests/fixtures/streams/qoder/`。`tests/integration/qoder-events.test.ts` 逐帧回放这些真实事件。
 
