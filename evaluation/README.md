@@ -1,6 +1,6 @@
 # 评测与 RSI
 
-> RSI 状态：**恢复中的有界 smoke**。用户于 2026-11-03 授权继续并调用 GitHub 当前配置的 Anthropic/DeepSeek 模型；单题、单候选 smoke 结果待云端验收。SWE-bench Lite 全 23 题仍未授权。
+> RSI 状态：**恢复中的有界 smoke**。用户于 2026-11-03 授权继续并调用 GitHub 当前配置的 Anthropic/DeepSeek 模型；首次 smoke 在 preflight 因依赖快照错误以 0 请求、0 tokens 中断。已修复符号链接摘要并通过 14 项 sandbox 测试，待新 Check 后重跑。SWE-bench Lite 全 23 题仍未授权。
 
 RSI 指持续改进本项目的 coding-agent harness，不训练或升级底层模型。实现位于 `evaluation/RSI/`：runner 记录安全证据，规则分析器诊断失败，隔离容器生成候选，独立 verifier 检查，控制面在预算内编排并输出可合并审查报告。自动合并、无人值守轮询和正式 300 题测试仍未启用；本次仅恢复一个有界 smoke，结果仍需人工审查。
 
@@ -39,7 +39,7 @@ python3 evaluation/RSI/loop.py \
 
 `smoke.json` 默认只跑第 0 题、1 个候选、最多 2 次解题运行；解题 30 轮、改进 10 轮、串行执行，总计 90 分钟、100 次模型请求、2,000,000 累计 token。每次请求的输出上限为 32,000 tokens，并同时受剩余累计 token 预算约束。smoke 只验证链路，verifier 结论固定为 `inconclusive`，不能作为合并依据。完整 dev、重复实验、正式测试集和真实云端开销需要单独的显式配置与授权。
 
-`.github/workflows/rsi.yml` 是仅 `workflow_dispatch` 的受控 smoke 入口：代码来自默认分支，输入完整基线 SHA，并要求输入确认短语后才调用模型。当前 workflow 使用仓库通用 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`，协议为 Anthropic。固定预算为 90 分钟、100 次请求、2,000,000 累计 tokens；每次请求最多输出 32,000 tokens，且受剩余累计 token 预算约束。只跑第 0 题和一个候选。它上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，保留 7 天。真实云端运行、可信 required check 与分支保护仍待验收；verifier 只能作为诊断工具。
+`.github/workflows/rsi.yml` 是仅 `workflow_dispatch` 的受控 smoke 入口：代码来自默认分支，输入完整基线 SHA，并要求输入确认短语后才调用模型。当前 workflow 使用仓库通用 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`，协议为 Anthropic。固定预算为 90 分钟、100 次请求、2,000,000 累计 tokens；每次请求最多输出 32,000 tokens，且受剩余累计 token 预算约束。只跑第 0 题和一个候选。它上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，保留 7 天。run 41647782174 在 preflight 时因 `tree_digest` 拒绝 npm 依赖目录内的安全相对符号链接而中断；报告确认没有发出模型请求。摘要现记录目录、文件权限/内容和链接目标，只接受严格解析到依赖根目录内的链接，并在目录扫描失败时中止；14 项 `evaluation/tests/test_sandbox.py` 通过。待新提交 Check 通过后重跑；verifier 只能作为诊断工具。
 
 `compare.py` 与 `experiment.py` 仍可用于已有目录的离线比较和人工审查报告。旧结果缺少可比性指纹时只作诊断素材，不作为严格性能基线。
 

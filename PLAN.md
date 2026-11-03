@@ -34,7 +34,7 @@
 - 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前实现改为会话 ID 作用域，引擎与 AgentRunner 回归测试通过，桌面跨会话审批 smoke 也在 run 41637023628 通过。
 - 用户于 2026-11-03 取消云同步；决定见 [ADR 0001](docs/decisions/0001-cloud-sync-out-of-scope.md)。多模态、会话导入和自动断点续跑仍不支持且待决定。
 - 用户于 2026-11-03 接受安全文档列出的五项当前残留风险；决定见 [ADR 0002](docs/decisions/0002-accept-current-security-residual-risks.md)。
-- 用户要求继续 RSI 并允许调用可用模型。受控 workflow 将使用 GitHub 已配置的 Anthropic/DeepSeek profile，按 smoke 文件既有硬上限执行一题/一个候选/90 分钟/100 次请求/2,000,000 tokens；运行及 artifact 核验待完成。
+- 用户要求继续 RSI 并允许调用可用模型。受控 workflow 使用 GitHub 已配置的 Anthropic/DeepSeek profile。run 41647782174 在 preflight 因依赖快照拒绝 `node_modules/.bin` 安全相对符号链接而中断；artifact 确认 0 请求、0 tokens。`tree_digest` 已记录目录、文件模式/内容和链接目标，仅接受严格解析在依赖根目录内的链接，并在目录扫描失败时中止；14 项 sandbox 测试通过。新 Check 和 RSI 重跑待完成。
 - Anthropic SDK 在自定义 base URL 后请求 `/v1/messages`；RSI gateway 归一化原本会丢失自定义 `/anthropic` 前缀的 `/v1`。现已在 `upstream_base` 为该协议补齐版本段，并由测试覆盖根地址、自定义前缀和完整 endpoint 地址。
 - 本机 `/usr/bin/x-terminal-emulator` 指向 Ptyxis。新窗口成功显示 Bitori TUI 的可访问树；Orca Linux provider 报告截图能力不支持，且启动时出现已有本地会话文本。为避免更改该会话，没有输入；真实光标视觉验收为 `INCONCLUSIVE`。
 
@@ -73,17 +73,17 @@
 | 本地工作区信任清单无密码学保护 | 用户接受当前风险 | 当前为本地文件，路径移动需重新信任，见 ADR 0002 |
 | bypass 档跳过逐次审批 | 用户接受当前风险 | 仅在受信环境使用并持续显示提示，见 ADR 0002 |
 | trace/历史包含未知机密 | 用户接受当前风险 | 已知配置密钥会脱敏；分享前仍需人工检查未知内容，见 ADR 0002 |
-| RSI | 用户已授权恢复有界 smoke | 运行 GitHub 通用 Anthropic/DeepSeek profile；使用 smoke.json 既有预算上限，云端结果待核实 |
+| RSI | preflight 修复后待云端重跑 | run 41647782174 在模型调用前因拒绝 npm 依赖树内安全相对符号链接失败，0 请求/0 tokens；`tree_digest` 修复与 14 项 sandbox 测试通过；新 Check 和重跑待完成 |
 
 ## 阶段
 
 1. **完成盘点。** 已汇总三个独立审查与当前项目文档；把实现缺陷、验收缺口、风险处置、产品决定和暂停项目分别记录。
 2. **补齐本地可执行实现。** 已按会话 ID 隔离临时授权；桌面 smoke 增加四项审批选择和范围断言；Linux 工作流新增 AppImage/deb 启动；Provider 证据新增提交 SHA 与工作树洁净标记及独立结果目录。定向测试（23 项）、类型检查、改动文件 lint、脚本语法、工作流 YAML 解析、6 份文档本地链接与差异检查均通过。
-3. **关闭外部验收。** 先前版本三平台 `Check` 与 Linux desktop workflow 通过，真实 Provider E2E 通过。SWE-bench 单题两次未完成后发现并修正 Agent shell Python 版本与轨迹误报，需在当前改动经 CI 后用 10 次迭代/600 秒重跑第 0 题。RSI 已接通同一 GitHub 配置；在 CI 通过后运行一个有界 smoke 并核对 artifact。
+3. **关闭外部验收。** 先前版本三平台 `Check` 与 Linux desktop workflow 通过，真实 Provider E2E 通过。SWE-bench 单题两次未完成后修正 Agent shell Python 版本与轨迹诊断；最终第 0 题复验仍在 10 轮上限结束、空补丁，原因已记录。RSI 首次 smoke 在 preflight 暴露依赖树安全符号链接处理缺陷，现已修复并由 14 项定向测试验证；新 Check 通过后重跑并核验 artifact。
 4. **处理 TUI 与桌面目标范围。** 模拟光标/输入用例由三平台 Check 通过。Ptyxis 实机检查受 Orca Linux provider 不支持截图及本地已有会话内容影响，未发送输入，真实光标视觉验收记为 `INCONCLUSIVE`。Windows/macOS 桌面支持仍在现有范围之外。
 5. **记录安全处置。** 用户接受五项既有残留风险；在安全文档和 ADR 中记录范围与日期，风险事实及现有控制保持可见。
 6. **处理产品方向。** 用户取消云同步；多模态、会话导入和自动断点续跑继续等产品决定。获准方向另拆为有范围、有测试和验收条件的实现阶段。
-7. **执行有界 RSI smoke。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的预算限制，结果不自动合并。
+7. **执行有界 RSI smoke。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的预算限制。首轮 preflight 零调用失败；符号链接快照修正后由 14 项 sandbox 测试验证，待云端复验，结果不自动合并。
 8. **最终核验。** 每项保留证据或明确的延期理由；更新文档索引；确认测试、工作流、分支和工作区状态，并审阅决策轨迹。
 
 ## 已完成的云端验收
@@ -95,7 +95,7 @@
 
 - **Provider 覆盖范围。** 当前 Anthropic/DeepSeek 配置已通过一次固定任务；25k token / 1 credit 阈值是运行后检查，不是硬限制。若要验收 Qoder、OpenAI Chat 或 OpenAI Responses，需分别配置正确 endpoint/key，不能把 Anthropic endpoint 直接当作这些协议。
 - **SWE-bench Lite 开发集。** 工作流已接入仓库通用模型配置，默认单题，最多 5 次迭代/600 秒；下一轮单题诊断将设 10 次迭代/600 秒。工作流没有总 token/美元硬上限。Docker runner 会下载固定公开数据和镜像，将公开任务发送给 Provider；隔离容器中的 Agent 可访问配置凭据和网络。结果、轨迹、诊断、补丁和汇总 artifact 保留 7 天。完整 23 题集仍未授权。
-- **RSI smoke。** 用户已授权恢复并调用可用模型。工作流改用现有通用 Anthropic/DeepSeek profile，使用 Docker、最多 90 分钟、100 次模型请求、2,000,000 累计 tokens；每次请求最多输出 32,000 tokens，且受剩余累计 token 预算约束。工作流上传既定报告、账本、候选证据和轨迹，保留 7 天。此处额度是实验硬上限，不是价格承诺。
+- **RSI smoke。** 用户已授权恢复并调用可用模型。工作流改用现有通用 Anthropic/DeepSeek profile，使用 Docker、最多 90 分钟、100 次模型请求、2,000,000 累计 tokens；每次请求最多输出 32,000 tokens，且受剩余累计 token 预算约束。首轮 run 41647782174 在 preflight 发现 `tree_digest` 拒绝 npm 依赖目录 `.bin` 中的安全相对符号链接，0 请求/0 tokens；现记录目录、文件模式/内容及链接目标，严格拒绝根外链接并在目录扫描错误时失败，由 14 项 sandbox 测试验证。新 Check 通过后重跑。工作流上传既定报告、账本、候选证据和轨迹，保留 7 天。额度是实验硬上限，不是价格承诺。
 - **产品功能。** 云同步已由用户取消，保持不支持。多模态、会话导入、自动断点续跑仍待决定，未获选择的方向保持未实现。
 - **安全风险处置。** 用户接受 `docs/reference/security.md` 列出的五项当前残留风险：仓库说明/skills/命令进入模型上下文；模型可能诱导用户批准；本地工作区信任清单无密码学保护；bypass 档跳过逐次审批；trace/历史可能包含未知机密。事实和现有控制保留在安全文档，见 ADR 0002。
 - **终端与桌面范围。** 已将本机默认终端 Ptyxis 设为真实光标/输入验收目标；实际显示仍未核验。Windows/macOS 桌面支持仍在现有范围之外。

@@ -1,9 +1,11 @@
+import hashlib
 import io
 import os
 from pathlib import Path
 import re
 import selectors
 import signal
+import stat
 import subprocess
 import tarfile
 import time
@@ -202,12 +204,57 @@ def export_source(repo, revision, target, paths=SOURCE_PATHS):
 
 def tree_digest(root):
     root = Path(root)
-    rows = []
-    for path in sorted(root.rglob('*')):
-        if path.is_symlink():
-            raise ValueError('snapshot contains a symlink')
-        if path.is_file():
-            rows.append([path.relative_to(root).as_posix(), digest(path.read_bytes())])
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('snapshot root must be a real directory')
+    resolved_root = root.resolve(strict=True)
+    rows = [['.', 'directory', stat.S_IMODE(root.lstat().st_mode)]]
+    pending = [(root, '.')]
+    while pending:
+        directory, directory_relative = pending.pop()
+        with os.scandir(directory) as iterator:
+            entries = sorted(iterator, key=lambda entry: entry.name)
+        for entry in entries:
+            path = Path(entry.path)
+            relative = entry.name if directory_relative == '.' else f'{directory_relative}/{entry.name}'
+            if entry.is_symlink():
+                target = Path(os.readlink(entry.path))
+                if target.is_absolute():
+                    raise ValueError('snapshot contains an unsafe symlink')
+                try:
+                    (path.parent / target).resolve(strict=True).relative_to(resolved_root)
+                except (OSError, RuntimeError, ValueError):
+                    raise ValueError('snapshot contains an unsafe symlink') from None
+                rows.append([relative, 'symlink', target.as_posix()])
+                continue
+            metadata = entry.stat(follow_symlinks=False)
+            mode = stat.S_IMODE(metadata.st_mode)
+            if entry.is_dir(follow_symlinks=False):
+                if not stat.S_ISDIR(metadata.st_mode):
+                    raise ValueError('snapshot changed while hashing')
+                rows.append([relative, 'directory', mode])
+                pending.append((path, relative))
+            elif entry.is_file(follow_symlinks=False):
+                if not stat.S_ISREG(metadata.st_mode):
+                    raise ValueError('snapshot changed while hashing')
+                try:
+                    descriptor = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
+                except OSError:
+                    raise ValueError('snapshot changed while hashing') from None
+                try:
+                    metadata = os.fstat(descriptor)
+                    if not stat.S_ISREG(metadata.st_mode):
+                        raise ValueError('snapshot changed while hashing')
+                    mode = stat.S_IMODE(metadata.st_mode)
+                    content = hashlib.sha256()
+                    with os.fdopen(descriptor, 'rb', closefd=False) as stream:
+                        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                            content.update(chunk)
+                finally:
+                    os.close(descriptor)
+                rows.append([relative, 'file', mode, content.hexdigest()])
+            else:
+                raise ValueError('snapshot contains an unsupported file type')
+    rows.sort(key=lambda row: row[0])
     return digest(rows)
 
 
