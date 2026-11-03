@@ -100,6 +100,41 @@ export function resultLine(record: ToolCallRecord, verbose: boolean): string | n
   return successLine(record, verbose);
 }
 
+/** 结果预览按行返回；命令输出在折叠态也能看到多行，避免只显示第一行。 */
+export function resultLines(record: ToolCallRecord, verbose: boolean): string[] {
+  if (record.executionStatus === 'running' || record.executionStatus === 'queued') return [];
+  if (record.toolName === 'run_command' && record.executionStatus === 'succeeded') {
+    const payload = resultPayload(record.result);
+    const text = stringify(payload?.stdout).trim() || stringify(payload?.stderr).trim();
+    if (text.length === 0) return ['(无输出)'];
+    const lines = text.split('\n');
+    const limit = verbose ? 16 : 6;
+    const shown = lines.slice(0, limit);
+    if (lines.length > limit) shown.push(`… 还有 ${lines.length - limit} 行`);
+    return shown;
+  }
+  const line = resultLine(record, verbose);
+  return line === null ? [] : line.split('\n');
+}
+
+/** 模型流中尚未完整的参数 JSON 也要给出可读预览。 */
+export function previewArguments(toolName: string, argumentsText: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(argumentsText || '{}');
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return primaryArgument(toolName, parsed as JsonObject);
+  } catch { /* 参数还在流式中，退回文本预览。 */ }
+  const compact = argumentsText.trim().replace(/\s+/g, ' ');
+  if (compact.length === 0) return null;
+  return compact.length > HEADLINE_ARG_LIMIT ? `${compact.slice(0, HEADLINE_ARG_LIMIT - 1)}…` : compact;
+}
+
+export function durationLabel(record: ToolCallRecord): string | null {
+  if (record.executionStatus === 'running' || record.executionStatus === 'queued') return null;
+  const elapsed = record.updatedAt - record.createdAt;
+  if (!Number.isFinite(elapsed) || elapsed < 100) return null;
+  return elapsed >= 10_000 ? `${(elapsed / 1000).toFixed(0)}s` : `${(elapsed / 1000).toFixed(1)}s`;
+}
+
 export function editHunk(args: JsonObject): {oldText: string; newText: string} | null {
   const oldText = args.oldText;
   const newText = args.newText;

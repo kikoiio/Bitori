@@ -1,18 +1,27 @@
 import {Box, Text} from 'ink';
 import type {AppState} from '../../chat/state.js';
+import {formatUsage} from '../../shared/usage-format.js';
+import {theme} from '../theme.js';
 
-/** 顶部状态栏：profile/model/请求状态来自同一个 AppState 快照。 */
+function statusColor(status: AppState['requestStatus']): string {
+  if (status === 'failed') return theme.red;
+  if (status === 'idle') return theme.dim;
+  if (status === 'cancelling') return theme.yellow;
+  return theme.accent;
+}
+
+/** 顶部信息行：profile/model/模式/请求状态/权限与用量。 */
 export function StatusBar({state}: {state: AppState}) {
-  // 供应商没有上报 usage 时保持空白，项目不会自行估算 token。
-  const displayedUsage = state.runUsage.inputTokens || state.runUsage.outputTokens || state.latestUsage === null ? state.runUsage : state.latestUsage;
-  // 缓存命中来自 Anthropic usage 事件，不持久化；命中数大于 0 时才展示。
-  const cache = (displayedUsage.cacheReadInputTokens ?? 0) > 0 ? ` · cache ${displayedUsage.cacheReadInputTokens}` : '';
-  const usage = `  tokens ${displayedUsage.inputTokens}↓ ${displayedUsage.outputTokens}↑${cache}`;
-  const progress = state.activeRunId === null ? '' : ` · ${state.iteration}/${state.maxIterations}${state.agentPhase ? ` · ${state.agentPhase}` : ''}`;
+  const displayedUsage = state.runUsage.inputTokens || state.runUsage.outputTokens || state.runUsage.credits || state.latestUsage === null ? state.runUsage : state.latestUsage;
+  const usage = formatUsage(displayedUsage);
   const permission = state.permissionTier === 'strict' ? '严格' : state.permissionTier === 'bypass' ? '放行' : '默认';
-  return <Box justifyContent="space-between">
-    <Text inverse> Bitori </Text>
-    <Text>{state.profile?.name ?? '-'} · {state.profile?.model ?? '-'} · {state.agentMode === 'plan' ? 'PLAN' : 'DO'} · {state.requestStatus} · 权限:{permission}{progress}{usage}</Text>
-    <Text color="gray">^N 新建  ^S 会话  ^O 详情</Text>
+  const mode = state.agentMode === 'plan' ? 'PLAN' : 'DO';
+  return <Box justifyContent="space-between" paddingX={1} marginBottom={1}>
+    <Box>
+      <Text color={statusColor(state.requestStatus)}>● </Text>
+      <Text color={theme.dim}>{state.profile?.name ?? '-'} · {state.profile?.model ?? '-'} · {mode} · {state.requestStatus}</Text>
+      <Text color={theme.faint}> · 权限:{permission} · {usage}</Text>
+    </Box>
+    <Text color={theme.faint}>/ 命令 · ^N 新建 · ^S 会话</Text>
   </Box>;
 }

@@ -1,5 +1,6 @@
 import {Box, Text} from 'ink';
 import {diffLines, diffWords, formatLineNumber, gutterWidth, type LineChange} from '../diff.js';
+import {theme} from '../theme.js';
 
 interface DiffViewProps {
   oldContent: string;
@@ -50,13 +51,13 @@ function DiffPair({pair, width}: {pair: RenderPair; width: number}) {
 }
 
 function DiffLine({change, width}: {change: LineChange; width: number}) {
-  const color = change.kind === 'add' ? 'green' : change.kind === 'remove' ? 'red' : 'gray';
+  const color = change.kind === 'add' ? theme.green : change.kind === 'remove' ? theme.red : theme.faint;
   const marker = change.kind === 'add' ? '+' : change.kind === 'remove' ? '-' : ' ';
   return <Text color={color}>{formatLineNumber(change, width)} {marker}{change.text}</Text>;
 }
 
 function WordLine({change, width, segments}: {change: LineChange; width: number; segments: ReturnType<typeof diffWords>['old']}) {
-  const color = change.kind === 'add' ? 'green' : 'red';
+  const color = change.kind === 'add' ? theme.green : theme.red;
   const marker = change.kind === 'add' ? '+' : '-';
   return <Box>
     <Text color={color}>{formatLineNumber(change, width)} {marker}</Text>

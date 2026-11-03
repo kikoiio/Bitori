@@ -13,4 +13,8 @@ export const keys = {
   /** 调试面板开关。 */
   debugPanel: 'ctrl+t',
   diffPanel: '/diff',
+  commandPalette: '/',
+  modelPicker: '/model',
+  /** 调整页面排版密度；桌面端对应页面缩放。 */
+  pageDensity: 'ctrl+- / ctrl+=',
 } as const;
