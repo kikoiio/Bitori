@@ -46,6 +46,7 @@ let modelState = null;
 let sessionFilter = '';
 let renamingSessionId = null;
 let renameDraft = '';
+let renameSelection = null;
 let deleteArmedSessionId = null;
 let rebuildingSessionList = false;
 let zoomTimer = null;
@@ -394,12 +395,8 @@ function renderProfiles() {
 function renderSessions() {
   const activeElement = document.activeElement;
   const activeRenameInput = activeElement?.matches?.('.session-rename-input') && ui.sessions.contains(activeElement) ? activeElement : null;
-  const focusedRename = activeRenameInput ? {
-    id: activeRenameInput.dataset.sessionId,
-    selectionStart: activeRenameInput.selectionStart,
-    selectionEnd: activeRenameInput.selectionEnd,
-    selectionDirection: activeRenameInput.selectionDirection || 'none',
-  } : null;
+  if (activeRenameInput && renamingSessionId === activeRenameInput.dataset.sessionId) rememberRenameSelection(activeRenameInput);
+  const focusedRename = renameSelection?.id === renamingSessionId ? renameSelection : null;
   if (activeRenameInput && renamingSessionId === activeRenameInput.dataset.sessionId) renameDraft = activeRenameInput.value;
   const focusedId = activeElement?.closest?.('[data-session-id]')?.dataset.sessionId;
   let focusedButton = null;
@@ -434,6 +431,7 @@ function renderSessions() {
         const title = input.value.trim();
         renamingSessionId = null;
         renameDraft = '';
+        renameSelection = null;
         if (title && title !== (session.title || '')) {
           try { await window.bitori.renameSession(session.id, title); await refreshSessions(); }
           catch (error) { setActionError(error); }
@@ -442,11 +440,15 @@ function renderSessions() {
       };
       input.addEventListener('keydown', event => {
         if (event.key === 'Enter') { event.preventDefault(); void commit(); }
-        else if (event.key === 'Escape') { renamingSessionId = null; renameDraft = ''; renderSessions(); }
+        else if (event.key === 'Escape') { renamingSessionId = null; renameDraft = ''; renameSelection = null; renderSessions(); }
       });
       input.addEventListener('input', () => {
-        if (renamingSessionId === session.id) renameDraft = input.value;
+        if (renamingSessionId === session.id) {
+          renameDraft = input.value;
+          rememberRenameSelection(input);
+        }
       });
+      input.addEventListener('select', () => rememberRenameSelection(input));
       input.addEventListener('blur', () => {
         if (!rebuildingSessionList && input.isConnected && renamingSessionId === session.id) void commit();
       });
@@ -470,7 +472,7 @@ function renderSessions() {
       rename.title = '重命名会话';
       rename.setAttribute('aria-label', '重命名会话');
       rename.disabled = !canUseSession();
-      rename.addEventListener('click', () => { deleteArmedSessionId = null; renamingSessionId = session.id; renameDraft = session.title || ''; renderSessions(); });
+      rename.addEventListener('click', () => { deleteArmedSessionId = null; renamingSessionId = session.id; renameDraft = session.title || ''; renameSelection = null; renderSessions(); });
       const remove = element('button', 'session-action danger', deleteArmedSessionId === session.id ? '确认?' : '🗑');
       remove.type = 'button';
       remove.title = '删除会话及其全部消息';
@@ -504,6 +506,17 @@ function renderSessions() {
   }
   if (focusedButton && !focusedButton.disabled) focusedButton.focus({preventScroll: true});
 }
+function rememberRenameSelection(input) {
+  if (input?.matches?.('.session-rename-input') && renamingSessionId === input.dataset.sessionId) {
+    renameSelection = {
+      id: input.dataset.sessionId,
+      selectionStart: input.selectionStart,
+      selectionEnd: input.selectionEnd,
+      selectionDirection: input.selectionDirection || 'none',
+    };
+  }
+}
+document.addEventListener('selectionchange', () => rememberRenameSelection(document.activeElement));
 function details(label, content, key, className = 'thinking') {
   const node = element('details', className);
   node.dataset.detailKey = key;
