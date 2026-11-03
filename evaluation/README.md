@@ -10,7 +10,7 @@ RSI 指持续改进本项目的 coding-agent harness，不训练或升级底层�
 
 最近一次完整开发集记录（2026-10-28，agent commit `ff9a4fb8ea70d9c0a7d2191086af99925a07069d`）覆盖 23/23 题，但结果为 8 个 `agent_error`、7 个 `unresolved`、8 个 `infrastructure_error`，没有 `resolved`。这是旧提交上的诊断记录，不代表当前版本。重跑前需决定单题或全 23 题、Provider/model 与供应商账户预算；工作流自身没有总 token 或美元费用硬上限，且按单题串行。
 
-手动运行 `.github/workflows/swe-bench-lite.yml`：`index=0` 至 `22` 为单题，`index=all` 为完整开发集；选择 openrouter、groq 或 xunfei。每题独立 runner，单题串行，减少共享模型服务的限流。模型、API key 和需要的接口地址来自对应仓库变量与 secret。讯飞使用 `XUNFEI_MODEL`、`XUNFEI_OPENAI_RESPONSE_URL` 和 `XUNFEI_LLM_API_KEY`，协议为 `openai-responses`；完整 `/responses` 地址会转为 SDK base URL，避免重复拼接路径。runner 需要联网下载依赖、数据、镜像，并将公开任务内容发送给模型供应商。模型产生的命令可访问容器内的模型凭据和网络，应只使用限额、可撤销的专用密钥。请勿对不可信的工作流或数据集开放仓库密钥。
+手动运行 `.github/workflows/swe-bench-lite.yml`：`index=0` 至 `22` 为单题，`index=all` 为完整开发集；默认运行第 0 题，Provider 默认使用仓库配置的 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`（当前配置为 Anthropic 协议）。也可选择 openrouter、groq 或 xunfei 专用变量/secret。每题可选最大迭代次数（默认 5）和 Agent wall-clock 上限（默认 600 秒）；每题独立 runner、单题串行。讯飞使用 `XUNFEI_MODEL`、`XUNFEI_OPENAI_RESPONSE_URL` 和 `XUNFEI_LLM_API_KEY`，协议为 `openai-responses`；完整 `/responses` 地址会转为 SDK base URL，避免重复拼接路径。runner 需要联网下载依赖、公开数据和镜像，并将公开任务内容发送给模型供应商。模型产生的命令可访问容器内的模型凭据和网络，应只使用限额、可撤销的专用密钥。工作流没有总 token 或美元费用硬上限，运行结果只提供用量证据，不保证实际费用上限；请勿对不可信的工作流或数据集开放仓库密钥。
 
 每题上传安全证据白名单：`result.json`、`trajectory.jsonl`、`diagnosis.json`、`solution.patch` 和 `artifacts.json`。不上传 gold 数据、`instance.json`、原始 thinking、完整请求上下文、凭据、worktree 或构建产物。轨迹与补丁均有大小上限并经过脱敏与二次扫描；导出补丁若被改写会标记为不可重放，评分始终使用容器内真实补丁。`resolved`、`unresolved`、`agent_error`、`provider_error` 和 `infrastructure_error` 分开记录；若作业启动前失败或超时，可能没有结果文件，汇总会标记缺失而不是当作成功。
 

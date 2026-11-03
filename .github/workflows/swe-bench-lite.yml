@@ -5,12 +5,22 @@ on:
       index:
         description: 'Task index 0–22, or all'
         type: string
-        default: 'all'
+        default: '0'
       provider:
         description: Model provider
         type: choice
-        options: [openrouter, groq, xunfei]
-        default: openrouter
+        options: [configured, openrouter, groq, xunfei]
+        default: configured
+      max_iterations:
+        description: Maximum Agent iterations per task
+        type: choice
+        options: ['1', '3', '5', '10', '30']
+        default: '5'
+      agent_timeout:
+        description: Agent wall-clock budget per task, in seconds
+        type: choice
+        options: ['300', '600', '1800']
+        default: '600'
 
 permissions:
   contents: read
@@ -56,15 +66,17 @@ jobs:
       - name: Run one task
         env:
           BITORI_PROVIDER: ${{ inputs.provider }}
-          BITORI_PROTOCOL: ${{ inputs.provider == 'xunfei' && 'openai-responses' || 'openai-chat' }}
-          BITORI_MODEL: ${{ inputs.provider == 'groq' && vars.GROQ_MODEL || inputs.provider == 'xunfei' && vars.XUNFEI_MODEL || vars.OPENROUTER_MODEL }}
-          BITORI_BASE_URL: ${{ inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || inputs.provider == 'xunfei' && vars.XUNFEI_OPENAI_RESPONSE_URL || 'https://openrouter.ai/api/v1' }}
-          BITORI_API_KEY: ${{ inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY || inputs.provider == 'xunfei' && secrets.XUNFEI_LLM_API_KEY || secrets.OPENROUTER_LLM_API_KEY }}
+          BITORI_PROTOCOL: ${{ inputs.provider == 'configured' && 'anthropic' || inputs.provider == 'xunfei' && 'openai-responses' || 'openai-chat' }}
+          BITORI_MODEL: ${{ inputs.provider == 'configured' && vars.LLM_MODEL || inputs.provider == 'groq' && vars.GROQ_MODEL || inputs.provider == 'xunfei' && vars.XUNFEI_MODEL || vars.OPENROUTER_MODEL }}
+          BITORI_BASE_URL: ${{ inputs.provider == 'configured' && vars.LLM_BASE_URL || inputs.provider == 'groq' && 'https://api.groq.com/openai/v1' || inputs.provider == 'xunfei' && vars.XUNFEI_OPENAI_RESPONSE_URL || 'https://openrouter.ai/api/v1' }}
+          BITORI_API_KEY: ${{ inputs.provider == 'configured' && secrets.LLM_API_KEY || inputs.provider == 'groq' && secrets.GROQ_LLM_API_KEY || inputs.provider == 'xunfei' && secrets.XUNFEI_LLM_API_KEY || secrets.OPENROUTER_LLM_API_KEY }}
           TASK_INDEX: ${{ matrix.index }}
+          MAX_ITERATIONS: ${{ inputs.max_iterations }}
+          AGENT_TIMEOUT: ${{ inputs.agent_timeout }}
         run: |
           test -n "$BITORI_MODEL" && test -n "$BITORI_BASE_URL" && test -n "$BITORI_API_KEY"
           export BITORI_NODE="$(command -v node)"
-          python evaluation/benchmarks/swe-bench-lite/run.py --index "$TASK_INDEX"
+          python evaluation/benchmarks/swe-bench-lite/run.py --index "$TASK_INDEX" --max-iterations "$MAX_ITERATIONS" --timeout "$AGENT_TIMEOUT"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
