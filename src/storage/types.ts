@@ -17,6 +17,8 @@ export interface Session {
 export interface AgentRunRecord {
   id: string; sessionId: string; userMessageId: string; mode: AgentMode; status: AgentRunStatus;
   stopReason: AgentStopReason | null; iterationCount: number; inputTokens: number; outputTokens: number;
+  /** Qoder 等 credits-only 协议的真实消耗；NULL 表示协议未上报。 */
+  credits: number | null;
   startedAt: number; finishedAt: number | null; updatedAt: number;
 }
 
@@ -78,6 +80,8 @@ export interface SessionRepositoryContract {
   checkpointAssistant(messageId: string, content: string, thinking: string): Promise<void>;
   finalizeMessage(messageId: string, update: FinalMessageUpdate): Promise<void>;
   setSessionMode(sessionId: string, mode: AgentMode): Promise<Session>;
+  renameSession(sessionId: string, title: string): Promise<Session>;
+  deleteSession(sessionId: string): Promise<void>;
   beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}>;
   beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage>;
   finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void>;

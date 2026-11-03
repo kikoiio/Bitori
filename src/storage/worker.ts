@@ -18,11 +18,11 @@ interface MessageRow {
   id: string; session_id: string; role: 'user' | 'assistant'; content: string; thinking: string;
   display_content: string | null;
   status: 'streaming' | 'completed' | 'cancelled' | 'failed'; error_code: StoredMessage['errorCode'];
-  error_message: string | null; input_tokens: number | null; output_tokens: number | null;
+  error_message: string | null; input_tokens: number | null; output_tokens: number | null; credits: number | null;
   provider_state: string | null; agent_run_id: string | null; iteration: number | null; created_at: number; updated_at: number;
 }
 interface ToolCallRow {id: string; session_id: string; assistant_message_id: string; provider_call_id: string | null; position: number; tool_name: string; arguments_json: string; arguments_text: string | null; agent_run_id: string | null; approval_status: ToolCallRecord['approvalStatus']; execution_status: ToolCallRecord['executionStatus']; result_json: string | null; created_at: number; updated_at: number}
-interface AgentRunRow {id: string; session_id: string; user_message_id: string; mode: AgentRunRecord['mode']; status: AgentRunRecord['status']; stop_reason: AgentRunRecord['stopReason']; iteration_count: number; input_tokens: number; output_tokens: number; started_at: number; finished_at: number | null; updated_at: number}
+interface AgentRunRow {id: string; session_id: string; user_message_id: string; mode: AgentRunRecord['mode']; status: AgentRunRecord['status']; stop_reason: AgentRunRecord['stopReason']; iteration_count: number; input_tokens: number; output_tokens: number; credits: number | null; started_at: number; finished_at: number | null; updated_at: number}
 
 if (parentPort === null) throw new Error('Storage Worker 必须在线程中运行');
 const port = parentPort;
@@ -54,7 +54,7 @@ function session(row: SessionRow): Session {
   return {id: row.id, profileName: row.profile_name, title: row.title, createdAt: row.created_at, updatedAt: row.updated_at, agentMode: row.agent_mode, latestPlanMessageId: row.latest_plan_message_id};
 }
 
-function agentRun(row: AgentRunRow): AgentRunRecord { return {id: row.id, sessionId: row.session_id, userMessageId: row.user_message_id, mode: row.mode, status: row.status, stopReason: row.stop_reason, iterationCount: row.iteration_count, inputTokens: row.input_tokens, outputTokens: row.output_tokens, startedAt: row.started_at, finishedAt: row.finished_at, updatedAt: row.updated_at}; }
+function agentRun(row: AgentRunRow): AgentRunRecord { return {id: row.id, sessionId: row.session_id, userMessageId: row.user_message_id, mode: row.mode, status: row.status, stopReason: row.stop_reason, iterationCount: row.iteration_count, inputTokens: row.input_tokens, outputTokens: row.output_tokens, credits: row.credits, startedAt: row.started_at, finishedAt: row.finished_at, updatedAt: row.updated_at}; }
 
 function message(row: MessageRow): StoredMessage {
   let providerState: StoredMessage['providerState'] = null;
@@ -68,8 +68,8 @@ function message(row: MessageRow): StoredMessage {
       logger.debug('provider_state 反序列化失败，已降级为普通文本', {error: error instanceof Error ? error.message : String(error)});
     }
   }
-  const usage = row.input_tokens === null || row.output_tokens === null
-    ? null : {inputTokens: row.input_tokens, outputTokens: row.output_tokens};
+  const usage = row.input_tokens === null && row.output_tokens === null && row.credits === null
+    ? null : {inputTokens: row.input_tokens ?? 0, outputTokens: row.output_tokens ?? 0, ...(row.credits === null ? {} : {credits: row.credits})};
   return {
     id: row.id, sessionId: row.session_id, role: row.role, content: row.content, ...(row.display_content === null ? {} : {displayContent: row.display_content}), thinking: row.thinking,
     status: row.status, errorCode: row.error_code, errorMessage: row.error_message, usage, providerState, agentRunId: row.agent_run_id, iteration: row.iteration,
@@ -80,9 +80,9 @@ function toolCall(row: ToolCallRow): ToolCallRecord { return {id: row.id, sessio
 
 function finalizeMessage(messageId: string, update: FinalMessageUpdate): void {
   database.prepare(`UPDATE messages SET content = ?, thinking = ?, status = ?, error_code = ?, error_message = ?,
-    input_tokens = ?, output_tokens = ?, provider_state = ?, updated_at = ? WHERE id = ?`)
+    input_tokens = ?, output_tokens = ?, credits = ?, provider_state = ?, updated_at = ? WHERE id = ?`)
     .run(update.content, update.thinking, update.status, update.error?.code ?? null, update.error?.message ?? null,
-      update.usage?.inputTokens ?? null, update.usage?.outputTokens ?? null,
+      update.usage?.inputTokens ?? null, update.usage?.outputTokens ?? null, update.usage?.credits ?? null,
       update.providerState === null ? null : JSON.stringify(update.providerState), now(), messageId);
 }
 
@@ -179,6 +179,25 @@ function execute(operation: StorageOperation): unknown {
       finalizeMessage(operation.messageId, operation.update);
       return null;
     }
+    case 'rename_session': {
+      const trimmed = operation.title.trim().replace(/\s+/g, ' ').slice(0, 80);
+      if (!trimmed) throw new Error('会话标题不能为空');
+      const changed = database.prepare('UPDATE sessions SET title=? WHERE id=?').run(trimmed, operation.sessionId);
+      if (changed.changes === 0) throw new Error('会话不存在');
+      return session(database.prepare('SELECT * FROM sessions WHERE id=?').get(operation.sessionId) as unknown as SessionRow);
+    }
+    case 'delete_session': {
+      transaction(() => {
+        // FK 立即检查：先断开会话对消息的计划引用，再按子→父顺序删除。
+        database.prepare('UPDATE sessions SET latest_plan_message_id=NULL WHERE id=?').run(operation.sessionId);
+        database.prepare('DELETE FROM context_checkpoints WHERE session_id=?').run(operation.sessionId);
+        database.prepare('DELETE FROM tool_calls WHERE session_id=?').run(operation.sessionId);
+        database.prepare('DELETE FROM agent_runs WHERE session_id=?').run(operation.sessionId);
+        database.prepare('DELETE FROM messages WHERE session_id=?').run(operation.sessionId);
+        database.prepare('DELETE FROM sessions WHERE id=?').run(operation.sessionId);
+      });
+      return null;
+    }
     case 'set_session_mode': {
       database.prepare('UPDATE sessions SET agent_mode=?, updated_at=? WHERE id=?').run(operation.mode, now(), operation.sessionId);
       const row = database.prepare('SELECT * FROM sessions WHERE id=?').get(operation.sessionId) as SessionRow | undefined;
@@ -190,15 +209,15 @@ function execute(operation: StorageOperation): unknown {
       if (!current) throw new Error('会话不存在');
       const timestamp = now(); const userId = createId();
       const count = (database.prepare('SELECT COUNT(*) AS count FROM messages WHERE session_id=?').get(operation.sessionId) as {count: number}).count;
-      database.prepare(`INSERT INTO messages(id,session_id,role,content,display_content,thinking,status,error_code,error_message,input_tokens,output_tokens,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?, 'user',?,?,'','completed',NULL,NULL,NULL,NULL,NULL,?,NULL,?,?,?,?)`).run(userId, operation.sessionId, operation.instruction ?? operation.displayText, operation.displayText, operation.runId, timestamp, timestamp, ownerId, process.pid);
-      database.prepare(`INSERT INTO agent_runs(id,session_id,user_message_id,mode,status,stop_reason,iteration_count,input_tokens,output_tokens,started_at,finished_at,updated_at,owner_id,owner_pid) VALUES(?,?,?,?,'running',NULL,0,0,0,?,NULL,?,?,?)`).run(operation.runId, operation.sessionId, userId, operation.mode, timestamp, timestamp, ownerId, process.pid);
+      database.prepare(`INSERT INTO messages(id,session_id,role,content,display_content,thinking,status,error_code,error_message,input_tokens,output_tokens,credits,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?, 'user',?,?,'','completed',NULL,NULL,NULL,NULL,NULL,NULL,?,NULL,?,?,?,?)`).run(userId, operation.sessionId, operation.instruction ?? operation.displayText, operation.displayText, operation.runId, timestamp, timestamp, ownerId, process.pid);
+      database.prepare(`INSERT INTO agent_runs(id,session_id,user_message_id,mode,status,stop_reason,iteration_count,input_tokens,output_tokens,credits,started_at,finished_at,updated_at,owner_id,owner_pid) VALUES(?,?,?,?,'running',NULL,0,0,0,NULL,?,NULL,?,?,?)`).run(operation.runId, operation.sessionId, userId, operation.mode, timestamp, timestamp, ownerId, process.pid);
       const title = operation.displayText.trim().replace(/\s+/g, ' ').slice(0, 60) || '新会话';
       database.prepare(`UPDATE sessions SET updated_at=?, title=CASE WHEN ?=0 THEN ? ELSE title END WHERE id=?`).run(timestamp, count, title, operation.sessionId);
       return {run: agentRun(database.prepare('SELECT * FROM agent_runs WHERE id=?').get(operation.runId) as unknown as AgentRunRow), userMessage: message(database.prepare('SELECT * FROM messages WHERE id=?').get(userId) as unknown as MessageRow)};
     });
     case 'begin_agent_iteration': {
       const timestamp = now();
-      database.prepare(`INSERT INTO messages(id,session_id,role,content,thinking,status,error_code,error_message,input_tokens,output_tokens,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?,'assistant','','','streaming',NULL,NULL,NULL,NULL,NULL,?,?,?, ?,?,?)`).run(operation.messageId, operation.sessionId, operation.runId, operation.iteration, timestamp, timestamp, ownerId, process.pid);
+      database.prepare(`INSERT INTO messages(id,session_id,role,content,thinking,status,error_code,error_message,input_tokens,output_tokens,credits,provider_state,agent_run_id,iteration,created_at,updated_at,owner_id,owner_pid) VALUES(?,?,'assistant','','','streaming',NULL,NULL,NULL,NULL,NULL,NULL,?,?,?, ?,?,?)`).run(operation.messageId, operation.sessionId, operation.runId, operation.iteration, timestamp, timestamp, ownerId, process.pid);
       return message(database.prepare('SELECT * FROM messages WHERE id=?').get(operation.messageId) as unknown as MessageRow);
     }
     case 'finalize_iteration_with_tool_batch': transaction(() => { finalizeMessage(operation.messageId, operation.update); insertToolBatch(operation.records); }); return null;
@@ -208,11 +227,11 @@ function execute(operation: StorageOperation): unknown {
       if (!running) return;
       database.prepare(`UPDATE messages SET status=?,error_code=?,error_message=?,updated_at=? WHERE agent_run_id=? AND status='streaming'`).run(operation.result.status === 'cancelled' ? 'cancelled' : 'failed', 'stream_interrupted', operation.message, timestamp, operation.runId);
       database.prepare(`UPDATE tool_calls SET approval_status=CASE WHEN approval_status='pending' THEN 'denied' ELSE approval_status END,execution_status='interrupted',result_json=?,updated_at=? WHERE agent_run_id=? AND (execution_status IN ('queued','running') OR approval_status='pending')`).run(JSON.stringify({status:'interrupted',error:{code:'interrupted',message:operation.message,retryable:false}}), timestamp, operation.runId);
-      database.prepare(`UPDATE agent_runs SET status=?,stop_reason=?,iteration_count=?,input_tokens=?,output_tokens=?,finished_at=?,updated_at=? WHERE id=? AND status='running'`).run(operation.result.status, operation.result.stopReason, operation.result.iterationCount, operation.result.usage.inputTokens, operation.result.usage.outputTokens, timestamp, timestamp, operation.runId);
+      database.prepare(`UPDATE agent_runs SET status=?,stop_reason=?,iteration_count=?,input_tokens=?,output_tokens=?,credits=?,finished_at=?,updated_at=? WHERE id=? AND status='running'`).run(operation.result.status, operation.result.stopReason, operation.result.iterationCount, operation.result.usage.inputTokens, operation.result.usage.outputTokens, operation.result.usage.credits ?? null, timestamp, timestamp, operation.runId);
     }); return null;
     case 'finish_agent_run': transaction(() => {
       const timestamp = now();
-      const updated = database.prepare(`UPDATE agent_runs SET status=?,stop_reason=?,iteration_count=?,input_tokens=?,output_tokens=?,finished_at=?,updated_at=? WHERE id=? AND status='running'`).run(operation.result.status, operation.result.stopReason, operation.result.iterationCount, operation.result.usage.inputTokens, operation.result.usage.outputTokens, timestamp, timestamp, operation.runId);
+      const updated = database.prepare(`UPDATE agent_runs SET status=?,stop_reason=?,iteration_count=?,input_tokens=?,output_tokens=?,credits=?,finished_at=?,updated_at=? WHERE id=? AND status='running'`).run(operation.result.status, operation.result.stopReason, operation.result.iterationCount, operation.result.usage.inputTokens, operation.result.usage.outputTokens, operation.result.usage.credits ?? null, timestamp, timestamp, operation.runId);
       if (updated.changes > 0 && operation.latestPlanMessageId !== undefined) database.prepare(`UPDATE sessions SET latest_plan_message_id=?,updated_at=? WHERE id=(SELECT session_id FROM agent_runs WHERE id=?)`).run(operation.latestPlanMessageId, timestamp, operation.runId);
     }); return null;
     case 'close':

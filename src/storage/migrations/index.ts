@@ -5,13 +5,14 @@ import {agentLoopMigration} from './003-agent-loop.js';
 import {ownershipCheckpointMigration} from './004-ownership-checkpoint.js';
 import {messageDisplayContentMigration} from './005-message-display-content.js';
 import {recoverLegacyLiveStateMigration} from './006-recover-legacy-live-state.js';
+import {usageCreditsMigration} from './007-usage-credits.js';
 
 export interface Migration {
   version: number;
   sql: string;
 }
 
-export const migrations: readonly Migration[] = [initialMigration, toolCallsMigration, agentLoopMigration, ownershipCheckpointMigration, messageDisplayContentMigration, recoverLegacyLiveStateMigration];
+export const migrations: readonly Migration[] = [initialMigration, toolCallsMigration, agentLoopMigration, ownershipCheckpointMigration, messageDisplayContentMigration, recoverLegacyLiveStateMigration, usageCreditsMigration];
 
 /** 只描述迁移器需要的最小数据库能力，避免它绑定到具体 SQLite 类。 */
 export interface MigrationDatabase {

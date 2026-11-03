@@ -1,4 +1,5 @@
 import {groupByIteration, type TraceIteration} from './reader.js';
+import {formatUsage} from '../shared/usage-format.js';
 import type {ContextCompositionBuckets, TraceEvent} from './types.js';
 
 const bucketLabels: Array<[keyof ContextCompositionBuckets, string]> = [
@@ -26,11 +27,12 @@ function renderIteration(iteration: TraceIteration): string[] {
   }
   if (iteration.composition) {
     const composition = iteration.composition;
-    lines.push(`组成：估算 ${composition.estimatedTotal} vs 真实 ${composition.providerInputTokens}（差 ${composition.delta}）；${compositionLine(composition.buckets)}`);
+    const real = composition.providerInputTokens > 0 ? `真实 ${composition.providerInputTokens}（差 ${composition.delta}）` : '真实未上报';
+    lines.push(`组成：估算 ${composition.estimatedTotal} vs ${real}；${compositionLine(composition.buckets)}`);
   }
   if (iteration.response) {
     const response = iteration.response;
-    lines.push(`响应：${response.text.length} 字，耗时 ${response.durationMs}ms，token ${response.usage.inputTokens}↓ ${response.usage.outputTokens}↑${response.usage.cacheReadInputTokens === undefined ? '' : `，缓存读 ${response.usage.cacheReadInputTokens}`}`);
+    lines.push(`响应：${response.text.length} 字，耗时 ${response.durationMs}ms，${formatUsage(response.usage)}`);
     if (response.errorCode) lines.push(`错误：${response.errorCode}（${response.errorMessage ?? ''}）`);
     for (const call of response.toolCalls) lines.push(`工具 ${call.name}：${call.argumentsText.slice(0, 100)}`);
     if (response.text.length > 0) lines.push(`文本预览：${response.text.slice(0, 200).replaceAll('\n', ' ')}${response.text.length > 200 ? '…' : ''}`);
@@ -57,9 +59,9 @@ export function renderTokenTrend(events: readonly TraceEvent[]): string {
   for (const iteration of groupByIteration(events)) {
     if (!iteration.composition && !iteration.response) continue;
     const estimated = iteration.composition?.estimatedTotal ?? '-';
-    const real = iteration.composition?.providerInputTokens ?? '-';
-    const delta = iteration.composition?.delta ?? '-';
-    const output = iteration.response?.usage.outputTokens ?? '-';
+    const real = iteration.composition !== undefined && iteration.composition.providerInputTokens > 0 ? iteration.composition.providerInputTokens : '-';
+    const delta = iteration.composition !== undefined && iteration.composition.providerInputTokens > 0 ? iteration.composition.delta : '-';
+    const output = iteration.response?.usage.credits !== undefined ? `c${iteration.response.usage.credits}` : iteration.response?.usage.outputTokens ?? '-';
     lines.push(`${String(iteration.iteration).padStart(4)}  ${String(estimated).padStart(5)}  ${String(real).padStart(5)}  ${String(delta).padStart(5)}  ${String(output).padStart(5)}`);
   }
   return lines.join('\n');

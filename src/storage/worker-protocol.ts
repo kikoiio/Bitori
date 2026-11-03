@@ -15,6 +15,8 @@ export type StorageOperation =
   | {type: 'checkpoint_assistant'; messageId: string; content: string; thinking: string}
   | {type: 'finalize_message'; messageId: string; update: FinalMessageUpdate}
   | {type: 'set_session_mode'; sessionId: string; mode: AgentMode}
+  | {type: 'rename_session'; sessionId: string; title: string}
+  | {type: 'delete_session'; sessionId: string}
   | {type: 'begin_agent_run'; runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}
   | {type: 'begin_agent_iteration'; messageId: string; runId: string; sessionId: string; iteration: number}
   | {type: 'finalize_iteration_with_tool_batch'; messageId: string; update: FinalMessageUpdate; records: ToolCallRecord[]}

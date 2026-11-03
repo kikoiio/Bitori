@@ -45,6 +45,8 @@ export class SessionRepository implements SessionRepositoryContract {
     await this.#client.request({type: 'finalize_message', messageId, update});
   }
   public async setSessionMode(sessionId: string, mode: AgentMode): Promise<Session> { return this.#client.request({type: 'set_session_mode', sessionId, mode}) as Promise<Session>; }
+  public async renameSession(sessionId: string, title: string): Promise<Session> { return this.#client.request({type: 'rename_session', sessionId, title}) as Promise<Session>; }
+  public async deleteSession(sessionId: string): Promise<void> { await this.#client.request({type: 'delete_session', sessionId}); }
   public async beginAgentRun(input: {runId: string; sessionId: string; displayText: string; instruction?: string; mode: AgentMode}): Promise<{run: AgentRunRecord; userMessage: StoredMessage}> { return this.#client.request({type: 'begin_agent_run', ...input}) as Promise<{run: AgentRunRecord; userMessage: StoredMessage}>; }
   public async beginAgentIteration(input: {messageId: string; runId: string; sessionId: string; iteration: number}): Promise<StoredMessage> { return this.#client.request({type: 'begin_agent_iteration', ...input}) as Promise<StoredMessage>; }
   public async finalizeIterationWithToolBatch(messageId: string, update: FinalMessageUpdate, records: ToolCallRecord[]): Promise<void> { await this.#client.request({type: 'finalize_iteration_with_tool_batch', messageId, update, records}); }
