@@ -200,6 +200,21 @@ mcp_servers:
     expect(() => loadConfig(root, root, {STRAY_API_KEY: 'x'})).toThrow(/没有可用 profile/);
   });
 
+  it('首次运行时环境已带连接参数就直接可用，不要求先填 .env', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-first-run-'));
+    temporaryDirectories.push(root);
+    // CI 与已导出变量的终端本来就带着凭据，不该再被"请去填 .env"挡住。
+    const config = loadConfig(root, root, {LLM_API_KEY: 'k', LLM_MODEL: 'm', LLM_BASE_URL: 'https://api.scnet.cn/api/llm/anthropic'});
+    expect(config.profiles[0]).toMatchObject({name: 'default', protocol: 'anthropic'});
+    expect(config.profiles[0]?.apiKey).toBe('k');
+  });
+
+  it('首次运行且没有可用连接参数时，仍然提示去填 .env', () => {
+    const root = mkdtempSync(join(tmpdir(), 'bitori-first-run-empty-'));
+    temporaryDirectories.push(root);
+    expect(() => loadConfig(root, root, {})).toThrow(/已创建/);
+  });
+
   it('默认 config.yaml 模板本身合法；.env 仓库示例与首次启动模板一致', () => {
     // config.yaml 的模板只在 src/config/defaults.ts 维护，仓库不再保留副本，这里守住模板的可解析性与结构。
     const parsed = parseConfig(parseYaml(defaultUserConfigYaml));

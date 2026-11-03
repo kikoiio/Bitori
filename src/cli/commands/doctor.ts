@@ -13,17 +13,22 @@ export interface DoctorCheck {name: string; status: CheckStatus; detail: string}
 export async function buildDoctorChecks(options: {profile?: string; json: boolean}, workspace: string, fetchImpl?: typeof fetch): Promise<{checks: DoctorCheck[]; profiles: ProviderProfile[]}> {
   const checks: DoctorCheck[] = [];
   const paths = configPaths();
-  checks.push({name: '配置文件', status: existsSync(paths.config) ? 'ok' : 'fail', detail: existsSync(paths.config) ? paths.config : `缺少 ${paths.config};首次运行 bitori 会生成模板`});
-  checks.push({name: '密钥文件', status: existsSync(paths.environment) ? 'ok' : 'fail', detail: existsSync(paths.environment) ? paths.environment : `缺少 ${paths.environment}`});
 
   let config: AppConfig | null = null;
+  let parseError: string | undefined;
   try {
     config = loadConfig(undefined, workspace);
+  } catch (error) {
+    parseError = error instanceof Error ? error.message : String(error);
+  }
+  // 首次运行时 loadConfig 会写出模板，所以文件存在性要在加载之后再判断，否则会误报"缺少"。
+  checks.push({name: '配置文件', status: existsSync(paths.config) ? 'ok' : 'fail', detail: existsSync(paths.config) ? paths.config : `缺少 ${paths.config};首次运行 bitori 会生成模板`});
+  checks.push({name: '密钥文件', status: existsSync(paths.environment) ? 'ok' : 'fail', detail: existsSync(paths.environment) ? paths.environment : `缺少 ${paths.environment}`});
+  if (config === null) {
+    checks.push({name: '配置解析', status: 'fail', detail: parseError ?? '配置无效'});
+  } else {
     const summary = config.profiles.map(profile => `${profile.name}·${profile.protocol}`).join(' ');
     checks.push({name: '配置解析', status: 'ok', detail: `${config.profiles.length} 个 profile：${summary}`});
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    checks.push({name: '配置解析', status: 'fail', detail: message});
   }
 
   const profiles = config === null ? [] : config.profiles.filter(p => options.profile === undefined || p.name === options.profile);

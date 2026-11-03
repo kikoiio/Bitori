@@ -120,6 +120,23 @@ const protocolBaseDefaults: Partial<Record<Protocol, string>> = {
 };
 
 /**
+ * 环境里是否已经带了可用的连接参数。首次运行会写出模板，但 CI 或已经导出变量的终端
+ * 本来就带着凭据，这时不该再被"请去填 .env"挡住。
+ */
+function connectionProvidedByEnvironment(environment: NodeJS.ProcessEnv): boolean {
+  const prefixes = new Set<string>();
+  for (const [name, value] of Object.entries(environment)) {
+    if (value === undefined || value.trim().length === 0) continue;
+    const match = /^(.+)_API_KEY$/.exec(name);
+    if (match) prefixes.add(match[1]!);
+  }
+  for (const prefix of prefixes) {
+    if (environment[`${prefix}_MODEL`]?.trim()) return true;
+  }
+  return false;
+}
+
+/**
  * 协议优先级：config.yaml 显式 > .env 的 <前缀>_PROTOCOL > 按 base_url 与密钥形状推断。
  * 推断结论必须带依据，诊断命令会把它展示出来，用户随时可以在 config.yaml 写死覆盖。
  */
@@ -248,7 +265,7 @@ function resolveMcpServer(name: string, source: McpServerConfigSource, environme
 export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cwd(), runtimeEnvironment: NodeJS.ProcessEnv = process.env): AppConfig {
   const paths = configPaths(homeDirectory);
   const scaffold = ensureUserConfigFiles(homeDirectory);
-  if (scaffold.created) {
+  if (scaffold.created && !connectionProvidedByEnvironment(runtimeEnvironment)) {
     throw new ConfigurationError(`已创建 ${scaffold.config} 和 ${scaffold.environment}。请在 ${scaffold.environment} 填一组变量：任意大写前缀 + _API_KEY、_BASE_URL、_MODEL（例如 OPENROUTER_API_KEY / OPENROUTER_BASE_URL / OPENROUTER_MODEL），保存后运行 bitori doctor 验证`);
   }
   const yamlText = readRequired(paths.config, '配置文件');

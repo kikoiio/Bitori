@@ -36,6 +36,13 @@ jobs:
 
       # 凭据与端点统一走 LLM_* 三个变量；真实端点会按 protocol 拼路径
       # （anthropic 由 SDK 拼成 <base_url>/v1/messages）。
+      - name: Check connectivity with the real credentials
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: node dist/bin/bitori.js doctor
+
       - name: Run real provider acceptance
         env:
           E2E_API_KEY: ${{ secrets.LLM_API_KEY }}

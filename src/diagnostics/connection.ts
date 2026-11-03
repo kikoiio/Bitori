@@ -41,7 +41,9 @@ export function modelsEndpoint(profile: ProviderProfile): {url: string; headers:
     case 'qoder':
       return {url: `${cloudApiRoot(profile.baseUrl)}/models`, headers: {...auth, Accept: 'application/json'}};
     case 'anthropic':
-      return {url: `${base}/models`, headers: {...auth, Accept: 'application/json', 'anthropic-version': '2023-06-01'}};
+      // Anthropic 的模型列表在 /v1/models，认证用 x-api-key（官方 SDK 的方式）。
+      // 用 Bearer 探测会得到 401，把本来可用的连接误报成失败。
+      return {url: `${base}/v1/models`, headers: {'x-api-key': profile.apiKey, Accept: 'application/json', 'anthropic-version': '2023-06-01'}};
     case 'openai-chat':
     case 'openai-responses':
       return {url: `${base}/models`, headers: {...auth, Accept: 'application/json'}};

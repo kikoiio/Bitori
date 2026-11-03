@@ -14,13 +14,23 @@ function jsonResponse(body: unknown, status = 200): Promise<Response> {
 describe('modelsEndpoint', () => {
   it('每个协议给出明确端点', () => {
     expect(modelsEndpoint(profile('qoder', 'https://api.qoder.com.cn'))).toEqual(expect.objectContaining({url: 'https://api.qoder.com.cn/api/v1/cloud/models'}));
-    expect(modelsEndpoint(profile('anthropic'))).toEqual(expect.objectContaining({url: 'https://example.test/models'}));
+    // Anthropic 的模型列表在 /v1/models，和官方 SDK 一致。
+    expect(modelsEndpoint(profile('anthropic'))).toEqual(expect.objectContaining({url: 'https://example.test/v1/models'}));
     expect(modelsEndpoint(profile('openai-chat'))).toEqual(expect.objectContaining({url: 'https://example.test/models'}));
     expect(modelsEndpoint(profile('openai-responses'))).toEqual(expect.objectContaining({url: 'https://example.test/models'}));
   });
-  it('anthropic 请求带版本头', () => {
+  it('anthropic 请求带版本头并用 x-api-key 认证', () => {
     const target = modelsEndpoint(profile('anthropic'));
-    if ('headers' in target) expect(target.headers['anthropic-version']).toBe('2023-06-01');
+    if ('headers' in target) {
+      expect(target.headers['anthropic-version']).toBe('2023-06-01');
+      // 官方 SDK 用 x-api-key；用 Bearer 探测会被网关判成未登录而误报连接失败。
+      expect(target.headers['x-api-key']).toBe('sk-test-key');
+      expect(target.headers['Authorization']).toBeUndefined();
+    } else throw new Error('unexpected');
+  });
+  it('OpenAI 兼容协议仍用 Bearer 认证', () => {
+    const target = modelsEndpoint(profile('openai-chat'));
+    if ('headers' in target) expect(target.headers['Authorization']).toBe('Bearer sk-test-key');
     else throw new Error('unexpected');
   });
 });
