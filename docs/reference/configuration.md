@@ -4,9 +4,31 @@
 
 ## 模型和 MCP
 
-从 [配置示例](../../config.example.yaml) 和 [环境变量示例](../../.env.example) 开始，在同目录 `.env` 中配置 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`。`profiles` 至少包含一项，`protocol` 为 `anthropic`、`openai-responses` 或 `openai-chat`；`model` 和 `base_url` 支持字面量或 `${ENV_NAME}` 引用，`api_key` 必须是完整的 `${ENV_NAME}` 引用。变量在加载时展开，缺失会报错；URL 在展开后校验为 HTTP(S)，实际进程环境优先于 `.env`。`thinking` 仅适用于 Anthropic，可设为 `false`、`true`、`{type: adaptive}`，或设为 `type: manual` 并提供小于 `max_tokens` 的 `budget_tokens`（至少 1024）。可选 `context_window` 为正整数。可通过 `models` 映射 SubAgent 的逻辑模型名到 profile 名。
+从 [环境变量示例](../../.env.example) 开始，把它放到 `~/.bitori/.env`；`~/.bitori/config.yaml` 首次启动时自动生成，通常不需要手写。在 `.env` 填写 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`，不要按供应商写死变量名。`profiles` 至少包含一项；`protocol` 是接口方言（`openai-chat`、`openai-responses`、`anthropic` 或 `qoder`），不是供应商名称。`model` 和 `base_url` 支持字面量或 `${ENV_NAME}` 引用，`api_key` 必须是完整的 `${ENV_NAME}` 引用。变量在加载时展开，缺失会报错；URL 在展开后校验为 HTTP(S)，实际进程环境优先于 `.env`。`thinking` 仅适用于 Anthropic，可设为 `false`、`true`、`{type: adaptive}`，或设为 `type: manual` 并提供小于 `max_tokens` 的 `budget_tokens`（至少 1024）。可选 `context_window` 为正整数。可通过 `models` 映射 SubAgent 的逻辑模型名到 profile 名。
 
-用户级 `config.yaml` 可包含 `mcp_servers`；项目级同名文件只允许 `mcp_servers`，同名服务完整覆盖用户级服务。stdio 服务配置 `transport: stdio`、`command`，可选 `args` 和 `env`；HTTP 服务配置 `transport: http`、`url`，可选 `headers`。命令、参数、环境值、URL 和 header 引用的环境变量在加载时展开，缺失即报错。示例中的 HTTP URL 是占位符，不是可用服务。stdio 服务会执行配置的命令，HTTP 服务会接收发往它的数据；只启用可信服务，并先检查命令、地址和凭据。
+`protocol: qoder` 走官方 Cloud Agents（PAT 前缀 `pt-` 或 SAT），不是 OpenAI Chat Completions。`base_url` 填 `https://api.qoder.com.cn`（国内）或 `https://api.qoder.com`（国际）；`model` 可用官方 id（如 `dfmodel`）或控制台展示名（如 `DeepSeek-Flash`）。启动后会在 Qoder 账号下复用名为 `bitori` 的 self_hosted Environment 与 Agent，把 Bitori 工具注册为 client-side custom tools 并在本地执行。
+
+用户级 `config.yaml` 可包含 `mcp_servers`；项目级同名文件只允许 `mcp_servers`，同名服务完整覆盖用户级服务。stdio 服务配置 `transport: stdio`、`command`，可选 `args` 和 `env`；HTTP 服务配置 `transport: http`、`url`，可选 `headers`。命令、参数、环境值、URL 和 header 引用的环境变量在加载时展开，缺失即报错；示例中的 HTTP URL 是占位符，不是可用服务。stdio 服务会执行配置的命令，HTTP 服务会接收发往它的数据；只启用可信服务，并先检查命令、地址和凭据。项目级扩展（MCP/Hooks）属于工作区自带内容：**未信任的工作区默认拒载**项目级 `.bitori/config.yaml` 的 MCP 与 `hooks.yaml`（启动时会在 warnings 中说明）。clone 的仓库确认后用 `bitori trust [path]` 登记（清单在 `~/.bitori/trusted-workspaces.json`，`--revoke` 撤销）；桌面选择工作区时的确认对话框会自动登记。`bitori doctor` 报告工作区信任状态。
+
+### 多个 Provider：只填 .env
+
+一个 Provider = `.env` 里一组同前缀变量，填完自动生效，`config.yaml` 不需要动：
+
+```ini
+# 前缀全大写；profile 名自动取前缀小写（OPENROUTER_ → openrouter）
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=deepseek/deepseek-chat
+
+QODER_API_KEY=pt-...
+QODER_BASE_URL=https://api.qoder.com.cn
+QODER_MODEL=DeepSeek-Flash
+QODER_PROTOCOL=qoder
+```
+
+规则：`<前缀>_API_KEY` + `<前缀>_MODEL` 必需；`<前缀>_PROTOCOL` 可选（默认 `openai-chat`，支持 `openai-chat | openai-responses | anthropic | qoder`）；`<前缀>_BASE_URL` 对 anthropic/OpenAI 兼容可省略（用官方默认端点），对 qoder 必填。不完整的变量组会被跳过，`bitori doctor` 列出缺哪一项。`config.yaml` 显式定义的 profile 优先，且它引用过的变量组不会重复派生；模板里 `LLM_*` 未填不再阻塞启动，只有选中 `default` profile 时才提示填写。填完运行 `bitori doctor` 即可逐个 profile 验证凭据、连接与模型。
+
+TUI `/model` 与桌面模型菜单会向 Provider 查询真实模型列表（Qoder/Anthropic/OpenAI 兼容端点的 `/models`），可在 profile 内直接选择模型；无法列表的端点会显示原因而不是伪造列表。连接故障可用 `bitori doctor` 或界面内的“模型/连接测试”定位（区分凭据、网络、协议不匹配与模型不存在）。
 
 ## 日志与追踪
 

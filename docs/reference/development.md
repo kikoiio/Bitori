@@ -6,9 +6,9 @@
 
 ## 本地开发
 
-使用 Node.js 24 和 npm，在仓库根目录执行 `npm ci` 后，以 `npm run dev -- --profile <name>` 启动；配置见 [配置与扩展](configuration.md)。`npm run build` 输出 `dist/`，`npm start` 运行编译后的终端入口。生成目录与本地密钥不应提交。
+使用 Node.js 24 和 npm，在仓库根目录执行 `npm ci` 后，在 `~/.bitori/.env` 填一组 `<前缀>_API_KEY`/`_BASE_URL`/`_MODEL`（自动派生 profile；模板默认使用 `LLM_*`），再以 `npm run dev` 启动（多 profile 时加 `--profile <name>`；`bitori doctor` 可逐 profile 验证）；配置见 [配置与扩展](configuration.md)。`npm run build` 输出 `dist/`，`npm start` 运行编译后的终端入口。生成目录与本地密钥不应提交。
 
-Linux Electron 日常迭代用 `npm run desktop`。`npm run desktop:package` 把安装形态写到 `out/desktop/`（`linux-unpacked`、AppImage、deb），供测试使用，配置禁止 publish。两者均需 Electron 依赖、图形环境及适当资源；启动后须选择并信任工作区。
+Linux Electron 日常迭代用 `npm run desktop`（开发入口带 `--disable-gpu --no-sandbox`，不把 `chrome-sandbox` 设为 root SUID）。`npm run desktop:package` 把安装形态写到 `out/desktop/`（`linux-unpacked`、AppImage、deb），供测试使用，配置禁止 publish。两者均需 Electron 依赖、图形环境及适当资源；启动后须选择并信任工作区。
 
 ## 验证
 
@@ -24,7 +24,22 @@ npm run check
 node dist/bin/bitori.js --help
 ```
 
-`npm test` 的 `pretest` 会先构建；`npm run check` 包含 `npm test` 和再次构建。自动测试使用模拟客户端、临时 SQLite 或本地服务；真实模型验收依赖凭据、网络及供应商配额，结果应单独记录，不能由模拟测试推断。`tests/acceptance/e2e-openrouter.ts` 是现有真实端点测试入口。
+`npm test` 的 `pretest` 会先构建；`npm run check` 包含 `npm test` 和再次构建。自动测试使用模拟客户端、临时 SQLite 或本地服务；真实模型验收依赖凭据、网络及供应商配额，结果应单独记录，不能由模拟测试推断。
+
+真实 Provider 端到端（会产生费用，必须显式开启）：
+
+```sh
+BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=qoder npm run test:e2e:providers
+BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:providers   # 需要 OPENROUTER_API_KEY 或 OPENAI_* 凭据
+```
+
+脚本在临时工作区跑“读取 → pwd → 编辑 → 校验 → 回答”的完整编码任务，断言工具链、diff、回复与用量（tokens 或 credits 至少其一真实非零），证据写入 `evaluation/results/e2e-providers/`（自动脱敏，日志不打印密钥）。`BITORI_E2E_PRESET=fix-test|add-test|refactor` 另跑「修复失效测试 / 补测试 / 小重构」三类真实编码场景（2026-11-01 全部用 Qoder 通过）。旧的 `tests/acceptance/e2e-openrouter.ts` 保留可用。
+
+Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-capture.ts --out /tmp/qoder-capture`（录制 busy 409、版本冲突 409、Last-Event-ID 重连、内置工具 requires_action、credits 用量等），再 `npx tsx tests/acceptance/sanitize-qoder-capture.ts` 脱敏输出到 `tests/fixtures/streams/qoder/`。`tests/integration/qoder-events.test.ts` 逐帧回放这些真实事件。
+
+桌面冒烟（开发入口）：`npm run build && HOME=<隔离目录> xvfb-run -a node tests/desktop/smoke.mjs`，覆盖会话/审批四选项/diff/撤销/模型列表/会话搜索重命名删除；打包形态：`npm run desktop:package` 后用 `BITORI_PACKAGED=1` 运行同一脚本，要求 `~/.bitori` 在测试 HOME 中不存在。
+
+诊断与信任：`node dist/bin/bitori.js doctor [--profile name] [--json]` 输出配置/凭据/工作区/连通性/模型列表（不含密钥）；`bitori trust [path] [--revoke]` 管理工作区信任清单。
 
 ## 贡献与验收
 
@@ -50,8 +65,8 @@ node dist/bin/bitori.js --help
 | 终端 | 编译后的 CLI/TUI：`node dist/bin/bitori.js` | 含在 Check 里；观感在本机终端 | PR 自动；观感按需本机 |
 | 桌面未打包 | `electron .` 会话、审批、工作区信任 | GitHub Actions + Xvfb | PR / `desktop/**` / 手动 |
 | 桌面包 | `out/desktop/linux-unpacked` 启动，并抽查 AppImage/deb | 同上；workflow artifact 留 7 天 | 同上 |
-| 真实模型 | OpenRouter/Groq 端到端 | 手动 `e2e.yml` | 明确授权后 |
-| 评测 | SWE-bench Lite / RSI smoke | 手动评测工作流 | 明确授权后 |
+| 真实模型 | Provider 端到端（Qoder/OpenAI 兼容等）+ OpenRouter/Groq | 本机 `BITORI_E2E_PROVIDERS=1 npm run test:e2e:providers`；旧的手动 `e2e.yml` | 明确授权并确认预算后 |
+| 评测 | SWE-bench Lite / RSI smoke | 当前暂停；恢复后按手动评测工作流执行 | 另行立项并明确授权后 |
 
 ## GitHub Actions
 
@@ -63,6 +78,6 @@ node dist/bin/bitori.js --help
 | [Linux desktop](../../.github/workflows/desktop.yml) | push 到 `desktop/**`、所有 PR、手动；模拟服务冒烟、打包及 `out/desktop/` 包启动 | 未调用真实模型；上传 7 天 AppImage/deb 与截图 artifact。 |
 | [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选择供应商和模型，`__list__` 只列模型 | 使用所选 `OPENROUTER_LLM_API_KEY` 或 `GROQ_LLM_API_KEY`，模型来自输入或对应 `OPENROUTER_MODEL` / `GROQ_MODEL` vars；会向供应商发送请求。 |
 | [SWE-bench Lite development](../../.github/workflows/swe-bench-lite.yml) | 手动运行单题或 23 题开发集；见 [评测说明](../../evaluation/README.md) | 使用所选模型供应商的 secret 和 model var；向供应商发送公开任务内容，上传安全证据白名单和汇总 artifact。 |
-| [RSI smoke](../../.github/workflows/rsi.yml) | 手动运行受控单题 RSI smoke；默认分支代码、完整基线 SHA 和确认短语 | 使用 `XUNFEI_LLM_API_KEY`、`XUNFEI_OPENAI_RESPONSE_URL` 和 `XUNFEI_MODEL`；向讯飞发送第 0 题内容，上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，不上传 gold、凭据、worktree 或构建产物。 |
+| [RSI smoke](../../.github/workflows/rsi.yml) | 当前暂停；恢复后手动运行受控单题 RSI smoke；默认分支代码、完整基线 SHA 和确认短语 | 使用 `XUNFEI_LLM_API_KEY`、`XUNFEI_OPENAI_RESPONSE_URL` 和 `XUNFEI_MODEL`；向讯飞发送第 0 题内容，上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，不上传 gold、凭据、worktree 或构建产物。 |
 
 模型发送的数据取决于实际测试任务和脚本，不能仅凭此表认定没有敏感内容。工作流、配置或行为变更应同步审查文档和示例，并在 PR 中记录未验证项。

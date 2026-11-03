@@ -1,6 +1,8 @@
 # 评测与 RSI
 
-RSI 指持续改进本项目的 coding-agent harness，不训练或升级底层模型。实现位于 `evaluation/RSI/`：runner 记录安全证据，规则分析器诊断失败，隔离容器生成候选，独立 verifier 检查，控制面在预算内编排并输出可合并审查报告。自动合并、无人值守轮询和正式 300 题测试仍未启用；未完成事项记录在 [docs/PLAN.md](../docs/PLAN.md)。
+> 当前状态：**暂停**。以下代码与流程保留为参考；未完成的安全验收不再作为近期目标，恢复需另行立项。
+
+RSI 指持续改进本项目的 coding-agent harness，不训练或升级底层模型。实现位于 `evaluation/RSI/`：runner 记录安全证据，规则分析器诊断失败，隔离容器生成候选，独立 verifier 检查，控制面在预算内编排并输出可合并审查报告。自动合并、无人值守轮询和正式 300 题测试仍未启用；该方向当前暂停，未完成验收不再作为近期目标。
 
 ## SWE-bench Lite 开发集
 
@@ -33,7 +35,7 @@ python3 evaluation/RSI/loop.py \
 
 `smoke.json` 默认只跑第 0 题、1 个候选、最多 2 次解题运行；解题 30 轮、改进 10 轮、串行执行，总计 90 分钟、100 次模型请求、2,000,000 token。smoke 只验证链路，verifier 结论固定为 `inconclusive`，不能作为合并依据。完整 dev、重复实验、正式测试集和真实云端开销需要单独的显式配置与授权。
 
-`.github/workflows/rsi.yml` 是仅 `workflow_dispatch` 的受控 smoke 入口：代码来自默认分支，输入完整基线 SHA，并要求输入确认短语后才调用讯飞。它上传与本地实验相同的证据白名单（报告、账本、诊断、假设、补丁、检查、比较、验证、轨迹），上限 7 天。真实云端运行、可信 required check 与分支保护尚未验收，见 [docs/PLAN.md](../docs/PLAN.md)；在这些门槛完成前，verifier 只能作为诊断工具。
+`.github/workflows/rsi.yml` 是仅 `workflow_dispatch` 的受控 smoke 入口：代码来自默认分支，输入完整基线 SHA，并要求输入确认短语后才调用讯飞。它上传与本地实验相同的证据白名单（报告、账本、诊断、假设、补丁、检查、比较、验证、轨迹），上限 7 天。真实云端运行、可信 required check 与分支保护尚未验收；该方向当前暂停，在这些门槛完成前，verifier 只能作为诊断工具。
 
 `compare.py` 与 `experiment.py` 仍可用于已有目录的离线比较和人工审查报告。旧结果缺少可比性指纹时只作诊断素材，不作为严格性能基线。
 

@@ -1,6 +1,7 @@
 node_modules/
 dist/
-evaluation/results/
+evaluation/results/*
+!evaluation/results/e2e-providers/
 coverage/
 .env
 *.db
