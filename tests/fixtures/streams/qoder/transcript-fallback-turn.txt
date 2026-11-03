@@ -1,0 +1,24 @@
+id: evt_0013
+event: agent.thinking
+data: {"id":"evt_0013","processed_at":"2026-11-01T00:00:00Z","type":"agent.thinking"}
+
+id: evt_0014
+event: agent.custom_tool_use
+data: {"id":"evt_0014","input":{"text":"hello"},"name":"capture_echo","processed_at":"2026-11-01T00:00:00Z","type":"agent.custom_tool_use"}
+
+id: evt_0015
+event: span.model_request_end
+data: {"id":"evt_0015","is_error":false,"model_request_start_id":"evt_0016","model_usage":{"credits":0.02},"processed_at":"2026-11-01T00:00:00Z","type":"span.model_request_end"}
+
+id: evt_0017
+event: session.thread_status_idle
+data: {"agent_name":"bitori","id":"evt_0017","processed_at":"2026-11-01T00:00:00Z","session_thread_id":"sthr_fixture","stop_reason":{"event_ids":["evt_0014"],"type":"requires_action"},"type":"session.thread_status_idle"}
+
+id: evt_0018
+event: session.usage
+data: {"id":"evt_0018","model_credits":0.02,"processed_at":"2026-11-01T00:00:00Z","sandbox_runtime_credits":0,"total_credits":0.02,"type":"session.usage"}
+
+id: evt_0019
+event: session.status_idle
+data: {"id":"evt_0019","processed_at":"2026-11-01T00:00:00Z","stop_reason":{"event_ids":["evt_0014"],"type":"requires_action"},"type":"session.status_idle"}
+

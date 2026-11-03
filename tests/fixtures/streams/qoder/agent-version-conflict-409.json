@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Version conflict. Expected version 52, got 59.",
+    "type": "conflict_error"
+  },
+  "request_id": "request-fixture",
+  "type": "error"
+}

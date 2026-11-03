@@ -1,0 +1,16 @@
+id: evt_0026
+event: agent.thinking
+data: {"id":"evt_0026","processed_at":"2026-11-01T00:00:00Z","type":"agent.thinking"}
+
+id: evt_0027
+event: event_start
+data: {"event":{"id":"evt_0027","type":"agent.message"},"type":"event_start"}
+
+id: evt_0027
+event: event_delta
+data: {"delta":{"content":{"text":"1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24","type":"text"},"index":0,"type":"content_delta"},"event_id":"evt_0027","type":"event_delta"}
+
+id: evt_0027
+event: event_delta
+data: {"delta":{"content":{"text":"\n25\n26\n27\n28\n29\n30","type":"text"},"index":0,"type":"content_delta"},"event_id":"evt_0027","type":"event_delta"}
+

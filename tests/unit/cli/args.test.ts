@@ -106,6 +106,19 @@ describe('parseCliArgs', () => {
     expect(() => parseCliArgs(args)).toThrow();
   });
 
+  it('解析 doctor 子命令', () => {
+    expect(parseCliArgs(['doctor'])).toEqual({help: false, doctor: {json: false}});
+    expect(parseCliArgs(['--profile', 'a', 'doctor', '--json'])).toEqual({help: false, profile: 'a', doctor: {json: true}});
+    expect(parseCliArgs(['doctor', '--profile', 'a']).profile).toBe('a');
+  });
+  it.each([
+    ['doctor', '--nonsense'],
+    ['doctor', 'extra'],
+    ['--profile', 'a', 'doctor', '--profile', 'b'],
+  ])('doctor 拒绝未知参数/重复/位置错误 %s', (...args) => {
+    expect(() => parseCliArgs(args)).toThrow();
+  });
+
   it('保留会话 ID 的既有别名', () => {
     expect(parseCliArgs(['trace', 'show', '--session', 'abc']).trace?.sessionId).toBe('abc');
     expect(parseCliArgs(['trace', 'tail', 'abc']).trace?.sessionId).toBe('abc');

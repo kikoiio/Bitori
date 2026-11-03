@@ -1,0 +1,28 @@
+id: evt_0001
+event: event_start
+data: {"event":{"id":"evt_0001","type":"agent.message"},"type":"event_start"}
+
+id: evt_0001
+event: event_delta
+data: {"delta":{"content":{"text":"收到","type":"text"},"index":0,"type":"content_delta"},"event_id":"evt_0001","type":"event_delta"}
+
+id: evt_0001
+event: agent.message
+data: {"content":[{"text":"收到","type":"text"}],"id":"evt_0001","processed_at":"2026-11-01T00:00:00Z","type":"agent.message"}
+
+id: evt_0002
+event: span.model_request_end
+data: {"id":"evt_0002","is_error":false,"model_request_start_id":"evt_0003","model_usage":{"credits":0.04},"processed_at":"2026-11-01T00:00:00Z","type":"span.model_request_end"}
+
+id: evt_0004
+event: session.thread_status_idle
+data: {"agent_name":"bitori","id":"evt_0004","processed_at":"2026-11-01T00:00:00Z","session_thread_id":"sthr_fixture","stop_reason":{"type":"end_turn"},"type":"session.thread_status_idle"}
+
+id: evt_0005
+event: session.usage
+data: {"id":"evt_0005","model_credits":0.04,"processed_at":"2026-11-01T00:00:00Z","sandbox_runtime_credits":0,"total_credits":0.04,"type":"session.usage"}
+
+id: evt_0006
+event: session.status_idle
+data: {"id":"evt_0006","processed_at":"2026-11-01T00:00:00Z","stop_reason":{"type":"end_turn"},"type":"session.status_idle"}
+

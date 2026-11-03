@@ -1,0 +1,22 @@
+id: evt_0020
+event: agent.tool_use
+data: {"evaluated_permission":"allow","evaluation":{"type":"always_allow"},"id":"evt_0020","input":{"command":"pwd","description":"Print working directory"},"name":"Bash","processed_at":"2026-11-01T00:00:00Z","type":"agent.tool_use"}
+
+id: evt_0021
+event: span.model_request_end
+data: {"id":"evt_0021","is_error":false,"model_request_start_id":"evt_0022","model_usage":{"credits":0.1},"processed_at":"2026-11-01T00:00:00Z","type":"span.model_request_end"}
+
+id: evt_0023
+event: session.thread_status_idle
+data: {"agent_name":"bitori-builtin-probe","id":"evt_0023","processed_at":"2026-11-01T00:00:00Z","session_thread_id":"sthr_fixture","stop_reason":{"event_ids":["evt_0020"],"type":"requires_action"},"type":"session.thread_status_idle"}
+
+id: evt_0024
+event: session.usage
+data: {"id":"evt_0024","model_credits":0.1,"processed_at":"2026-11-01T00:00:00Z","sandbox_runtime_credits":0,"total_credits":0.1,"type":"session.usage"}
+
+id: evt_0025
+event: session.status_idle
+data: {"id":"evt_0025","processed_at":"2026-11-01T00:00:00Z","stop_reason":{"event_ids":["evt_0020"],"type":"requires_action"},"type":"session.status_idle"}
+
+: heartbeat
+

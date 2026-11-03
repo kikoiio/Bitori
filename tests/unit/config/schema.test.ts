@@ -26,6 +26,11 @@ describe('config schema', () => {
     expect(() => parseConfig({profiles: [{...base, thinking: {type: 'manual', budget_tokens: 1000, max_tokens: 999}}]})).toThrow();
   });
 
+  it('接受 qoder 协议', () => {
+    const parsed = parseConfig({profiles: [{...base, protocol: 'qoder', model: 'DeepSeek-Flash'}]});
+    expect(parsed.profiles[0]?.protocol).toBe('qoder');
+  });
+
   it('接受待展开的模型和 URL，拒绝空值和密钥字面量', () => {
     const parsed = parseConfig({profiles: [{...base, model: '${LLM_MODEL}', base_url: '${LLM_BASE_URL}'}]});
     expect(parsed.profiles[0]).toMatchObject({model: '${LLM_MODEL}', base_url: '${LLM_BASE_URL}'});

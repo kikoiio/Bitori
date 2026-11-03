@@ -4,7 +4,7 @@ import {describe, expect, it} from 'vitest';
 import {DiffView} from '../../src/tui/components/diff-view.js';
 import {ToolApprovalPanel} from '../../src/tui/components/tool-approval-panel.js';
 import {ToolCallCard} from '../../src/tui/components/tool-call-card.js';
-import {ToolCallList} from '../../src/tui/components/tool-call-list.js';
+import {LiveToolList, ToolCallList} from '../../src/tui/components/tool-call-list.js';
 import type {ToolCallRecord} from '../../src/storage/types.js';
 
 function record(partial: Partial<ToolCallRecord> & Pick<ToolCallRecord, 'id' | 'toolName'>): ToolCallRecord {
@@ -25,7 +25,7 @@ describe('工具 TUI 组件', () => {
     const frame = view.lastFrame() ?? '';
     expect(frame).toContain('Bash(echo hi)');
     expect(frame).toContain('hi');
-    expect(frame).toContain('●');
+    expect(frame).toContain('✓');
     view.unmount();
   });
 
@@ -63,6 +63,15 @@ describe('工具 TUI 组件', () => {
     expect(verbose.lastFrame()).toContain('Read(a.ts)');
     expect(verbose.lastFrame()).toContain('Read(b.ts)');
     verbose.unmount();
+  });
+
+  it('流式工具草稿立即可见', () => {
+    const view = render(<LiveToolList tools={[{callId: 'c', iterationId: 'm', name: 'run_command', argumentsText: '{"command":"pwd"}', ready: false}]} spinner="⠋" />);
+    const frame = view.lastFrame() ?? '';
+    expect(frame).toContain('Bash');
+    expect(frame).toContain('pwd');
+    expect(frame).toContain('准备中');
+    view.unmount();
   });
 
   it('审批面板显示参数、编号选项和 Y/N', () => {

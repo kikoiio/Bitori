@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Session is currently processing a turn. Cancel the current turn or wait for completion.",
+    "type": "invalid_request_error"
+  },
+  "request_id": "request-fixture",
+  "type": "error"
+}

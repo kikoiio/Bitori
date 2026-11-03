@@ -1,0 +1,10 @@
+{
+  "request": {
+    "events": [
+      {
+        "type": "user.interrupt"
+      }
+    ]
+  },
+  "status": 200
+}

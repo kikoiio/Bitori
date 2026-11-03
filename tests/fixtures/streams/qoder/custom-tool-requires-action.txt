@@ -1,0 +1,20 @@
+id: evt_0007
+event: agent.custom_tool_use
+data: {"id":"evt_0007","input":{"text":"hello"},"name":"capture_echo","processed_at":"2026-11-01T00:00:00Z","type":"agent.custom_tool_use"}
+
+id: evt_0008
+event: span.model_request_end
+data: {"id":"evt_0008","is_error":false,"model_request_start_id":"evt_0009","model_usage":{"credits":0.05},"processed_at":"2026-11-01T00:00:00Z","type":"span.model_request_end"}
+
+id: evt_0010
+event: session.thread_status_idle
+data: {"agent_name":"bitori","id":"evt_0010","processed_at":"2026-11-01T00:00:00Z","session_thread_id":"sthr_fixture","stop_reason":{"event_ids":["evt_0007"],"type":"requires_action"},"type":"session.thread_status_idle"}
+
+id: evt_0011
+event: session.usage
+data: {"id":"evt_0011","model_credits":0.05,"processed_at":"2026-11-01T00:00:00Z","sandbox_runtime_credits":0,"total_credits":0.05,"type":"session.usage"}
+
+id: evt_0012
+event: session.status_idle
+data: {"id":"evt_0012","processed_at":"2026-11-01T00:00:00Z","stop_reason":{"event_ids":["evt_0007"],"type":"requires_action"},"type":"session.status_idle"}
+

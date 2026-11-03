@@ -34,10 +34,14 @@ describe('runMigrations', () => {
     runMigrations(database as unknown as MigrationDatabase);
     const rows = database.prepare('SELECT version FROM schema_migrations').all();
     // 重复初始化不得重复应用迁移。
-    expect(rows).toEqual([{version: 1}, {version: 2}, {version: 3}, {version: 4}, {version: 5}, {version: 6}]);
+    expect(rows).toEqual([{version: 1}, {version: 2}, {version: 3}, {version: 4}, {version: 5}, {version: 6}, {version: 7}]);
     expect(() => database.prepare(`INSERT INTO messages(id,session_id,role,content,thinking,status,created_at,updated_at) VALUES ('x','missing','bad','','','bad',1,1)`).run()).toThrow();
     const sessionColumns = database.prepare('PRAGMA table_info(sessions)').all() as Array<{name: string}>;
     expect(sessionColumns.map(column => column.name)).toEqual(expect.arrayContaining(['agent_mode', 'latest_plan_message_id']));
+    const messageColumns = database.prepare('PRAGMA table_info(messages)').all() as Array<{name: string}>;
+    expect(messageColumns.map(column => column.name)).toEqual(expect.arrayContaining(['credits']));
+    const runColumns = database.prepare('PRAGMA table_info(agent_runs)').all() as Array<{name: string}>;
+    expect(runColumns.map(column => column.name)).toEqual(expect.arrayContaining(['credits']));
     database.close();
   });
 });
