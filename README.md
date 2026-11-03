@@ -2,7 +2,7 @@
 
 Bitori 是在本地工作区中运行的 AI 编码助手，提供跨平台终端 TUI 和 Linux 桌面界面。模型可读取文件、提出修改并调用工具；需要审批的操作会先显示实际参数。
 
-当前正在实现本地图片、会话 JSON 交换和中断恢复。以下入口按当前源码说明，整体验收状态见 [开发与测试](docs/reference/development.md) 与 [PLAN.md](PLAN.md)。云同步不在产品范围内，RSI 当前暂停。
+本地图片、版本化会话 JSON 交换和中断恢复已完成实现；提交 `507d3d3` 的三平台全量 Check 通过，Linux 桌面 GUI/打包复验仍在进行。验收进度见 [开发与测试](docs/reference/development.md) 与 [PLAN.md](PLAN.md)。云同步不在产品范围内，RSI 当前暂停。
 
 ## 首次启动
 
@@ -49,4 +49,4 @@ Linux 桌面源码入口是 `npm run desktop`，该命令会先构建并准备 E
 
 ## 开发与限制
 
-[文档索引](docs/README.md) 汇总配置、架构、安全与验收说明。完整构建、全量测试、桌面 GUI 和打包优先在获授权的免费云端 CI 执行。本轮三项新功能仍需集成及云端验证，历史成功记录不能代表当前工作树已通过。真实终端光标视觉验收目前为 `INCONCLUSIVE`；Windows 和 macOS 桌面不在当前目标范围内。
+[文档索引](docs/README.md) 汇总配置、架构、安全与验收说明。完整构建和全量测试由本轮 GitHub Actions run 41669917762 在 Ubuntu、Windows、macOS 全部通过，Linux 桌面 GUI/打包仍待本轮工作流完成。真实终端光标视觉验收目前为 `INCONCLUSIVE`；Windows 和 macOS 桌面不在当前目标范围内。

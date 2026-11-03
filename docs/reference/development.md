@@ -43,17 +43,17 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:provider
 
 Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-capture.ts --out .tmp/qoder-capture`（录制 busy 409、版本冲突 409、Last-Event-ID 重连、内置工具 requires_action、credits 用量等），再 `npx tsx tests/acceptance/sanitize-qoder-capture.ts` 脱敏输出到 `tests/fixtures/streams/qoder/`。`tests/integration/qoder-events.test.ts` 逐帧回放这些真实事件。
 
-桌面冒烟由 GitHub Actions + Xvfb 顺序执行，覆盖四种审批选择、一次/会话/永久授权边界、diff/撤销、模型列表和会话管理。工作流还会启动 `linux-unpacked`、AppImage（通过 `APPIMAGE_EXTRACT_AND_RUN=1` 启动）及解包 deb 中的应用二进制；结果和截图 artifact 保留 7 天。历史提交 `7bca1f1` 的开发版、`linux-unpacked`、AppImage 和解包 deb 已由 [run 41637023628](https://github.com/kikoiio/Bitori/actions/runs/41637023628) 验证通过。当前工作树新增的图片、归档和恢复场景仍待集成验证，不能沿用该历史结论。脚本支持 `BITORI_PACKAGED_BINARY` 指定二进制和 `BITORI_SCREENSHOT_PREFIX` 区分截图；测试 HOME 中不得已有 `~/.bitori`。
+桌面冒烟由 GitHub Actions + Xvfb 顺序执行，覆盖四种审批选择、一次/会话/永久授权边界、diff/撤销、模型列表和会话管理。工作流还会启动 `linux-unpacked`、AppImage（通过 `APPIMAGE_EXTRACT_AND_RUN=1` 启动）及解包 deb 中的应用二进制；结果和截图 artifact 保留 7 天。历史提交 `7bca1f1` 的全部安装形态已由 [run 41637023628](https://github.com/kikoiio/Bitori/actions/runs/41637023628) 验证；本轮在提交 `507d3d3` 的全新桌面验收待运行。脚本支持 `BITORI_PACKAGED_BINARY` 指定二进制和 `BITORI_SCREENSHOT_PREFIX` 区分截图；测试 HOME 中不得已有 `~/.bitori`。
 
 诊断与信任：`node dist/bin/bitori.js doctor [--profile name] [--json]` 输出配置/凭据/工作区/连通性/模型列表（不含密钥）；`bitori trust [path] [--revoke]` 管理工作区信任清单。
 
 ## 本轮产品开发与验证状态
 
-截至 2026-11-03，按 [PLAN.md](../../PLAN.md) 推进本地图片、版本化会话 JSON 和自动恢复，RSI 暂停。当前源码已经接入附件 schema、Provider 请求、存储迁移、归档、检查点以及 TUI 和桌面入口；本轮仍处于集成阶段。用户入口与限制见 [配置参考](configuration.md#图片附件)。
+截至 2026-11-03，本地图片、版本化会话 JSON 和自动恢复已完成实现；RSI 暂停。提交 `507d3d3` 的三平台完整 Check 通过，Ubuntu 执行 111 个测试文件、737 项测试，包含新构建下的 SQLite 导入/恢复集成回归。Linux 桌面 GUI/打包 smoke 尚待本轮工作流验证。用户入口与限制见 [配置参考](configuration.md#图片附件)。
 
-已有历史证据包括三平台 Check、Linux 桌面审批与打包启动，以及一个 Anthropic 兼容端点的真实文本工具任务，详见 PLAN.md。该 Provider 记录没有验收本轮图片能力。Qoder、OpenAI Chat 和 Anthropic 的早期证据未记录提交 SHA；OpenAI Responses 没有真实端点验收证据，不能把适配器单测当作真实端点成功。
+本轮三平台 Check 由 [run 41669917762](https://github.com/kikoiio/Bitori/actions/runs/41669917762) 通过，Linux 桌面工作流待执行。一个 Anthropic 兼容端点的历史真实文本工具任务不验收本轮图片能力；Qoder、OpenAI Chat 和 Anthropic 的早期证据未记录提交 SHA；OpenAI Responses 没有真实端点验收证据，不能把适配器单测当作真实端点成功。
 
-本轮已有部分定向单测与类型检查记录，尚不能据此宣布当前工作树完成全平台、存储集成或桌面验收。以最终代码提交对应的 Check、桌面工作流和 PLAN.md 验收记录为准。本次用户文档补齐只做源码与文档静态核对，没有运行构建、测试、GUI、容器、模型请求或云端工作流。
+Run 41669917762 在实现提交上完成三平台 `npm run check`，包括类型检查、lint、构建和全量 Vitest（Ubuntu 111 files / 737 tests）；控制器导入、worker 事务和恢复集成均通过。本次文档状态更新本身仍需最终 Check；桌面 GUI/打包由 Linux desktop workflow 单独复验，最终证据以 PLAN.md 为准。
 
 | 本轮场景 | 需要确认的行为 |
 |---|---|
@@ -95,7 +95,7 @@ TUI 模拟测试覆盖光标行列、中文折行、流式更新、输入与取�
 | Check | 类型、lint、单元/集成/TUI 测试、`dist/` 构建 | GitHub-hosted Ubuntu/Windows/macOS | 每个 PR 和 `master` |
 | 终端 | TUI 模拟终端测试；CLI 交互与光标观感 | 自动测试在 Check；交互观感需用户目标终端验收 | 自动测试随 Check；真实终端按环境验收 |
 | 桌面未打包 | 开发入口会话、审批、工作区信任 | GitHub Actions + Xvfb | PR / `desktop/**` / 手动；master 需手动触发 |
-| 桌面包 | `linux-unpacked`、AppImage、解包 deb 启动 | GitHub Actions + Xvfb；截图与安装包 artifact 留 7 天 | 历史启动验收通过；当前工作树需另验收 |
+| 桌面包 | `linux-unpacked`、AppImage、解包 deb 启动 | GitHub Actions + Xvfb；截图与安装包 artifact 留 7 天 | 历史启动验收通过；本轮在 `507d3d3` 上待重新验收 |
 | 真实模型 | Provider 端到端（Qoder/OpenAI 兼容等）+ OpenRouter/Groq | 获授权的手动 `e2e.yml`，或确需本地环境的定向脚本 | 明确授权并确认预算后 |
 | SWE-bench Lite 开发集 | 单题或 23 题开发集；最近 23 题结果为 8 个 agent 错误、7 个未解决、8 个环境错误 | GitHub Actions + Docker；每题串行 | 需选 Provider/model、运行范围和预算后授权 |
 | RSI smoke | 受控单题 RSI 实验 | 当前暂停 | 单独恢复立项并明确授权、数据范围和预算后 |
@@ -107,7 +107,7 @@ TUI 模拟测试覆盖光标行列、中文折行、流式更新、输入与取�
 | 工作流 | 触发与主要动作 | 凭据、外发和写入 |
 |---|---|---|
 | [Check](../../.github/workflows/check.yml) | push 到 `master` 或 `desktop/**`、所有 PR、手动；三平台执行 `npm run check` | 未声明模型 secrets 或显式写权限。 |
-| [Linux desktop](../../.github/workflows/desktop.yml) | push 到 `desktop/**`、所有 PR、手动；模拟服务冒烟并逐一启动 `linux-unpacked`、AppImage、解包 deb | 未调用真实模型；上传 7 天 AppImage/deb 与截图 artifact。master 上需手动触发；历史成功记录不代表当前工作树已通过。 |
+| [Linux desktop](../../.github/workflows/desktop.yml) | push 到 `desktop/**`、所有 PR、手动；模拟服务冒烟并逐一启动 `linux-unpacked`、AppImage、解包 deb | 未调用真实模型；上传 7 天 AppImage/deb 与截图 artifact。master 上需手动触发；本轮正在安排与最终产品提交一致的复验。 |
 | [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选择接口方言、覆盖模型和事后用量阈值 | 统一读 `secrets.LLM_API_KEY` 与 `vars.LLM_BASE_URL`、`vars.LLM_MODEL`；先跑 `bitori doctor` 用真实凭据验证连通性与模型列表，再跑统一验收脚本 `npm run test:e2e:providers`。token 阈值可选 25k/50k/100k/150k，Qoder 可选 1/2/5 credits；脚本运行后才检查用量，不会阻止请求超额，实际费用可能高于阈值。需另确认供应商账户级费用限额；只上传本次运行的证据 JSON 并保留 7 天。 |
 | [SWE-bench Lite development](../../.github/workflows/swe-bench-lite.yml) | 手动运行单题或 23 题开发集；每题隔离运行，`max-parallel: 1` | 使用所选模型供应商的 secret 和 model var；向供应商发送公开任务内容。容器中的 agent 可访问容器凭据与网络；上传 result/trajectory/diagnosis/patch/artifact 白名单与汇总，保留 7 天。全量运行没有统一 token 或美元费用上限。 |
 | [RSI smoke](../../.github/workflows/rsi.yml) | 当前暂停；恢复后手动运行受控单题 RSI smoke；默认分支代码、完整基线 SHA 和确认短语 | 读取仓库通用 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL` 配置；向配置的 Provider 发送第 0 题内容，上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，不上传 gold、凭据、worktree 或构建产物。 |

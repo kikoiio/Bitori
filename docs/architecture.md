@@ -46,12 +46,12 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 | 方向 | 状态 | 依据与后续 |
 |---|---|---|
 | 终端交互、模型协议、会话 | 已实现 | `src/tui/`、`src/providers/`、`src/storage/`；协议含 Anthropic、OpenAI Responses/Chat 与官方 Qoder Cloud Agents。Devin 风格对话流、`/` 命令面板、流式工具草稿、内联 diff、`Ctrl+O` 详情与 `Ctrl+/-` 密度已落地。`/model` 两级选择（profile → Provider 真实模型列表）、会话面板输入搜索 / `r` 重命名 / `d` 两步删除、`/undo` 撤销快照。Qoder 只上报 credits（`span.model_request_end`），UI/trace/存储显示 credits 而非伪造 0 tokens；busy 换会话、agent 版本 409 重取版本重试、断流带 `Last-Event-ID` 续读，事件形状由 `tests/fixtures/streams/qoder/` 真实录制回放。真实终端观感仍需按环境验收。 |
-| 桌面工作台 | 已实现；验收待更新工作流运行 | `src/desktop/`；Claude Desktop 风格深色布局、斜杠命令、流式工具卡片与 `Ctrl+/-` 页面缩放。edit/write 卡片默认展开行级 diff 并提供撤销按钮；审批有一次/本会话/永久/拒绝四种选择。当前 smoke 覆盖四种选择、会话授权复用边界、diff/撤销、模型列表与会话管理。当前工作树中的 Linux 工作流定义还会启动 AppImage 和解包后的 deb；最近一次成功运行早于这些新增步骤，因此本次 Actions 验收仍待运行。 |
+| 桌面工作台 | 已实现；本轮 Linux GUI/打包验收待运行 | `src/desktop/`；Claude Desktop 风格深色布局、斜杠命令、流式工具卡片与 `Ctrl+/-` 页面缩放。edit/write 卡片默认展开行级 diff 并提供撤销按钮；审批有一次/本会话/永久/拒绝四种选择。当前 smoke 覆盖四种选择、会话授权复用边界、diff/撤销、模型列表与会话管理；本轮待再次运行开发版与 Linux 安装包 smoke。 |
 | 多轮工具、Plan/Do、权限、MCP | 已实现 | `src/agent/`、`src/tools/`、`src/mcp/`；命令和 MCP 不构成操作系统沙箱。 |
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
 | 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。历史证据覆盖 Qoder、OpenAI Chat 和 Anthropic，但未记录运行提交 SHA；验收脚本现记录 `commitSha` 和 `workingTreeClean`，OpenAI Responses 及当前提交的四协议验收仍待运行。 |
 | 桌面图形应用 | Linux 初版 | `src/desktop/` 提供 Electron 界面。最近一次成功 Linux CI 只验证开发入口和 `linux-unpacked`；当前工作流定义新增 AppImage 与解包 deb 启动步骤，需在 GitHub Actions 实际运行后才能记为通过。其他桌面平台和真实模型需另行验收。打包路径见 [开发与测试](reference/development.md)。 |
-| 多模态、会话导入、自动断点续跑 | 已纳入本轮，集成验收中 | 本地图片贯通四种 Provider 与 TUI/桌面；版本化 JSON 由 CLI/TUI/桌面交换；持久检查点恢复并要求不确定副作用确认。完整 Check、桌面 GUI/打包与恢复存储集成验证待完成，见[项目待办计划](../PLAN.md)。 |
+| 多模态、会话导入、自动断点续跑 | 实现及三平台 Check/SQLite 集成通过；桌面验收待运行 | 本地图片贯通四种 Provider 与 TUI/桌面；版本化 JSON 由 CLI/TUI/桌面交换；持久检查点恢复并要求不确定副作用确认。run 41669917762 全平台通过；Linux 桌面 GUI/打包待本轮复验，见[项目待办计划](../PLAN.md)。 |
 | 云同步 | 已取消，保持不支持 | 见 ADR 0001。 |
 
-状态依据 2026-11-03 的代码和历史验证记录，其中终端工具展示于 2026-10-30 更新；本次桌面工作流及真实端点验收须单独核实。
+状态依据 2026-11-03 的代码与验证记录，其中终端工具展示于 2026-10-30 更新；本轮桌面工作流待单独核实，真实图片 Provider 端点未在本轮验证。
