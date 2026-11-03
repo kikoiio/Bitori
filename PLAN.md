@@ -22,6 +22,8 @@
 
 - GitHub 当前没有开放 issue 或 PR。仓库没有 TODO 或 roadmap 文件；代码搜索只在一个测试样例中找到字面量 `TODO`。
 - 当前基线的 GitHub `Check` 已在 Ubuntu、Windows 和 macOS 通过，包括完整类型、lint、测试和构建流程：[run 41629488646](https://github.com/kikoiio/Bitori/actions/runs/41629488646)。不重复触发这项检查。
+- 本轮提交 `7d58863` 推送后的新 `Check` 为 [run 41636113358](https://github.com/kikoiio/Bitori/actions/runs/41636113358)：Ubuntu 与 macOS 通过；Windows 的快速流式光标稳定性测试在 20 秒截止时仍处于 streaming。已改为等待 `sendMessage` 自然结束并延长测试框架上限，等待复验。
+- 新版 Linux 桌面验收 [run 41636209387](https://github.com/kikoiio/Bitori/actions/runs/41636209387)：开发入口、审批 smoke、打包和 `linux-unpacked` 启动通过；AppImage 步骤失败。Playwright 会在传入参数前加调试参数，AppImage 的 `--appimage-extract-and-run` 不再是首参数；已改用 AppImage 官方支持的 `APPIMAGE_EXTRACT_AND_RUN=1` 环境变量，等待复验。deb 步骤因前序失败未运行。
 - 最近一次 `E2E LLM` 成功运行使用基线 `efa1b8e4f7afa79fe4a8aced94c3002950694f99`，早于当前提交。六份已跟踪证据覆盖 Qoder、OpenAI Chat 和 Anthropic；OpenAI Responses 没有真实端点证据。证据文件没有运行时 HEAD SHA，无法仅凭文件确认它们测试的确切提交。当前基线的四种协议都没有可追溯到本次提交的真实端点验收。
 - 最近一次 Linux 桌面 smoke 和打包成功记录是 2026-10-28，早于当前基线。工作流 smoke 启动开发入口和 `linux-unpacked`；AppImage 与 deb 只构建并上传，未启动。桌面 smoke 覆盖“一次批准”和“拒绝”，没有覆盖“本会话”和“永久允许”。
 - 最近一次 SWE-bench Lite 23 题开发集记录为 2026-10-28、agent SHA `ff9a4fb8ea70d9c0a7d2191086af99925a07069d`：23/23 题有结果，但 8 个 `agent_error`、7 个 `unresolved`、8 个 `infrastructure_error`，没有 `resolved`。结果中的问题包括模型工具调用错误、Groq 速率/上下文限制及 gold 环境验证失败；不能当作当前版本验收。
@@ -48,9 +50,9 @@
 
 | 项目 | 当前状态 | 完成证据或门槛 |
 |---|---|---|
-| 全平台代码检查 | 已验证 | 当前基线的 `Check` 三个平台通过 |
+| 全平台代码检查 | 修复待复验 | 新提交 Ubuntu/macOS 通过；Windows 流式光标测试因 20 秒截止未完成，见 run 41636113358 |
 | 临时会话授权边界 | 单测已验证；桌面云端 smoke 待运行 | 权限规则按 `sessionId` 保存；23 项定向单测通过，覆盖原会话复用和其他会话重新审批 |
-| Linux 桌面 smoke 与打包 | 已补工作流，待云端权限 | 最近一次成功记录早于当前基线；新工作流会启动 AppImage/deb，尚未在该定义下运行 |
+| Linux 桌面 smoke 与打包 | 已补工作流；AppImage 修复待复验 | run 41636209387 的开发入口、打包和 `linux-unpacked` 通过；AppImage 失败后 deb 被跳过 |
 | 桌面审批选项 | 已补 smoke，待云端权限 | 覆盖一次/本会话/永久/拒绝，以及授权范围与持久化 |
 | Provider 证据可追溯性 | 实现静态验证通过；真实 E2E 待授权 | 新结果记录 `commitSha` 和 `workingTreeClean`；旧记录没有 SHA；类型检查和改动文件 lint 通过 |
 | 真实 Provider 验收 | 等协议、模型、事后用量阈值和账户预算 | 当前四种协议均无可追溯到基线 SHA 的结果；OpenAI Responses 没有历史证据 |

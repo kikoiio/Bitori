@@ -54,11 +54,7 @@ describe('PromptInput 流式更新稳定性', () => {
     await controller.initialize(profile);
     const terminal = fakeTerminal();
     const app = render(<Harness controller={controller} />, {stdout: terminal.stdout as never, stdin: terminal.stdin as never, exitOnCtrlC: false, patchConsole: false, interactive: true});
-    void controller.sendMessage('测试');
-    const deadline = Date.now() + 20_000;
-    while ((controller.getState().requestStatus !== 'idle' || controller.getState().stopReason === null) && Date.now() < deadline) {
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
+    await controller.sendMessage('测试');
     const status = controller.getState().requestStatus;
     const stop = controller.getState().stopReason;
     const err = controller.getState().visibleError;
@@ -67,5 +63,5 @@ describe('PromptInput 流式更新稳定性', () => {
     await controller.shutdown();
     rmSync(root, {recursive: true, force: true});
     expect({status, stop, err, hasMax}).toEqual({status: 'idle', stop: 'natural_completion', err: null, hasMax: false});
-  }, 30_000);
+  }, 60_000);
 });

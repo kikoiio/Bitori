@@ -35,7 +35,8 @@ jobs:
         run: |
           mapfile -t appimages < <(find out/desktop -maxdepth 1 -type f -name '*.AppImage' -print)
           test "${#appimages[@]}" -eq 1
-          BITORI_PACKAGED=1 BITORI_APPIMAGE=1 BITORI_SCREENSHOT_PREFIX=appimage BITORI_PACKAGED_BINARY="${appimages[0]}" xvfb-run -a node tests/desktop/smoke.mjs
+          # Playwright prepends Electron inspector flags, so use the AppImage env fallback instead of its positional flag.
+          APPIMAGE_EXTRACT_AND_RUN=1 BITORI_PACKAGED=1 BITORI_SCREENSHOT_PREFIX=appimage BITORI_PACKAGED_BINARY="${appimages[0]}" xvfb-run -a node tests/desktop/smoke.mjs
       - name: Exercise extracted deb startup
         run: |
           mapfile -t debs < <(find out/desktop -maxdepth 1 -type f -name '*.deb' -print)

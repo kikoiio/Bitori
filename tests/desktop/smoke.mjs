@@ -57,9 +57,7 @@ try {
   const screenshotPrefix = process.env.BITORI_SCREENSHOT_PREFIX ?? (packaged ? 'packaged' : '');
   const screenshotPath = name => resolve(`desktop-test-output/${screenshotPrefix ? `${screenshotPrefix}-` : ''}${name}.png`);
   const executablePath = packaged ? resolve(process.env.BITORI_PACKAGED_BINARY ?? 'out/desktop/linux-unpacked/bitori') : require('electron');
-  const args = packaged
-    ? [...(process.env.BITORI_APPIMAGE === '1' ? ['--appimage-extract-and-run'] : []), '--disable-gpu', '--no-sandbox']
-    : [resolve('src/desktop/main.cjs'), '--disable-gpu', '--no-sandbox'];
+  const args = packaged ? ['--disable-gpu', '--no-sandbox'] : [resolve('src/desktop/main.cjs'), '--disable-gpu', '--no-sandbox'];
   application = await electron.launch({executablePath, args, cwd: workspace, timeout: 30000});
   const page = await application.firstWindow();
   await page.getByTestId('request-status').getByText('等待工作区').waitFor({timeout: 30000});
