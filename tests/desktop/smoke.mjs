@@ -15,6 +15,7 @@ let application;
 let configCreated = false;
 let toolCallSequence = 0;
 let lastImageDataUrl = null;
+let greetingSessionId;
 const server = createServer((request, response) => {
   if (request.method === 'GET' && String(request.url).endsWith('/models')) {
     response.writeHead(200, {'content-type': 'application/json'});
@@ -197,6 +198,8 @@ try {
     await page.getByText('测试回复 你好 <img src=x>', {exact: true}).waitFor();
     assert.equal(await page.locator('.message.assistant img').count(), 0);
     await page.getByTestId('request-status').getByText('就绪').waitFor();
+    greetingSessionId = await page.locator('.session[aria-current="page"]').getAttribute('data-session-id');
+    assert.ok(greetingSessionId);
     await page.getByTestId('new-session').click();
     await page.getByTestId('message-input').fill('执行写入');
     await page.getByTestId('send').click();
@@ -217,7 +220,7 @@ try {
     assert.equal(existsSync(join(workspace, 'result.txt')), false);
     await page.getByTestId('request-status').getByText('就绪').waitFor();
     await page.waitForFunction(() => document.querySelectorAll('[data-session-id]').length >= 2);
-    await page.locator('[data-session-id]').last().click();
+    await page.locator(`.session[data-session-id="${greetingSessionId}"]`).click();
     await page.getByTestId('message-list').getByText('你好', {exact: true}).waitFor();
     await page.getByTestId('new-session').click();
     await page.getByTestId('message-input').fill('拒绝写入');
