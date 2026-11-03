@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import type {ParsedConfig, ProviderProfileSource, ThinkingConfig} from './types.js';
+import {protocols, type ParsedConfig, type ProviderProfileSource, type ThinkingConfig} from './types.js';
 
 // API Key 必须写成完整的 ${ENV_NAME}，不能把真实密钥直接放入 YAML。
 const environmentReference = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
@@ -22,7 +22,7 @@ const thinkingSchema = z.union([
 
 const profileSchema = z.object({
   name: z.string().trim().min(1, 'name 不能为空'),
-  protocol: z.enum(['anthropic', 'openai-responses', 'openai-chat']),
+  protocol: z.enum(protocols),
   model: z.string().trim().min(1, 'model 不能为空'),
   base_url: z.string().trim().min(1, 'base_url 不能为空'),
   api_key: z.string().regex(environmentReference, 'api_key 必须完整使用 ${ENV_NAME} 引用'),
@@ -60,7 +60,8 @@ const traceSchema = z.strictObject({
 
 export const configSchema = z
   .strictObject({
-    profiles: z.array(profileSchema).min(1, '至少需要一个 profile'),
+    // 允许 config.yaml 不定义 profile：此时靠 .env 变量组派生；两者皆空由 loadConfig 统一报错。
+    profiles: z.array(profileSchema),
     mcp_servers: mcpServersSchema.optional(),
     models: modelAliasesSchema.optional(),
     logging: loggingSchema.optional(),

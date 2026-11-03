@@ -1,7 +1,7 @@
 /**
  * 配置层的纯类型与小型转换函数。
  */
-export const protocols = ['anthropic', 'openai-responses', 'openai-chat'] as const;
+export const protocols = ['anthropic', 'openai-responses', 'openai-chat', 'qoder'] as const;
 
 export type Protocol = (typeof protocols)[number];
 
@@ -37,9 +37,13 @@ export interface ProviderProfile {
   model: string;
   baseUrl: string;
   apiKey: string;
+  /** config.yaml 中 api_key 引用的环境变量名，供缺 key 时报错。 */
+  apiKeyVariable?: string;
   thinking: ThinkingConfig;
   /** 未配置时由 effectiveContextWindow 给出协议默认值。 */
   contextWindow?: number;
+  /** model/base_url 引用的环境变量还没填；选中该 profile 时由 resolveProfileWithApiKey 指名报错。 */
+  missingVariables?: string[];
 }
 
 /** MCP Server 配置以名称为键；项目级同名项会完整覆盖用户级项。 */
@@ -64,6 +68,8 @@ export interface AppConfig {
   logging: LoggingConfig;
   /** trace 配置；字段缺省时使用默认保留期。 */
   trace: TraceConfig;
+  /** 加载期产生的用户可见提示（如未信任工作区的项目扩展被跳过）。 */
+  notices?: string[];
 }
 
 /** YAML `logging:` 段的内部形状。 */
@@ -88,7 +94,8 @@ export interface ParsedConfig {
 /** 跨协议默认上下文窗口；配置值只做覆盖。 */
 export function effectiveContextWindow(protocol: Protocol, configured?: number): number {
   if (configured && configured > 0) return configured;
-  return protocol === 'anthropic' ? 200_000 : 128_000;
+  if (protocol === 'anthropic' || protocol === 'qoder') return 200_000;
+  return 128_000;
 }
 
 export function toProfileSummary(profile: ProviderProfile): ProfileSummary {

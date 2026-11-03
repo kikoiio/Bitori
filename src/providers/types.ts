@@ -6,7 +6,7 @@ import {z} from 'zod';
 
 /**
  * Provider 层的核心抽象。
- * 上层只依赖这些类型，不直接依赖 Anthropic/OpenAI SDK，因此可以用同一套聊天逻辑驱动三种协议。
+ * 上层只依赖这些类型，不直接依赖 Anthropic/OpenAI SDK，因此可以用同一套聊天逻辑驱动各协议。
  */
 export type MessageRole = 'user' | 'assistant';
 
@@ -88,6 +88,8 @@ export interface Usage {
   /** 缓存命中与缓存创建字段仅 Anthropic 协议上报；不持久化，只走事件与界面即时展示。 */
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
+  /** Qoder Cloud Agents 只上报 credits（真实录制见 tests/fixtures/streams/qoder）；credits-only 的用量不得渲染成 0 tokens。 */
+  credits?: number;
 }
 
 /** 供应商各自的结束原因会在边界层被映射成这组统一值。 */
