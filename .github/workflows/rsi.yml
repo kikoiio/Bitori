@@ -76,7 +76,7 @@ jobs:
           MODEL: ${{ vars.LLM_MODEL }}
         run: |
           echo "provider=$PROVIDER protocol=$PROTOCOL model=$MODEL"
-          echo 'scope: task 0 only, one candidate, 30 agent iterations, 90 minute / 100 request / 2,000,000 token budget'
+          echo 'scope: task 0 only, one candidate, 30 agent iterations, 90 minute / 100 request / 2,000,000 total-token budget; 32,000 output tokens per request'
           echo 'uploads: report, ledger, diagnosis, hypothesis, patch, checks, comparison, verification, trajectory'
           echo 'never uploaded: gold instance data, raw thinking, credentials, worktrees, build outputs'
       - name: Configure ephemeral commit identity
