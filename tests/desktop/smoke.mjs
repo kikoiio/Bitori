@@ -117,8 +117,8 @@ try {
     }, imageBase64);
     await page.getByTestId('paste-image').click();
     await page.locator('#attachment-drafts img').waitFor();
-    assert.equal(await page.locator('#attachment-drafts .attachment-preview-name').textContent(), 'icon.png');
-    await page.getByRole('button', {name: '移除图片 icon.png'}).click();
+    assert.equal(await page.locator('#attachment-drafts .attachment-preview-name').textContent(), 'clipboard.png');
+    await page.getByRole('button', {name: '移除图片 clipboard.png'}).click();
     await page.locator('#attachment-drafts').waitFor({state: 'hidden'});
 
     await page.getByTestId('choose-images').click();
