@@ -46,7 +46,6 @@ let modelState = null;
 let sessionFilter = '';
 let renamingSessionId = null;
 let renameDraft = '';
-let renameSelection = null;
 let deleteArmedSessionId = null;
 let rebuildingSessionList = false;
 let zoomTimer = null;
@@ -395,18 +394,19 @@ function renderProfiles() {
 function renderSessions() {
   const activeElement = document.activeElement;
   const activeRenameInput = activeElement?.matches?.('.session-rename-input') && ui.sessions.contains(activeElement) ? activeElement : null;
-  if (activeRenameInput && renamingSessionId === activeRenameInput.dataset.sessionId) rememberRenameSelection(activeRenameInput);
-  const focusedRename = renameSelection?.id === renamingSessionId ? renameSelection : null;
-  if (activeRenameInput && renamingSessionId === activeRenameInput.dataset.sessionId) renameDraft = activeRenameInput.value;
+  const needle = sessionFilter.trim().toLowerCase();
+  const visible = needle ? sessions.filter(session => String(session.title || '新会话').toLowerCase().includes(needle)) : sessions;
+  ui.sessionCount.textContent = needle ? `${visible.length}/${sessions.length}` : (sessions.length ? String(sessions.length) : '');
+  if (activeRenameInput && renamingSessionId === activeRenameInput.dataset.sessionId) {
+    renameDraft = activeRenameInput.value;
+    if (visible.some(session => session.id === renamingSessionId)) return;
+  }
   const focusedId = activeElement?.closest?.('[data-session-id]')?.dataset.sessionId;
   let focusedButton = null;
   let renameInputToFocus = null;
   rebuildingSessionList = true;
   try { ui.sessions.replaceChildren(); }
   finally { rebuildingSessionList = false; }
-  const needle = sessionFilter.trim().toLowerCase();
-  const visible = needle ? sessions.filter(session => String(session.title || '新会话').toLowerCase().includes(needle)) : sessions;
-  ui.sessionCount.textContent = needle ? `${visible.length}/${sessions.length}` : (sessions.length ? String(sessions.length) : '');
   if (!sessions.length) {
     const message = !workspace ? '选择并信任工作区后查看会话。' : state && state.profile ? '暂无会话，点击“新建会话”开始。' : '选择模型配置后查看会话。';
     ui.sessions.append(element('p', 'sidebar-empty', message));
@@ -431,7 +431,6 @@ function renderSessions() {
         const title = input.value.trim();
         renamingSessionId = null;
         renameDraft = '';
-        renameSelection = null;
         if (title && title !== (session.title || '')) {
           try { await window.bitori.renameSession(session.id, title); await refreshSessions(); }
           catch (error) { setActionError(error); }
@@ -440,17 +439,13 @@ function renderSessions() {
       };
       input.addEventListener('keydown', event => {
         if (event.key === 'Enter') { event.preventDefault(); void commit(); }
-        else if (event.key === 'Escape') { renamingSessionId = null; renameDraft = ''; renameSelection = null; renderSessions(); }
+        else if (event.key === 'Escape') { renamingSessionId = null; renameDraft = ''; renderSessions(); }
       });
       input.addEventListener('input', () => {
         if (renamingSessionId === session.id) {
           renameDraft = input.value;
-          rememberRenameSelection(input);
         }
       });
-      input.addEventListener('select', () => rememberRenameSelection(input));
-      input.addEventListener('keyup', () => rememberRenameSelection(input));
-      input.addEventListener('mouseup', () => rememberRenameSelection(input));
       input.addEventListener('blur', () => {
         if (!rebuildingSessionList && input.isConnected && renamingSessionId === session.id) void commit();
       });
@@ -474,7 +469,7 @@ function renderSessions() {
       rename.title = '重命名会话';
       rename.setAttribute('aria-label', '重命名会话');
       rename.disabled = !canUseSession();
-      rename.addEventListener('click', () => { deleteArmedSessionId = null; renamingSessionId = session.id; renameDraft = session.title || ''; renameSelection = null; renderSessions(); });
+      rename.addEventListener('click', () => { deleteArmedSessionId = null; renamingSessionId = session.id; renameDraft = session.title || ''; renderSessions(); });
       const remove = element('button', 'session-action danger', deleteArmedSessionId === session.id ? '确认?' : '🗑');
       remove.type = 'button';
       remove.title = '删除会话及其全部消息';
@@ -491,15 +486,7 @@ function renderSessions() {
     }
     ui.sessions.append(item);
   }
-  if (focusedRename && focusedRename.id === renamingSessionId) {
-    const input = renameInputToFocus;
-    if (input) {
-      input.focus({preventScroll: true});
-      if (focusedRename.selectionStart !== null && focusedRename.selectionEnd !== null) {
-        input.setSelectionRange(focusedRename.selectionStart, focusedRename.selectionEnd, focusedRename.selectionDirection);
-      }
-    }
-  } else if (renameInputToFocus) {
+  if (renameInputToFocus) {
     const input = renameInputToFocus;
     const sessionId = input.dataset.sessionId;
     window.setTimeout(() => {
@@ -508,17 +495,6 @@ function renderSessions() {
   }
   if (focusedButton && !focusedButton.disabled) focusedButton.focus({preventScroll: true});
 }
-function rememberRenameSelection(input) {
-  if (input?.matches?.('.session-rename-input') && renamingSessionId === input.dataset.sessionId) {
-    renameSelection = {
-      id: input.dataset.sessionId,
-      selectionStart: input.selectionStart,
-      selectionEnd: input.selectionEnd,
-      selectionDirection: input.selectionDirection || 'none',
-    };
-  }
-}
-document.addEventListener('selectionchange', () => rememberRenameSelection(document.activeElement));
 function details(label, content, key, className = 'thinking') {
   const node = element('details', className);
   node.dataset.detailKey = key;
