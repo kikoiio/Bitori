@@ -488,10 +488,8 @@ function renderSessions() {
   }
   if (renameInputToFocus) {
     const input = renameInputToFocus;
-    const sessionId = input.dataset.sessionId;
-    window.setTimeout(() => {
-      if (renamingSessionId === sessionId && input.isConnected) { input.focus(); input.select(); }
-    }, 0);
+    input.focus({preventScroll: true});
+    input.select();
   }
   if (focusedButton && !focusedButton.disabled) focusedButton.focus({preventScroll: true});
 }
