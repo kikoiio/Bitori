@@ -109,9 +109,11 @@ try {
     await page.getByRole('button', {name: '移除图片 icon.png'}).click();
     await page.locator('#attachment-drafts').waitFor({state: 'hidden'});
 
-    await application.evaluate(({clipboard, nativeImage}, path) => {
-      clipboard.writeImage(nativeImage.createFromPath(path));
-    }, imagePath);
+    const imageBase64 = (await readFile(imagePath)).toString('base64');
+    await application.evaluate(async ({clipboard, ClipboardItem}, data) => {
+      const image = new (require('node:buffer').Blob)([Buffer.from(data, 'base64')], {type: 'image/png'});
+      await clipboard.write([new ClipboardItem({'image/png': image})]);
+    }, imageBase64);
     await page.getByTestId('paste-image').click();
     await page.locator('#attachment-drafts img').waitFor();
     assert.equal(await page.locator('#attachment-drafts .attachment-preview-name').textContent(), 'icon.png');

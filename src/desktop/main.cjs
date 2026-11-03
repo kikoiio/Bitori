@@ -182,11 +182,24 @@ function registerHandlers() {
     }
     return core.imageAttachmentsSchema.parse(attachments);
   });
-  handle('bitori:paste-image', () => {
-    const image = clipboard.readImage();
-    if (image.isEmpty()) return null;
-    const attachment = core.imageAttachmentFromBytes(new Uint8Array(image.toPNG()), 'clipboard.png');
-    return core.imageAttachmentsSchema.parse([attachment])[0];
+  handle('bitori:paste-image', async () => {
+    const imageTypes = new Map([
+      ['image/png', 'png'],
+      ['image/jpeg', 'jpg'],
+      ['image/gif', 'gif'],
+      ['image/webp', 'webp'],
+    ]);
+    for (const item of await clipboard.read()) {
+      for (const [mediaType, extension] of imageTypes) {
+        if (!item.types.includes(mediaType)) continue;
+        const image = await item.getType(mediaType);
+        if (image.size > 4 * 1024 * 1024) throw new Error('单张图片大小不能超过 4 MiB');
+        const bytes = new Uint8Array(await image.arrayBuffer());
+        const attachment = core.imageAttachmentFromBytes(bytes, `clipboard.${extension}`);
+        return core.imageAttachmentsSchema.parse([attachment])[0];
+      }
+    }
+    return null;
   });
   handle('bitori:send', (text, attachments) => {
     if (typeof text !== 'string' || text.length > 100000) throw new Error('消息无效');
