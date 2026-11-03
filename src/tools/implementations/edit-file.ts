@@ -5,11 +5,12 @@ import {z} from 'zod';
 import {assertUtf8Text} from '../utf8.js';
 import {WorkspacePaths} from '../workspace-paths.js';
 import {normalizeFileError, toolError} from './shared.js';
+import type {SnapshotStore} from '../snapshots.js';
 import type {Tool, ToolContext, ToolExecutionResult} from '../types.js';
 
 const schema = z.object({path: z.string().min(1), oldText: z.string().min(1), newText: z.string()}).strict();
 export class EditFileTool implements Tool<{path: string; oldText: string; newText: string}> {
-  constructor(private readonly operations: {open: typeof open; rename: typeof rename; unlink: typeof unlink} = {open, rename, unlink}) {}
+  constructor(private readonly operations: {open: typeof open; rename: typeof rename; unlink: typeof unlink} = {open, rename, unlink}, private readonly snapshots?: SnapshotStore) {}
   // 与系统提示双重强化「编辑前必先读取」规则。
   readonly name = 'edit_file'; readonly description = '对工作区现有 UTF-8 文件执行唯一字面匹配替换；编辑前必须先用 read_file 读取该文件，不得凭记忆或猜测修改'; readonly effect = 'write' as const;
   readonly inputSchema = z.toJSONSchema(schema, {io: 'input'});
@@ -22,7 +23,8 @@ export class EditFileTool implements Tool<{path: string; oldText: string; newTex
       const mode = (await stat(path)).mode & 0o7777;
       const content = assertUtf8Text(await readFile(path, {signal: context.signal}));
       const pieces = content.split(args.oldText);
-      if (pieces.length !== 2) return toolError('no_unique_match', `待替换文本匹配了 ${pieces.length - 1} 次，必须恰好一次`);
+      if (pieces.length === 1) return toolError('no_unique_match', '待替换文本出现 0 次：文件可能已被外部修改或 oldText 凭记忆书写；请重新 read_file 该文件后再编辑');
+      if (pieces.length !== 2) return toolError('no_unique_match', `待替换文本匹配了 ${pieces.length - 1} 次，必须恰好一次；请扩大 oldText 范围使其唯一`);
       const updated = pieces[0] + args.newText + pieces[1];
       const candidate = join(dirname(path), `.bitori-${randomUUID()}.tmp`);
       context.signal.throwIfAborted();
@@ -38,6 +40,8 @@ export class EditFileTool implements Tool<{path: string; oldText: string; newTex
       context.signal.throwIfAborted();
       await this.operations.rename(temporary, path);
       temporary = undefined;
+      // 快照记录失败不影响编辑结果;撤销功能降级而不是拒绝工作。
+      await this.snapshots?.record({path: args.path, absolutePath: path, preContent: content, postContent: updated, toolName: 'edit_file'}).catch(() => null);
       return {status: 'success', output: {path: args.path, replacements: 1}};
     } catch (error) {
       if (context.signal.aborted) return {status: 'interrupted', error: {code: 'interrupted', message: '文件编辑已取消', retryable: false}};

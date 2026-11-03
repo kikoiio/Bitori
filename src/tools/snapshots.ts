@@ -1,0 +1,123 @@
+import {createHash, randomUUID} from 'node:crypto';
+import {mkdir, open, readFile, readdir, rename, rm, stat, unlink, writeFile} from 'node:fs/promises';
+import {dirname, join, resolve, sep} from 'node:path';
+import {basename} from 'node:path/posix';
+
+/** edit_file/write_file 提交前的可验证快照;撤销只恢复 Bitori 自己写过的内容。 */
+export interface FileSnapshot {
+  id: string;
+  workspaceRoot: string;
+  /** 工作区相对 posix 路径(展示用)。 */
+  path: string;
+  absolutePath: string;
+  /** null 表示写入前文件不存在(write_file 新建),撤销时删除文件。 */
+  preContent: string | null;
+  /** Bitori 写入后内容的 sha256;撤销前当前内容必须仍等于它,拒绝盲目覆盖外部修改。 */
+  postHash: string;
+  toolName: string;
+  createdAt: number;
+}
+
+const PREVIEW_LIMIT = 1024 * 1024;
+
+export function sha256Text(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+export class SnapshotStore {
+  constructor(readonly directory: string, readonly workspaceRoot: string, private readonly maxKeep = 200) {}
+
+  static forWorkspace(workspaceRoot: string): SnapshotStore {
+    const root = resolve(workspaceRoot);
+    const hash = createHash('sha256').update(root).digest('hex').slice(0, 16);
+    return new SnapshotStore(join(root, '.bitori', 'snapshots', hash), root);
+  }
+
+  /** 在提交点之前调用;失败只丢快照,绝不阻断写入本身。 */
+  async record(input: {path: string; absolutePath: string; preContent: string | null; postContent: string; toolName: string}): Promise<FileSnapshot | null> {
+    const preOverLimit = input.preContent !== null && Buffer.byteLength(input.preContent) > PREVIEW_LIMIT;
+    if (preOverLimit) return null;
+    const snapshot: FileSnapshot = {
+      id: randomUUID(),
+      workspaceRoot: this.workspaceRoot,
+      path: input.path,
+      absolutePath: input.absolutePath,
+      preContent: input.preContent,
+      postHash: sha256Text(input.postContent),
+      toolName: input.toolName,
+      createdAt: Date.now(),
+    };
+    await mkdir(this.directory, {recursive: true});
+    await writeFile(join(this.directory, `${snapshot.id}.json`), JSON.stringify(snapshot), 'utf8');
+    await this.#prune();
+    return snapshot;
+  }
+
+  async list(): Promise<FileSnapshot[]> {
+    let names: string[];
+    try { names = await readdir(this.directory); } catch { return []; }
+    const snapshots: FileSnapshot[] = [];
+    for (const name of names) {
+      if (!name.endsWith('.json')) continue;
+      try {
+        const parsed = JSON.parse(await readFile(join(this.directory, name), 'utf8')) as FileSnapshot;
+        if (parsed.workspaceRoot === this.workspaceRoot && isSafeTarget(parsed, this.workspaceRoot)) snapshots.push(parsed);
+      } catch { /* 损坏的快照按不存在处理 */ }
+    }
+    return snapshots.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /** path 省略时撤销全局最近一次,否则撤销该文件的最近一次。 */
+  async undo(path?: string): Promise<{ok: boolean; message: string}> {
+    const all = await this.list();
+    const wanted = path === undefined || path === '' ? all[0] : all.find(snapshot => snapshot.path === normalizeRelative(path));
+    if (!wanted) {
+      return {ok: false, message: path ? `没有 ${path} 的修改快照:只记录 edit_file/write_file 成功提交过的写入` : '没有可撤销的文件修改快照'};
+    }
+    const target = wanted.absolutePath;
+    if (!isSafeTarget(wanted, this.workspaceRoot)) return {ok: false, message: '快照指向工作区之外,已拒绝'};
+    let current: string;
+    try { current = await readFile(target, 'utf8'); } catch {
+      await this.#discard(wanted.id);
+      return {ok: false, message: `${wanted.path} 已不存在,快照过期,不做猜测恢复`};
+    }
+    if (sha256Text(current) !== wanted.postHash) {
+      return {ok: false, message: `${wanted.path} 在 Bitori 写入后被外部修改,拒绝盲目覆盖。请先 read_file 查看当前内容,手动处理后再重试`};
+    }
+    if (wanted.preContent === null) {
+      await unlink(target);
+      await this.#discard(wanted.id);
+      return {ok: true, message: `已删除 Bitori 新建的 ${wanted.path}`};
+    }
+    const mode = (await stat(target)).mode & 0o7777;
+    const candidate = join(dirname(target), `.bitori-undo-${randomUUID()}.tmp`);
+    const handle = await open(candidate, 'wx', 0o600);
+    try {
+      await handle.writeFile(wanted.preContent, 'utf8');
+      await handle.chmod(mode);
+      await handle.sync();
+    } finally { await handle.close(); }
+    await rename(candidate, target);
+    await this.#discard(wanted.id);
+    return {ok: true, message: `已撤销 ${wanted.path} 的最近一次 Bitori 修改(${basename(wanted.path)} ← ${wanted.toolName})`};
+  }
+
+  async #discard(id: string): Promise<void> {
+    await rm(join(this.directory, `${id}.json`), {force: true}).catch(() => undefined);
+  }
+
+  async #prune(): Promise<void> {
+    const all = await this.list();
+    if (all.length <= this.maxKeep) return;
+    for (const stale of all.slice(this.maxKeep)) await this.#discard(stale.id);
+  }
+}
+
+function isSafeTarget(snapshot: FileSnapshot, workspaceRoot: string): boolean {
+  const target = resolve(snapshot.absolutePath);
+  return target === workspaceRoot || target.startsWith(workspaceRoot + sep);
+}
+
+export function normalizeRelative(path: string): string {
+  return path.replaceAll('\\', '/').replace(/^\.\/+/, '').replace(/^\/+/, '');
+}

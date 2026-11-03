@@ -8,6 +8,7 @@ import {SearchTextTool} from './implementations/search-text.js';
 import {WriteFileTool} from './implementations/write-file.js';
 import {ToolRegistry} from './registry.js';
 import {PermissionEngine} from './permission-engine.js';
+import {SnapshotStore} from './snapshots.js';
 import {McpManager} from '../mcp/manager.js';
 import type {Tool} from './types.js';
 import {createAgentServices, type AgentServices} from '../agent/services.js';
@@ -25,12 +26,13 @@ export const fixedToolLimits = {
 } as const;
 
 /** 组合根只需调用一次，三个 Provider 共享同一注册集合。 */
-export function createToolSystem(workspaceRoot: string, mcpServers: Record<string, McpServerConfig> = {}, options: {services?: AgentServices; clientFor?: (model: string | null) => LLMClient; memoryClient?: LLMClient} = {}) {
-  const services = options.services ?? createAgentServices({workDir: workspaceRoot});
+export function createToolSystem(workspaceRoot: string, mcpServers: Record<string, McpServerConfig> = {}, options: {services?: AgentServices; clientFor?: (model: string | null) => LLMClient; memoryClient?: LLMClient; projectTrusted?: boolean} = {}) {
+  const services = options.services ?? createAgentServices({workDir: workspaceRoot, ...(options.projectTrusted === undefined ? {} : {projectTrusted: options.projectTrusted})});
   const enterWorktree = new EnterWorktreeTool();
   const registry = new ToolRegistry();
+  const snapshots = SnapshotStore.forWorkspace(workspaceRoot);
   const coreTools: Tool[] = [
-    new ReadFileTool(), new WriteFileTool(), new EditFileTool(), new RunCommandTool(), new FindFilesTool(), new SearchTextTool(),
+    new ReadFileTool(), new WriteFileTool(undefined, snapshots), new EditFileTool(undefined, snapshots), new RunCommandTool(), new FindFilesTool(), new SearchTextTool(),
     new LoadSkillTool(services.skills, services.skillExecutor),
     new TeamTools(services.teams),
     enterWorktree,
@@ -40,5 +42,5 @@ export function createToolSystem(workspaceRoot: string, mcpServers: Record<strin
   for (const tool of coreTools) registry.register(tool);
   const permissions = new PermissionEngine({workspaceRoot, tools: registry.entries().map(tool => tool.name)});
   const mcp = new McpManager(registry, mcpServers, workspaceRoot);
-  return {registry, executor: new ToolExecutor(registry, {workspaceRoot, limits: fixedToolLimits, permissions}), approvals: new ApprovalCoordinator(), permissions, mcp, services, memoryClient: options.memoryClient ?? null, close: async () => { await Promise.all([services.close(), mcp.close()]); }};
+  return {registry, executor: new ToolExecutor(registry, {workspaceRoot, limits: fixedToolLimits, permissions}), approvals: new ApprovalCoordinator(), permissions, snapshots, mcp, services, memoryClient: options.memoryClient ?? null, close: async () => { await Promise.all([services.close(), mcp.close()]); }};
 }
