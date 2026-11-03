@@ -9,26 +9,27 @@
 
 ## 工作规模与严谨度
 
-本轮覆盖 3 个只读审查、桌面与 Provider 验收证据、4 种 Provider 协议、SWE-bench Lite 23 题历史未解决结果、4 个未决产品方向、5 条安全残留风险、1 个暂停中的 RSI 项目，以及桌面“本会话允许”越过对话边界的实现缺陷。当前基线 `Check` 已通过；完成本次小范围代码改动后运行定向验证，不重复触发完整三平台检查。严谨度设为高，因为后续步骤会触发模型费用、上传数据，或改变权限和产品范围。
+本轮覆盖 3 个只读审查、桌面与 Provider 验收证据、4 种 Provider 协议、SWE-bench Lite 23 题历史未解决结果、4 个未决产品方向、5 条安全残留风险、1 个暂停中的 RSI 项目，以及桌面“本会话允许”越过对话边界的实现缺陷。最初只计划定向本地验证；用户授权免费云资源后，实际运行了修复后 master 的三平台 `Check` 与 Linux 桌面包验收，并完成失败修复和复验。Provider/SWE-bench/RSI 仍可能产生模型费用或上传任务轨迹，产品与安全决策也仍未定。
 
 ## 吞吐安排
 
 - **先决步骤。** 汇总只读审查，核对当前状态；任何收费 Provider 请求、云端任务、产品功能实现和安全模型变更都要先过对应门槛。
 - **并行工作。** TUI/桌面、Provider、风险/产品/RSI 三个资料审查彼此独立。
 - **共享写入。** 主执行者负责 `PLAN.md`、`.audit/`、文档、权限代码和工作流；审查代理只返回报告。汇总后另派一名实现代理只改 Provider 证据脚本，主执行者审查后再扩展其工作目录选项；文件写入不重叠。
-- **最小拆分。** 先用 3 个轻量审查代理收集互不重叠的证据；汇总后发现“本会话允许”存在明确越界，作为有文档规格的独立代码切片由主执行者修复。文件写入串行整合，云端 GUI 与 Provider 请求仍等待授权。
+- **最小拆分。** 先用 3 个轻量审查代理收集互不重叠的证据；汇总后发现“本会话允许”存在明确越界，作为有文档规格的独立代码切片由主执行者修复。文件写入串行整合；用户授权免费云资源后，GUI 工作流已通过；Provider 请求因不能确认零费用和账户预算仍未触发。
 
 ## 当前证据
 
 - GitHub 当前没有开放 issue 或 PR。仓库没有 TODO 或 roadmap 文件；代码搜索只在一个测试样例中找到字面量 `TODO`。
-- 当前基线的 GitHub `Check` 已在 Ubuntu、Windows 和 macOS 通过，包括完整类型、lint、测试和构建流程：[run 41629488646](https://github.com/kikoiio/Bitori/actions/runs/41629488646)。不重复触发这项检查。
-- 本轮提交 `7d58863` 推送后的新 `Check` 为 [run 41636113358](https://github.com/kikoiio/Bitori/actions/runs/41636113358)：Ubuntu 与 macOS 通过；Windows 的快速流式光标稳定性测试在 20 秒截止时仍处于 streaming。已改为等待 `sendMessage` 自然结束并延长测试框架上限，等待复验。
-- 新版 Linux 桌面验收 [run 41636209387](https://github.com/kikoiio/Bitori/actions/runs/41636209387)：开发入口、审批 smoke、打包和 `linux-unpacked` 启动通过；AppImage 步骤失败。Playwright 会在传入参数前加调试参数，AppImage 的 `--appimage-extract-and-run` 不再是首参数；已改用 AppImage 官方支持的 `APPIMAGE_EXTRACT_AND_RUN=1` 环境变量，等待复验。deb 步骤因前序失败未运行。
-- 最近一次 `E2E LLM` 成功运行使用基线 `efa1b8e4f7afa79fe4a8aced94c3002950694f99`，早于当前提交。六份已跟踪证据覆盖 Qoder、OpenAI Chat 和 Anthropic；OpenAI Responses 没有真实端点证据。证据文件没有运行时 HEAD SHA，无法仅凭文件确认它们测试的确切提交。当前基线的四种协议都没有可追溯到本次提交的真实端点验收。
-- 最近一次 Linux 桌面 smoke 和打包成功记录是 2026-10-28，早于当前基线。工作流 smoke 启动开发入口和 `linux-unpacked`；AppImage 与 deb 只构建并上传，未启动。桌面 smoke 覆盖“一次批准”和“拒绝”，没有覆盖“本会话”和“永久允许”。
+- 初始基线的 GitHub `Check` 曾在 Ubuntu、Windows 和 macOS 通过：[run 41629488646](https://github.com/kikoiio/Bitori/actions/runs/41629488646)。当前修复后 master 的完整三平台检查也已通过，见下方复验记录。
+- 本轮提交 `7d58863` 的首轮 `Check` 为 [run 41636113358](https://github.com/kikoiio/Bitori/actions/runs/41636113358)：Ubuntu 与 macOS 通过；Windows 的快速流式光标稳定性测试在 20 秒截止时仍处于 streaming。后续提交将测试改为等待 `sendMessage` 自然结束，复验通过。
+- 首轮 Linux 桌面验收 [run 41636209387](https://github.com/kikoiio/Bitori/actions/runs/41636209387) 的 AppImage 步骤失败：Playwright 会在传入参数前加调试参数，使 `--appimage-extract-and-run` 不再是首参数。后续改用 AppImage 官方支持的 `APPIMAGE_EXTRACT_AND_RUN=1` 环境变量，完整复验通过。
+- 修复后提交 `7bca1f1b9682729c7f3197ef1e4cbdf258fa01e4` 的三平台 `Check` 全部通过：[run 41636966238](https://github.com/kikoiio/Bitori/actions/runs/41636966238)。Linux desktop [run 41637023628](https://github.com/kikoiio/Bitori/actions/runs/41637023628) 的开发版、审批 smoke、打包、`linux-unpacked`、AppImage 和解包 deb 启动均通过；只读 artifact 查询确认 `desktop-packaged-linux` 与 `desktop-screenshots` 已上传，均保留至 2026-11-10。
+- 最近一次历史 `E2E LLM` 成功运行使用提交 `efa1b8e4f7afa79fe4a8aced94c3002950694f99`，早于本轮提交。六份已跟踪证据覆盖 Qoder、OpenAI Chat 和 Anthropic；OpenAI Responses 没有真实端点证据。证据文件没有运行时 HEAD SHA，无法仅凭文件确认它们测试的确切提交。本轮 master 的四种协议都没有可追溯到当前提交的真实端点验收。
+- 本计划开始前最近一次 Linux 桌面 smoke 和打包成功记录是 2026-10-28。那次只启动开发入口和 `linux-unpacked`；AppImage 与 deb 只构建并上传，未启动，桌面 smoke 也没有覆盖“本会话”和“永久允许”。当前完整验收已在 run 41637023628 通过。
 - 最近一次 SWE-bench Lite 23 题开发集记录为 2026-10-28、agent SHA `ff9a4fb8ea70d9c0a7d2191086af99925a07069d`：23/23 题有结果，但 8 个 `agent_error`、7 个 `unresolved`、8 个 `infrastructure_error`，没有 `resolved`。结果中的问题包括模型工具调用错误、Groq 速率/上下文限制及 gold 环境验证失败；不能当作当前版本验收。
-- TUI 的模拟终端测试覆盖光标行列、中文折行、输入、排队和取消，且已由当前基线的三平台 `Check` 运行。它没有启动 CLI 做真实终端交互验收。
-- 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前工作树已改为会话 ID 作用域，并加入引擎与 AgentRunner 回归测试，仍需定向验证和桌面云端验收。
+- TUI 的模拟终端测试覆盖光标行列、中文折行、输入、排队和取消，且已由修复后提交 `7bca1f1` 的三平台 `Check` 运行并通过。它没有启动 CLI 做真实终端交互验收。
+- 桌面权限引擎此前把“本会话允许”加入工作区运行时共享规则，没有按对话 `sessionId` 隔离；这会让另一个聊天复用临时授权。当前实现改为会话 ID 作用域，引擎与 AgentRunner 回归测试通过，桌面跨会话审批 smoke 也在 run 41637023628 通过。
 - 文档将多模态、云同步、会话导入和自动断点续跑列为“不支持，是否纳入尚未决定”。这些是产品决策，不是可直接实现的规格。
 - 安全文档记录了五类残留风险。它们尚未组成有优先级和验收标准的修复清单。
 - RSI 文档明确将该方向标为暂停，未完成的隔离和云端验收不属于近期目标。
@@ -50,10 +51,10 @@
 
 | 项目 | 当前状态 | 完成证据或门槛 |
 |---|---|---|
-| 全平台代码检查 | 修复待复验 | 新提交 Ubuntu/macOS 通过；Windows 流式光标测试因 20 秒截止未完成，见 run 41636113358 |
-| 临时会话授权边界 | 单测已验证；桌面云端 smoke 待运行 | 权限规则按 `sessionId` 保存；23 项定向单测通过，覆盖原会话复用和其他会话重新审批 |
-| Linux 桌面 smoke 与打包 | 已补工作流；AppImage 修复待复验 | run 41636209387 的开发入口、打包和 `linux-unpacked` 通过；AppImage 失败后 deb 被跳过 |
-| 桌面审批选项 | 已补 smoke，待云端权限 | 覆盖一次/本会话/永久/拒绝，以及授权范围与持久化 |
+| 全平台代码检查 | 已验证 | 修复后提交 `7bca1f1b9682729c7f3197ef1e4cbdf258fa01e4` 的 Ubuntu/Windows/macOS 完整 `Check` 全通过，见 run 41636966238 |
+| 临时会话授权边界 | 已验证 | 23 项定向单测及 Linux 桌面跨会话 smoke 通过，见 run 41637023628 |
+| Linux 桌面 smoke 与打包 | 已验证 | 开发版、`linux-unpacked`、AppImage 与 deb 启动 smoke 通过；构件和截图已上传，见 run 41637023628 |
+| 桌面审批选项 | 已验证 | 一次/本会话/永久/拒绝、授权范围与持久化 smoke 均通过，见 run 41637023628 |
 | Provider 证据可追溯性 | 实现静态验证通过；真实 E2E 待授权 | 新结果记录 `commitSha` 和 `workingTreeClean`；旧记录没有 SHA；类型检查和改动文件 lint 通过 |
 | 真实 Provider 验收 | 等协议、模型、事后用量阈值和账户预算 | 当前四种协议均无可追溯到基线 SHA 的结果；OpenAI Responses 没有历史证据 |
 | SWE-bench Lite 开发集 | 等运行范围和费用授权 | 旧 23 题结果没有解决项；详见 [评测说明](evaluation/README.md) |
@@ -74,17 +75,20 @@
 
 1. **完成盘点。** 已汇总三个独立审查与当前项目文档；把实现缺陷、验收缺口、风险处置、产品决定和暂停项目分别记录。
 2. **补齐本地可执行实现。** 已按会话 ID 隔离临时授权；桌面 smoke 增加四项审批选择和范围断言；Linux 工作流新增 AppImage/deb 启动；Provider 证据新增提交 SHA 与工作树洁净标记及独立结果目录。定向测试（23 项）、类型检查、改动文件 lint、脚本语法、工作流 YAML 解析、6 份文档本地链接与差异检查均通过。
-3. **关闭外部验收。** 对已提交的当前版本手动运行 Linux desktop workflow；经用户选定协议、模型、事后用量阈值和供应商账户预算后逐项运行真实 Provider E2E；另经批准选择 SWE-bench Lite 单题诊断或 23 题开发集。收到 Actions 结果后更新架构、评测文档和索引。
+3. **关闭外部验收。** 已对修复后当前版本运行三平台 `Check` 与 Linux desktop workflow，结果全通过；artifact 已核实上传。真实 Provider E2E 仍需协议、模型、事后阈值和账户预算；SWE-bench 仍需范围、Provider/model 和账户预算，获准后再运行并更新评测文档。
 4. **处理 TUI 与桌面目标范围。** 当前基线的模拟光标/输入用例由三平台 Check 通过；真实终端观感需要用户确认具体终端并验收。Windows/macOS 桌面支持仍在现有范围之外。
 5. **记录安全处置待决。** 保留五项既有残留风险，分别列明事实和需要的产品/安全决策；不在没有威胁边界和验收标准时改写权限或数据保留政策。
 6. **处理未决产品方向。** 对多模态、云同步、会话导入和自动断点续跑分别取得产品决定。获准方向另拆为有范围、有测试和验收条件的实现阶段。
 7. **保留 RSI 暂停状态。** 只有用户明确恢复该项目并批准服务、数据上传和预算后，才运行 Docker/云端 smoke。
 8. **最终核验。** 每项保留证据或明确的延期理由；更新文档索引；确认测试、工作流、分支和工作区状态，并审阅决策轨迹。
 
+## 已完成的云端验收
+
+- 用户授权使用免费云资源后，将 `master` 推送至提交 `7d58863`，并触发三平台检查；初次运行暴露 Windows 光标稳定性测试的 20 秒截止问题，已在 `7bca1f1` 修复并由 run 41636966238 全平台复验通过。
+- 手动运行 Linux desktop workflow，初次 AppImage 测试因 AppImage 参数顺序失败；改用 `APPIMAGE_EXTRACT_AND_RUN=1` 后，run 41637023628 的所有 smoke 通过。`desktop-packaged-linux`（237,007,447 字节）与 `desktop-screenshots`（870,292 字节）已只读核实上传，保留至 2026-11-10。
+
 ## 必须先取得的授权
 
-- **推送及自动 Check。** 将提交推送到 `master` 会触发 GitHub Actions `Check`，在 Ubuntu/Windows/macOS 执行 `npm run check`（类型、lint、全套测试和构建）。工作流只申请 `contents: read`，不读取模型密钥、不上传 artifact；仍属于云端 runner 使用，需按仓库规则先获得明确许可。
-- **Linux 桌面云端验收。** 使用 GitHub Actions 的 `Linux desktop` 工作流，在云端安装依赖、运行 Electron/Xvfb 四次（开发入口、`linux-unpacked`、AppImage、解包 deb），并将 AppImage/deb 与可选截图上传保留 7 天。工作流申请 `contents: read`，运行它还需要有权限触发该仓库 Actions 的 GitHub 身份。
 - **真实 Provider 验收。** 使用 GitHub Actions 的 `E2E LLM` 工作流读取配置的 Provider 凭据并发送固定测试任务。工作流提供 25k/50k/100k/150k token 阈值和 1/2/5 credits 阈值（默认 50k tokens / 1 credit），脚本在任务结束后才比较累计用量并标记超额；这不是请求硬上限，实际费用仍按 Provider/model 计价且可能高于阈值。要保证美元费用不超额，需有供应商账户级限额；授权前须明确协议、模型、事后阈值及账户预算。只上传本次运行的证据 JSON（含回复片段、工具状态与提交信息）并保留 7 天。四种协议分别运行。
 - **SWE-bench Lite 开发集。** 使用 GitHub Actions 的 `SWE-bench Lite development`，选择 openrouter/groq/xunfei、模型变量、单题或全部 23 题。工作流按单题串行，每个任务容器最多使用 4 GiB、2 CPU；每题最多 30 次 Agent 迭代、30 分钟 Agent 执行，job timeout 为 75 分钟。它下载固定公开数据集和镜像、将题目发送给 Provider；隔离容器中的 agent 可访问该容器凭据与网络。上传结果、轨迹、诊断、补丁、artifact 白名单和汇总，保留 7 天。无全局 token/美元费用上限；运行前必须指定范围、Provider/model 和外部账户预算。
 - **RSI smoke。** 文档将它暂停。恢复会使用 Xunfei 凭据、Docker、最多 90 分钟、100 次模型请求和 2,000,000 tokens，并上传列出的实验报告与轨迹保留 7 天。需要单独明确恢复决定和预算。
