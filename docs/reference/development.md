@@ -8,6 +8,8 @@
 
 使用 Node.js 24 和 npm，在仓库根目录执行 `npm ci` 后，在 `~/.bitori/.env` 填一组 `<前缀>_API_KEY`/`_BASE_URL`/`_MODEL`（自动派生 profile；模板默认使用 `LLM_*`），再以 `npm run dev` 启动（多 profile 时加 `--profile <name>`；`bitori doctor` 可逐 profile 验证）；配置见 [配置与扩展](configuration.md)。`npm run build` 输出 `dist/`，`npm start` 运行编译后的终端入口。生成目录与本地密钥不应提交。
 
+仓库用 `.gitattributes` 固定所有文本文件以 LF 检出。Windows 上若被转成 CRLF，源码里的 `\n` 转义与仓库里的实体文件会不一致，录制夹具的 SSE 分帧也会失效；改动后请确认 `git ls-files --eol` 全为 `i/lf w/lf`。
+
 Linux Electron 日常迭代用 `npm run desktop`（开发入口带 `--disable-gpu --no-sandbox`，不把 `chrome-sandbox` 设为 root SUID）。`npm run desktop:package` 把安装形态写到 `out/desktop/`（`linux-unpacked`、AppImage、deb），供测试使用，配置禁止 publish。两者均需 Electron 依赖、图形环境及适当资源；启动后须选择并信任工作区。
 
 ## 验证
