@@ -1,4 +1,5 @@
 import {join, resolve} from 'node:path';
+import {isWorkspaceTrusted} from '../config/trust.js';
 import {ChatController} from '../chat/agent-controller.js';
 import {collectSecretValues, configPaths, resolveProfileWithApiKey} from '../config/loader.js';
 import type {AppConfig} from '../config/types.js';
@@ -32,17 +33,19 @@ export async function createApplicationRuntime(options: {
   workspace: string;
   databasePath?: string;
   maxIterations?: number;
+  /** Provider 内模型选择：只覆盖本次运行时的 model，不改配置文件。 */
+  modelOverride?: string;
 }): Promise<ApplicationRuntime> {
   const {config} = options;
-  const profile = resolveProfileWithApiKey(config, options.profileName);
-  if (profile === null) throw new Error('请选择模型配置');
+  const resolved = resolveProfileWithApiKey(config, options.profileName);
+  if (resolved === null) throw new Error('请选择模型配置');
+  const profile = options.modelOverride === undefined ? resolved : {...resolved, model: options.modelOverride};
   const workspace = resolve(options.workspace);
   const cache = new Map<string, LLMClient>();
   const clientFor = (model: string | null): LLMClient => {
     const name = model === null ? profile.name : config.models[model] ?? model;
-    const candidate = config.profiles.find(item => item.name === name) ?? profile;
-    const selected = resolveProfileWithApiKey(config, candidate.name);
-    if (selected === null) throw new Error('找不到模型配置');
+    const selected = name === profile.name ? profile : (config.profiles.find(item => item.name === name) ?? profile);
+    if (selected.apiKey.length === 0) throw new Error(`请在 .env 中填写 ${selected.apiKeyVariable ?? 'API key'}`);
     const cached = cache.get(selected.name);
     if (cached) return cached;
     const client = createLLMClient(selected);
@@ -50,7 +53,8 @@ export async function createApplicationRuntime(options: {
     return client;
   };
   const client = clientFor(null);
-  const tools = createToolSystem(workspace, config.mcpServers, {clientFor, memoryClient: client});
+  const tools = createToolSystem(workspace, config.mcpServers, {clientFor, memoryClient: client, projectTrusted: isWorkspaceTrusted(workspace)});
+  // 未信任工作区的项目级扩展由 loadConfig/services 拒载，这里把原因呈现到 UI。
   let repository: SessionRepository | undefined;
   let controller: ChatController | undefined;
   let closed: Promise<void> | undefined;
@@ -72,7 +76,7 @@ export async function createApplicationRuntime(options: {
     const paths = configPaths();
     controller = new ChatController(client, repository, tools, undefined, {workspaceRoot: workspace, observability: {traceDirectory: paths.traces, usagePath: join(paths.usage, 'skills.jsonl')}, ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
     await controller.initialize(profile);
-    return {controller, warnings: mcp.failed.map(item => `MCP Server ${item.name} 启动失败：${item.error.message}`), close};
+    return {controller, warnings: [...(config.notices ?? []), ...mcp.failed.map(item => `MCP Server ${item.name} 启动失败：${item.error.message}`)], close};
   } catch (error) {
     await close().catch(() => undefined);
     throw error;

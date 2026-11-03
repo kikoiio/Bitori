@@ -10,6 +10,15 @@ import type {PermissionTier} from '../tools/permission-engine.js';
 export type Screen = 'profile_select' | 'chat' | 'session_list' | 'terminal_too_small';
 export type RequestStatus = 'idle' | 'thinking' | 'streaming' | 'approving' | 'executing_tools' | 'cancelling' | 'failed';
 
+/** 模型流里已经开始、但尚未完成一整轮迭代的工具调用；用于即时展示。 */
+export interface LiveToolCall {
+  callId: string;
+  iterationId: string;
+  name: string;
+  argumentsText: string;
+  ready: boolean;
+}
+
 /**
  * TUI 的单一状态快照。控制器每次都创建新对象发布，React 据此判断是否重渲染。
  */
@@ -24,6 +33,7 @@ export interface AppState {
   selectedMessageId: string | null;
   visibleError: string | null;
   toolCalls: ToolCallRecord[];
+  liveToolCalls: LiveToolCall[];
   approvalPrompt: ToolApprovalPrompt | null;
   agentMode: AgentMode;
   activeRunId: string | null;
@@ -48,7 +58,7 @@ export function initialAppState(profile: ProfileSummary | null = null): AppState
     expandedThinkingIds: new Set(),
     selectedMessageId: null,
     visibleError: null,
-    toolCalls: [], approvalPrompt: null,
+    toolCalls: [], liveToolCalls: [], approvalPrompt: null,
     agentMode: 'execute', activeRunId: null, iteration: 0, maxIterations: 20,
     agentPhase: null, runUsage: {inputTokens: 0, outputTokens: 0}, stopReason: null,
     permissionTier: 'default',

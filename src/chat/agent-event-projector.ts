@@ -1,5 +1,6 @@
 import {now} from '../shared/ids.js';
 import type {AgentEvent, AgentMode} from '../agent/types.js';
+import {providerErrorGuidance} from '../providers/errors.js';
 import type {AppState} from './state.js';
 import type {FinalMessageUpdate, SessionRepositoryContract, StoredMessage, ToolCallRecord} from '../storage/types.js';
 import type {PreparedToolCall} from '../tools/types.js';
@@ -14,13 +15,21 @@ export class AgentEventProjector {
   constructor(readonly repository: SessionRepositoryContract, initialState: AppState, readonly publish: (state: AppState) => void, mode: AgentMode) { this.#state = initialState; this.#mode = mode; }
 
   async project(event: AgentEvent): Promise<void> {
-    if (event.type === 'run_started') this.#set({...this.#state, activeRunId: event.runId, agentMode: event.mode, requestStatus: 'streaming', iteration: 0, maxIterations: event.maxIterations, agentPhase: 'preparing', runUsage: {inputTokens: 0, outputTokens: 0}, stopReason: null, visibleError: null});
+    if (event.type === 'run_started') this.#set({...this.#state, activeRunId: event.runId, agentMode: event.mode, requestStatus: 'streaming', iteration: 0, maxIterations: event.maxIterations, agentPhase: 'preparing', runUsage: {inputTokens: 0, outputTokens: 0}, stopReason: null, visibleError: null, liveToolCalls: []});
     else if (event.type === 'context_compacted') {
       await this.repository.saveContextCheckpoint(event.sessionId, {boundaryMessageId: event.boundaryMessageId, items: event.items});
     }
     else if (event.type === 'iteration_started') {
       const message = await this.repository.beginAgentIteration({messageId: event.iterationId, runId: event.runId, sessionId: event.sessionId, iteration: event.iteration});
-      this.#set({...this.#state, messages: [...this.#state.messages, message], iteration: event.iteration, requestStatus: 'streaming'});
+      this.#set({...this.#state, messages: [...this.#state.messages, message], iteration: event.iteration, requestStatus: 'streaming', liveToolCalls: []});
+    } else if (event.type === 'tool_call_started') {
+      this.#set({...this.#state, liveToolCalls: [...this.#state.liveToolCalls.filter(call => call.callId !== event.callId), {callId: event.callId, iterationId: event.iterationId, name: event.name, argumentsText: '', ready: false}]});
+    } else if (event.type === 'tool_arguments_delta') {
+      this.#set({...this.#state, liveToolCalls: this.#state.liveToolCalls.map(call => call.callId === event.callId ? {...call, argumentsText: call.argumentsText + event.delta} : call)});
+    } else if (event.type === 'tool_call_ready') {
+      const id = event.call.availability === 'available' ? event.call.call.internalId : event.call.draft.internalId;
+      const argumentsText = event.call.availability === 'available' ? event.call.argumentsText : event.call.draft.argumentsText;
+      this.#set({...this.#state, liveToolCalls: this.#state.liveToolCalls.map(call => call.callId === id ? {...call, argumentsText, ready: true} : call)});
     } else if (event.type === 'text_delta' || event.type === 'thinking_delta') {
       const current = this.#state.messages.find(message => message.id === event.iterationId);
       if (!current) throw new Error(`缺少迭代消息：${event.iterationId}`);
@@ -48,8 +57,9 @@ export class AgentEventProjector {
       await this.repository.finishAgentRun(event.runId, event.result, latestPlan);
       const failed = [...this.#state.messages].findLast(message => message.role === 'assistant' && message.status === 'failed');
       const detail = failed?.errorMessage === undefined || failed.errorMessage === null ? '' : `：${failed.errorMessage}`;
-      const message = event.result.stopReason === 'natural_completion' ? null : `Agent 已停止：${event.result.stopReason}${detail}`;
-      this.#set({...this.#state, activeRunId: null, requestStatus: event.result.status === 'failed' ? 'failed' : 'idle', agentPhase: 'finishing', runUsage: event.result.usage, stopReason: event.result.stopReason, approvalPrompt: null, visibleError: message});
+      const guidance = failed?.errorCode === undefined || failed.errorCode === null ? '' : ` ${providerErrorGuidance(failed.errorCode)}`;
+      const message = event.result.stopReason === 'natural_completion' ? null : `Agent 已停止：${event.result.stopReason}${detail}${guidance}`;
+      this.#set({...this.#state, activeRunId: null, requestStatus: event.result.status === 'failed' ? 'failed' : 'idle', agentPhase: 'finishing', runUsage: event.result.usage, stopReason: event.result.stopReason, approvalPrompt: null, visibleError: message, liveToolCalls: []});
     }
   }
 
@@ -65,7 +75,7 @@ export class AgentEventProjector {
     });
     await this.repository.finalizeIterationWithToolBatch(message.id, update, records);
     const finalMessage = {...message, content: response.text, thinking: response.thinking, status, errorCode: response.error?.code ?? null, errorMessage: response.error?.message ?? null, usage: response.usage, providerState: response.providerState, updatedAt: event.at};
-    this.#set({...this.#state, messages: this.#state.messages.map(item => item.id === finalMessage.id ? finalMessage : item), toolCalls: [...this.#state.toolCalls, ...records]});
+    this.#set({...this.#state, messages: this.#state.messages.map(item => item.id === finalMessage.id ? finalMessage : item), toolCalls: [...this.#state.toolCalls, ...records], liveToolCalls: this.#state.liveToolCalls.filter(call => call.iterationId !== event.iterationId)});
   }
 
   #replaceTool(record: ToolCallRecord): void { this.#set({...this.#state, toolCalls: this.#state.toolCalls.map(item => item.id === record.id ? record : item)}); }

@@ -1,12 +1,13 @@
 import type {PermissionTier} from '../tools/permission-engine.js';
 
-export type LocalCommandAction = 'help' | 'plan' | 'do' | 'compact' | 'permission';
+export type LocalCommandAction = 'help' | 'plan' | 'do' | 'compact' | 'permission' | 'undo';
 
 export interface CommandContext {workDir: string; args: string}
 interface CommandBase {
   name: string;
   aliases: string[];
   description: string;
+  argumentHint?: string;
 }
 export type Command = CommandBase & (
   | {type: 'local'; action: LocalCommandAction}
@@ -20,7 +21,8 @@ const localCommands = [
   {name: 'plan', aliases: [], description: '切换到计划模式'},
   {name: 'do', aliases: [], description: '执行最近计划'},
   {name: 'compact', aliases: ['c'], description: '手动压缩上下文'},
-  {name: 'permission', aliases: ['permissions', 'mode'], description: '切换权限档：strict、default 或 bypass'},
+  {name: 'permission', aliases: ['permissions', 'mode'], description: '切换权限档：strict、default 或 bypass', argumentHint: 'strict | default | bypass'},
+  {name: 'undo', aliases: [], description: '撤销最近一次 Bitori 文件修改（可指定路径）', argumentHint: '[path]'},
 ] as const;
 
 export function parseCommand(input: string): ParsedCommand | null {

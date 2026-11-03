@@ -25,13 +25,14 @@ function definitionsDigest(definitions: readonly ToolDefinition[]): string {
   return createHash('sha256').update(JSON.stringify(definitions)).digest('hex').slice(0, 16);
 }
 
-/** 累计用量；缓存字段只在 Anthropic 协议出现，双方都缺省时不带入结果。 */
+/** 累计用量；缓存字段只在 Anthropic 协议出现、credits 只在 Qoder 协议出现，双方都缺省时不带入结果。 */
 function addUsage(a: Usage, b: Usage): Usage {
   return {
     inputTokens: a.inputTokens + b.inputTokens,
     outputTokens: a.outputTokens + b.outputTokens,
     ...(a.cacheReadInputTokens !== undefined || b.cacheReadInputTokens !== undefined ? {cacheReadInputTokens: (a.cacheReadInputTokens ?? 0) + (b.cacheReadInputTokens ?? 0)} : {}),
     ...(a.cacheCreationInputTokens !== undefined || b.cacheCreationInputTokens !== undefined ? {cacheCreationInputTokens: (a.cacheCreationInputTokens ?? 0) + (b.cacheCreationInputTokens ?? 0)} : {}),
+    ...(a.credits !== undefined || b.credits !== undefined ? {credits: Math.round(((a.credits ?? 0) + (b.credits ?? 0)) * 1e6) / 1e6} : {}),
   };
 }
 

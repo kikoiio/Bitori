@@ -57,10 +57,10 @@ function readHooks(path: string, label: string): HookConfig[] {
   return normalized;
 }
 
-/** 用户级先加载，项目级追加；once id 在合并集合内全局生效。 */
-export function loadHookConfigs(workDir = process.cwd(), home = homedir()): HookConfig[] {
+/** 用户级先加载，项目级追加；once id 在合并集合内全局生效。工作区未信任时 includeProject=false，项目 Hook 不加载。 */
+export function loadHookConfigs(workDir = process.cwd(), home = homedir(), includeProject = true): HookConfig[] {
   return [
     ...readHooks(join(home, '.bitori', 'hooks.yaml'), '用户级'),
-    ...readHooks(join(workDir, '.bitori', 'hooks.yaml'), '项目级'),
+    ...(includeProject ? readHooks(join(workDir, '.bitori', 'hooks.yaml'), '项目级') : []),
   ];
 }

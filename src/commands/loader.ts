@@ -49,6 +49,7 @@ function registerMarkdown(registry: CommandRegistry, path: string, name: string)
     aliases: [],
     type: 'prompt',
     description: parsed.meta.description,
+    ...(parsed.meta.argumentHint ? {argumentHint: parsed.meta.argumentHint} : {}),
     handler: ({args}) => renderBody(parsed.body, args),
   });
 }

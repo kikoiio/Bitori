@@ -26,14 +26,21 @@ import {AgentTraceTap, type DebugEntry} from '../trace/tap.js';
 import {TraceWriter} from '../trace/writer.js';
 import {UsageRecorder} from '../usage/recorder.js';
 import type {PermissionEngine, PermissionTier} from '../tools/permission-engine.js';
+import type {SnapshotStore} from '../tools/snapshots.js';
 import type {AgentServices} from '../agent/services.js';
 import type {AgentRunResult, AgentStopReason} from '../agent/types.js';
 import {createDefaultRegistry, parseCommand, permissionTierArgument, type CommandRegistry} from '../commands/registry.js';
 import {loadUserCommands} from '../commands/loader.js';
 
 type StateListener = (state: AppState) => void;
+export interface CommandSummary {
+  name: string;
+  aliases: string[];
+  description: string;
+  argumentHint?: string;
+}
 const logger = getLogger('chat');
-interface ControllerToolSystem {registry: ToolRegistry; executor: ToolExecutor; approvals: ApprovalCoordinator; permissions?: PermissionEngine}
+interface ControllerToolSystem {registry: ToolRegistry; executor: ToolExecutor; approvals: ApprovalCoordinator; permissions?: PermissionEngine; snapshots?: SnapshotStore}
 interface ControllerToolSystemWithServices extends ControllerToolSystem {services?: AgentServices; memoryClient?: LLMClient}
 interface ActiveRequest {abortController: AbortController; promise: Promise<void>}
 
@@ -91,7 +98,7 @@ export class ChatController {
     }
     const registry = tools?.registry ?? new ToolRegistry(); const approvals = tools?.approvals ?? new ApprovalCoordinator();
     const executor = tools?.executor ?? new ToolExecutor(registry, {workspaceRoot: this.#workspaceRoot, limits: fixedToolLimits});
-    this.#tools = {registry, approvals, executor, ...(tools?.permissions === undefined && executor.options.permissions === undefined ? {} : {permissions: tools?.permissions ?? executor.options.permissions})};
+    this.#tools = {registry, approvals, executor, ...(tools?.permissions === undefined && executor.options.permissions === undefined ? {} : {permissions: tools?.permissions ?? executor.options.permissions}), ...(tools?.snapshots === undefined ? {} : {snapshots: tools.snapshots})};
     const withServices: ControllerToolSystemWithServices | null = tools;
     this.#services = withServices?.services ?? null;
     this.#memoryClient = withServices?.memoryClient ?? null;
@@ -100,6 +107,15 @@ export class ChatController {
     this.#maxIterations = options.maxIterations ?? 20;
   }
   getState(): AppState { return this.#state; }
+  /** 供输入框命令面板展示；包括内置命令与用户 Markdown 命令。 */
+  commandCatalog(): CommandSummary[] {
+    return this.#commands.listCommands().map(command => ({
+      name: command.name,
+      aliases: [...command.aliases],
+      description: command.description,
+      ...(command.argumentHint === undefined ? {} : {argumentHint: command.argumentHint}),
+    }));
+  }
   traceStats(): ReturnType<TraceWriter['statsFor']> | null {
     return this.#state.session && this.#traceWriter ? this.#traceWriter.statsFor(this.#state.session.id) : null;
   }
@@ -145,6 +161,11 @@ export class ChatController {
       if (known.action === 'permission') {
         const tier = permissionTierArgument(parsed.args);
         if (tier) this.#setPermissionTier(tier); else this.#error('权限档必须是 strict、default 或 bypass');
+        return;
+      }
+      if (known.action === 'undo') {
+        const result = await this.undoLastEdit(parsed.args === '' ? undefined : parsed.args);
+        this.#error(result.message);
         return;
       }
       if (parsed.args) { this.#error(`/${known.name} 不接受参数`); return; }
@@ -194,9 +215,9 @@ export class ChatController {
       try {
         await this.#repository.abortAgentRun(runId, result, detail);
         const conversation = await this.#repository.getConversation(session.id);
-        if (conversation) this.#publish({...this.#state, messages: conversation.messages, toolCalls: conversation.toolCalls});
+        if (conversation) this.#publish({...this.#state, messages: conversation.messages, toolCalls: conversation.toolCalls, liveToolCalls: []});
       } catch (storageError) { detail += `；无法持久化终态：${errorMessage(storageError)}`; logger.warn('Agent 终态写入失败', {runId, error: errorMessage(storageError)}); }
-      this.#publish({...this.#state, requestStatus: cancelled ? 'idle' : 'failed', activeRunId: null, approvalPrompt: null, stopReason: reason, visibleError: detail});
+      this.#publish({...this.#state, requestStatus: cancelled ? 'idle' : 'failed', activeRunId: null, approvalPrompt: null, stopReason: reason, visibleError: detail, liveToolCalls: []});
     }
   }
   async #consume(runId: string, userMessageId: string, instruction: string, trigger: 'message' | 'do', context: AgentContext, signal: AbortSignal, reminders: string[]): Promise<void> {
@@ -222,10 +243,47 @@ export class ChatController {
   }
   async cancelActiveRequest(): Promise<void> { const active = this.#active; if (!active) return; if (active.abortController.signal.aborted) { await active.promise; return; } this.#publish({...this.#state, requestStatus: 'cancelling'}); active.abortController.abort(); this.#tools.approvals.interruptAll(); await active.promise; }
   resolveToolApproval(decision: ApprovalDecision): void { const prompt = this.#state.approvalPrompt; if (prompt) this.#tools.approvals.resolve(prompt.callId, decision); }
+  /** 撤销最近一次(或指定文件的)Bitori 文件写入;当前内容被外部修改时拒绝盲目覆盖。 */
+  async undoLastEdit(path?: string): Promise<{ok: boolean; message: string}> {
+    if (this.#active) return {ok: false, message: '生成中不能撤销;请先停止或等待当前任务'};
+    const store = this.#tools.snapshots;
+    if (store === undefined) return {ok: false, message: '当前工具系统未启用快照存储,无法撤销'};
+    return store.undo(path);
+  }
   setPermissionTier(tier: PermissionTier): void { this.#setPermissionTier(tier); }
   async createSession(): Promise<void> { if (!this.#canChangeSession() || !this.#profile) return; const profile = this.#profile; await this.#changeSession(async signal => { this.#rebuildSystemPrompt(); const session = await this.#repository.createSession(profile.name); if (signal.aborted) return; this.#tap?.fact(session.id, 'session_created', {profileName: profile.name}); await this.#publishSession(session, [], [], [], signal); }); }
   async listSessions(): Promise<Session[]> { return this.#profile ? this.#repository.listSessions(this.#profile.name) : []; }
   async switchSession(sessionId: string): Promise<void> { if (!this.#canChangeSession() || !this.#profile) return; const profile = this.#profile; await this.#changeSession(async signal => { const session = await this.#repository.getSession(sessionId); if (signal.aborted) return; if (!session || session.profileName !== profile.name) { this.#error('该会话不属于当前 profile'); return; } this.#rebuildSystemPrompt(); const conversation = await this.#repository.getConversation(session.id); const messages = conversation?.messages ?? await this.#repository.getMessages(session.id); if (signal.aborted) return; this.#tap?.fact(session.id, 'session_switched', {profileName: profile.name}); await this.#publishSession(session, messages, conversation?.toolCalls ?? [], conversation?.agentRuns ?? [], signal); }); }
+  async renameSession(sessionId: string, title: string): Promise<void> {
+    if (this.#closed) return;
+    if (this.#active) { this.#error('生成期间不能重命名会话'); return; }
+    const trimmed = title.trim();
+    if (!trimmed) { this.#error('会话标题不能为空'); return; }
+    try {
+      const updated = await this.#repository.renameSession(sessionId, trimmed);
+      if (this.#state.session?.id === updated.id) this.#publish({...this.#state, session: updated});
+    } catch (error) { this.#error(`重命名失败：${error instanceof Error ? error.message : String(error)}`); }
+  }
+  async deleteSession(sessionId: string): Promise<void> {
+    if (!this.#canChangeSession()) return;
+    const profile = this.#profile;
+    const isCurrent = this.#state.session?.id === sessionId;
+    try {
+      await this.#repository.deleteSession(sessionId);
+    } catch (error) { this.#error(`删除失败：${error instanceof Error ? error.message : String(error)}`); return; }
+    this.#tap?.fact(sessionId, 'session_deleted', {profileName: profile?.name ?? ''});
+    if (isCurrent && profile !== null && profile !== undefined) {
+      await this.#changeSession(async signal => {
+        const next = await this.#repository.findLatestSession(profile.name) ?? await this.#repository.createSession(profile.name);
+        if (signal.aborted) return;
+        this.#rebuildSystemPrompt();
+        const conversation = await this.#repository.getConversation(next.id);
+        const messages = conversation?.messages ?? await this.#repository.getMessages(next.id);
+        if (signal.aborted) return;
+        await this.#publishSession(next, messages, conversation?.toolCalls ?? [], conversation?.agentRuns ?? [], signal);
+      });
+    }
+  }
   setScreen(screen: AppState['screen']): void { this.#publish({...this.#state, screen}); }
   /** 调试面板开关；面板内容在渲染时通过 debugEntries/activeSkills 实时读取。 */
   toggleDebugPanel(): void { this.#publish({...this.#state, debugOpen: !this.#state.debugOpen}); }
@@ -252,7 +310,7 @@ export class ChatController {
     return this.#shutdownPromise;
   }
   async #setMode(mode: 'plan' | 'execute'): Promise<void> { const session = this.#state.session; if (!session) return; const updated = await this.#repository.setSessionMode(session.id, mode); this.#tap?.fact(session.id, 'mode_switch', {mode}); this.#publish({...this.#state, session: updated, agentMode: mode, visibleError: null}); }
-  #setPermissionTier(tier: PermissionTier): void { if (!this.#tools.permissions) { this.#error('当前工具系统未启用权限引擎'); return; } this.#tools.permissions.setTier(tier); this.#publish({...this.#state, permissionTier: tier, visibleError: null}); }
+  #setPermissionTier(tier: PermissionTier): void { if (!this.#tools.permissions) { this.#error('当前工具系统未启用权限引擎'); return; } this.#tools.permissions.setTier(tier); this.#publish({...this.#state, permissionTier: tier, visibleError: tier === 'bypass' ? '已切换到放行档：写入与命令将跳过逐个审批，仅受路径与 Hooks 底线约束。用 /permission default 恢复。' : null}); }
   /** 会话激活时采集环境并冻结系统提示；同一会话内逐字节稳定，保证 Anthropic 可缓存前缀不被破坏。 */
   #rebuildSystemPrompt(): void {
     if (!this.#profile) { this.#systemBlocks = null; return; }
@@ -265,7 +323,7 @@ export class ChatController {
     await active.promise;
   }
   #canChangeSession(): boolean { if (this.#closed) return false; if (this.#active) { this.#error('生成期间不能新建或切换会话'); return false; } return true; }
-  async #publishSession(session: Session, messages: StoredMessage[], toolCalls: ToolCallRecord[] = [], agentRuns: AgentRunRecord[] = [], signal?: AbortSignal): Promise<void> { await this.#services?.hooks.fire('session_end', {event: 'session_end'}); if (signal?.aborted) return; this.#publish({...this.#state, screen: 'chat', session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls, requestStatus: 'idle', ...restoredRunState(messages, agentRuns), activeRunId: null, iteration: 0, agentPhase: null, expandedThinkingIds: new Set(), selectedMessageId: null, visibleError: null, approvalPrompt: null}); }
+  async #publishSession(session: Session, messages: StoredMessage[], toolCalls: ToolCallRecord[] = [], agentRuns: AgentRunRecord[] = [], signal?: AbortSignal): Promise<void> { await this.#services?.hooks.fire('session_end', {event: 'session_end'}); if (signal?.aborted) return; this.#publish({...this.#state, screen: 'chat', session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls, requestStatus: 'idle', ...restoredRunState(messages, agentRuns), activeRunId: null, iteration: 0, agentPhase: null, expandedThinkingIds: new Set(), selectedMessageId: null, visibleError: null, approvalPrompt: null, liveToolCalls: []}); }
   #error(message: string): void { this.#publish({...this.#state, visibleError: message}); }
   #publish(state: AppState): void { if (state === this.#state) return; this.#state = state; for (const listener of this.#listeners) listener(state); }
 }

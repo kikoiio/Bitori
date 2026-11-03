@@ -21,11 +21,13 @@ export class StreamCollector {
         else if (event.type === 'thinking_delta') { thinking += event.text; yield {...base, type: 'thinking_delta', delta: event.text}; }
         else if (event.type === 'usage') {
           // 缓存字段沿用「有值才覆盖」的保留语义：Anthropic 只在 message_start 上报，后续 usage 事件不清空已收到的值。
+          // credits 是同一迭代内多次模型调用的累加(Qoder 每个 span.model_request_end 上报一次)。
           usage = {
             inputTokens: event.usage.inputTokens || usage.inputTokens,
             outputTokens: event.usage.outputTokens || usage.outputTokens,
             ...(event.usage.cacheReadInputTokens !== undefined || usage.cacheReadInputTokens !== undefined ? {cacheReadInputTokens: event.usage.cacheReadInputTokens ?? usage.cacheReadInputTokens} : {}),
             ...(event.usage.cacheCreationInputTokens !== undefined || usage.cacheCreationInputTokens !== undefined ? {cacheCreationInputTokens: event.usage.cacheCreationInputTokens ?? usage.cacheCreationInputTokens} : {}),
+            ...(event.usage.credits !== undefined || usage.credits !== undefined ? {credits: (usage.credits ?? 0) + (event.usage.credits ?? 0)} : {}),
           };
           yield {...base, type: 'usage_updated', iterationUsage: usage, totalUsage: usage};
         } else if (event.type === 'tool_call_start') {

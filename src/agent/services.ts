@@ -8,6 +8,7 @@ import {loadAgentDefinitions} from '../subagents/loader.js';
 import {TeamManager} from '../teams/team.js';
 import {HookEngine} from '../hooks/engine.js';
 import {loadHookConfigs} from '../hooks/loader.js';
+import {isWorkspaceTrusted} from '../config/trust.js';
 import type {HookConfig} from '../hooks/types.js';
 import type {LLMClient} from '../providers/types.js';
 import {join} from 'node:path';
@@ -25,9 +26,11 @@ export interface AgentServices {
 }
 
 /** 把各子系统接入同一个组合根，供工具与控制器共享。 */
-export function createAgentServices(options: {workDir?: string; hooks?: readonly HookConfig[]} = {}): AgentServices {
+export function createAgentServices(options: {workDir?: string; hooks?: readonly HookConfig[]; projectTrusted?: boolean} = {}): AgentServices {
   const workDir = options.workDir ?? process.cwd();
   const home = homedir();
+  // 未信任工作区的项目级 Hook 默认拒载；显式传入 hooks 数组时以调用方为准。
+  const includeProjectHooks = options.projectTrusted ?? isWorkspaceTrusted(workDir, home);
   const skills = new SkillLoader(workDir, home);
   skills.loadAll();
   const activeSkills = new ActiveSkills();
@@ -51,7 +54,7 @@ export function createAgentServices(options: {workDir?: string; hooks?: readonly
     },
     agents: loadAgentDefinitions(workDir, home),
     teams: new TeamManager(join(home, '.bitori', 'teams')),
-    hooks: new HookEngine(options.hooks ?? loadHookConfigs(workDir)),
+    hooks: new HookEngine(options.hooks ?? loadHookConfigs(workDir, home, includeProjectHooks)),
     close: () => closed ??= Promise.all([...ownedExtractors].map(extractor => extractor.close())).then(() => { ownedExtractors.clear(); }),
   };
 }
