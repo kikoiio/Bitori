@@ -7,6 +7,7 @@ import {loadAgentDefinitions, parseAgentDefinition} from '../../../src/subagents
 import {spawnSubAgent} from '../../../src/subagents/spawn.js';
 import {BUILTIN_AGENTS} from '../../../src/subagents/types.js';
 import {AgentTool} from '../../../src/tools/implementations/agent-tools.js';
+import {trustWorkspace} from '../../../src/config/trust.js';
 
 describe('SubAgent', () => {
   it('内置角色明确说明只提供文本咨询', () => {
@@ -55,8 +56,23 @@ describe('SubAgent', () => {
     onTestFinished(() => rmSync(home, {recursive: true, force: true}));
     mkdirSync(join(work, '.bitori', 'agents'), {recursive: true});
     writeFileSync(join(work, '.bitori', 'agents', 'explore.md'), '---\nname: explore\ndescription: 项目探索\n---\n', 'utf8');
-    const agents = loadAgentDefinitions(work, home);
+    const agents = loadAgentDefinitions(work, home, true);
     expect(agents.find(agent => agent.name === 'explore')?.description).toBe('项目探索');
+  });
+
+  it('项目 Agent 只在信任工作区后加载', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'bitori-agents-trust-'));
+    const home = mkdtempSync(join(tmpdir(), 'bitori-home-'));
+    try {
+      mkdirSync(join(work, '.bitori', 'agents'), {recursive: true});
+      writeFileSync(join(work, '.bitori', 'agents', 'review.md'), '---\nname: review\ndescription: 项目审查\n---\n', 'utf8');
+      expect(loadAgentDefinitions(work, home).some(agent => agent.name === 'review')).toBe(false);
+      await trustWorkspace(work, home);
+      expect(loadAgentDefinitions(work, home).find(agent => agent.name === 'review')?.description).toBe('项目审查');
+    } finally {
+      rmSync(work, {recursive: true, force: true});
+      rmSync(home, {recursive: true, force: true});
+    }
   });
 
   it('子 Agent 输出收集', async () => {

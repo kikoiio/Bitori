@@ -39,7 +39,7 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 
 ## 诊断、信任与安全边界
 
-`src/diagnostics/connection.ts` 用各协议的 `/models` 端点做真实连接探测，把 DNS/超时/401/404/协议不匹配/模型不存在归入 `ProviderErrorCode`；`bitori doctor` 复用同一探测输出配置、凭据、工作区与模型清单（永不打印密钥值）。接口方言可省略：`src/config/protocol.ts` 按密钥形状（Qoder PAT 的 `pt-` 前缀）与地址关键词（anthropic/claude、responses、chat/completions）推断，认不出时兜底为最常见的 OpenAI 兼容接口并标记为弱推断；优先级是 `config.yaml` 显式 > `.env` 的 `<前缀>_PROTOCOL` > 推断，doctor 的「协议」一项会显示结论与依据。工作区信任清单在 `~/.bitori/trusted-workspaces.json`，由 `bitori trust`、桌面信任对话框与 doctor 检查共同维护。文件修改撤销依赖 `src/tools/snapshots.ts`：edit/write 提交前记录改前内容，撤销要求当前内容仍等于 Bitori 写入结果（被外部修改则拒绝覆盖）；快照按写入时间排序，同一毫秒内的多次写入也能定位到最近一次。撤销目标由工作区相对路径推导而非快照里记录的绝对路径——同一文件在不同平台可能被写成 8.3 短名、展开后的符号链接路径或不同大小写，比较绝对路径会把合法快照误判成工作区之外。威胁模型、控制、验证证据与已知残留风险记录见 [安全模型与审计](reference/security.md)。
+`src/diagnostics/connection.ts` 用各协议的 `/models` 端点做真实连接探测，把 DNS/超时/401/404/协议不匹配/模型不存在归入 `ProviderErrorCode`；`bitori doctor` 复用同一探测输出配置、凭据、工作区与模型清单（永不打印密钥值）。接口方言可省略：`src/config/protocol.ts` 按密钥形状（Qoder PAT 的 `pt-` 前缀）与地址关键词（anthropic/claude、responses、chat/completions）推断，认不出时兜底为最常见的 OpenAI 兼容接口并标记为弱推断；优先级是 `config.yaml` 显式 > `.env` 的 `<前缀>_PROTOCOL` > 推断，doctor 的「协议」一项会显示结论与依据。工作区信任清单在 `~/.bitori/trusted-workspaces.json`；未信任工作区的项目配置、指令、记忆、skills、commands、agents 与权限规则默认拒载。清单由 `bitori trust`、桌面信任对话框与 doctor 检查共同维护。文件修改撤销依赖 `src/tools/snapshots.ts`：edit/write 提交前记录改前内容，撤销要求当前内容仍等于 Bitori 写入结果（被外部修改则拒绝覆盖）；快照按写入时间排序，同一毫秒内的多次写入也能定位到最近一次。撤销目标由工作区相对路径推导而非快照里记录的绝对路径——同一文件在不同平台可能被写成 8.3 短名、展开后的符号链接路径或不同大小写，比较绝对路径会把合法快照误判成工作区之外。威胁模型、控制、验证证据与已知残留风险记录见 [安全模型与审计](reference/security.md)。
 
 ## 意图与实现状态
 
@@ -49,9 +49,9 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 | 桌面工作台 | 已实现；Linux GUI/打包验收通过 | `src/desktop/`；Claude Desktop 风格深色布局、斜杠命令、流式工具卡片与 `Ctrl+/-` 页面缩放。edit/write 卡片默认展开行级 diff 并提供撤销按钮；审批有一次/本会话/永久/拒绝四种选择。smoke 覆盖四种选择、会话授权复用边界、diff/撤销、模型列表、图片/归档入口、会话管理和重命名编辑期间 caret 稳定；run 41680030634 通过开发版、AppImage 与解包 deb 启动。 |
 | 多轮工具、Plan/Do、权限、MCP | 已实现 | `src/agent/`、`src/tools/`、`src/mcp/`；命令和 MCP 不构成操作系统沙箱。 |
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
-| 自动化验收与模型兼容性 | 持续完善 | `tests/` 和 `.github/workflows/`；真实端点测试按需运行，不等同完整供应商认证。历史证据覆盖 Qoder、OpenAI Chat 和 Anthropic，但未记录运行提交 SHA；本轮三平台 Check 和四种 Provider 的离线映射测试通过，未单独验证四种真实模型端点。 |
-| 桌面图形应用 | Linux 初版已验收 | `src/desktop/` 提供 Electron 界面。run 41680030634 已通过开发版、AppImage 和解包 deb 启动；Windows/macOS 桌面和真实模型端点需另行验收。打包路径见 [开发与测试](reference/development.md)。 |
-| 多模态、会话导入、自动断点续跑 | 实现、三平台 Check、SQLite 集成和 Linux 桌面验收通过 | 本地图片贯通 TUI/桌面及支持图像的 Provider；不支持图像的 Provider 明确拒绝；版本化 JSON 由 CLI/TUI/桌面交换；持久检查点恢复并要求不确定副作用确认。提交 `f66f293` 的三平台 Check 见 run 41679968530，Linux 桌面与打包 smoke 见 run 41680030634；真实 Provider 图片端点未在本轮验证，见[项目待办计划](../PLAN.md)。 |
+| 自动化验收与模型兼容性 | 自动映射有单测；真实端点按配置逐项验收 | `tests/` 和 `.github/workflows/`；某一个配置端点的图片请求结果只适用于该模型/endpoint，不代表其他协议或供应商；本轮证据见[项目待办计划](../PLAN.md)。 |
+| 桌面图形应用 | Linux 初版已验收 | `src/desktop/` 提供 Electron 界面。run 41680030634 已通过开发版、AppImage 和解包 deb 启动；Windows/macOS 桌面明确不在当前目标内。打包路径见 [开发与测试](reference/development.md)。 |
+| 多模态、会话导入、自动断点续跑 | 实现、三平台 Check、SQLite 集成和 Linux 桌面验收通过 | 本地图片贯通 TUI/桌面及支持图像的 Provider；不支持图像的 Provider 明确拒绝；版本化 JSON 由 CLI/TUI/桌面交换；持久检查点恢复并要求不确定副作用确认。真实图片请求的当前端点证据见[项目待办计划](../PLAN.md)。 |
 | 云同步 | 已取消，保持不支持 | 见 ADR 0001。 |
 
-状态依据 2026-11-03 的代码与验证记录，其中终端工具展示于 2026-10-30 更新；真实终端光标观感和真实图片 Provider 端点未在本轮验证。
+状态依据 2026-11-03 的代码与验证记录。Linux 隔离 PTY 核对实际 Ink 组件的 ANSI 光标行列；Ptyxis 像素外观仍需在目标终端环境单独验收。RSI 与 SWE-bench Lite 已暂停；Windows/macOS 桌面不在范围内。

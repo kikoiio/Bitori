@@ -13,6 +13,12 @@ on:
         required: false
         default: ''
         type: string
+      preset:
+        description: 验收场景（image 强制最多一次 Provider 聊天调用）
+        required: true
+        default: 'image'
+        type: choice
+        options: ['image', 'loop', 'fix-test', 'add-test', 'refactor']
       max_tokens:
         description: 运行后超额判定阈值（不会阻止请求超过此值）
         required: true
@@ -54,7 +60,12 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: node dist/bin/bitori.js doctor
+          E2E_INPUT_MODEL: ${{ inputs.model }}
+          E2E_INPUT_PROTOCOL: ${{ inputs.protocol }}
+        run: |
+          if [ -n "$E2E_INPUT_MODEL" ]; then export LLM_MODEL="$E2E_INPUT_MODEL"; fi
+          if [ -n "$E2E_INPUT_PROTOCOL" ]; then export LLM_PROTOCOL="$E2E_INPUT_PROTOCOL"; fi
+          node dist/bin/bitori.js doctor
 
       - name: Run real provider acceptance
         env:
@@ -65,13 +76,14 @@ jobs:
           BITORI_E2E_PROTOCOL: ${{ inputs.protocol }}
           BITORI_E2E_MAX_TOKENS: ${{ inputs.max_tokens }}
           BITORI_E2E_MAX_CREDITS: ${{ inputs.max_credits }}
+          BITORI_E2E_PRESET: ${{ inputs.preset }}
           BITORI_E2E_RESULTS_DIR: ${{ runner.temp }}/e2e-evidence
         run: npm run test:e2e:providers
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-evidence-${{ inputs.protocol || 'auto' }}
+          name: e2e-evidence-${{ inputs.protocol || 'auto' }}-${{ inputs.preset }}
           path: ${{ runner.temp }}/e2e-evidence/
           if-no-files-found: ignore
           retention-days: 7

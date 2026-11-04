@@ -6,6 +6,7 @@ import {parseSkillText} from '../../../src/skills/parser.js';
 import {SkillLoader} from '../../../src/skills/loader.js';
 import {ActiveSkills, SkillExecutor} from '../../../src/skills/executor.js';
 import {LoadSkillTool} from '../../../src/tools/implementations/skill-tools.js';
+import {trustWorkspace} from '../../../src/config/trust.js';
 
 describe('Skill 系统', () => {
   it('解析 frontmatter 并记录不支持的执行选项', () => {
@@ -24,7 +25,7 @@ describe('Skill 系统', () => {
       mkdirSync(join(work, '.bitori', 'skills', 'review'), {recursive: true});
       writeFileSync(join(home, '.bitori', 'skills', 'common.md'), '---\nname: common\ndescription: 用户级\n---\n用户正文', 'utf8');
       writeFileSync(join(work, '.bitori', 'skills', 'review', 'SKILL.md'), '---\nname: review\ndescription: 项目级\n---\n项目正文', 'utf8');
-      const loader = new SkillLoader(work, home);
+      const loader = new SkillLoader(work, home, true);
       expect(loader.loadAll()).toEqual([
         {name: 'common', description: '用户级', source: 'user'},
         {name: 'review', description: '项目级', source: 'project'},
@@ -37,6 +38,21 @@ describe('Skill 系统', () => {
       } finally {
         rmSync(work, {recursive: true, force: true});
       }
+    }
+  });
+
+  it('项目 Skills 只在信任工作区后加载', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'bitori-skills-trust-'));
+    const home = mkdtempSync(join(tmpdir(), 'bitori-home-'));
+    try {
+      mkdirSync(join(work, '.bitori', 'skills'), {recursive: true});
+      writeFileSync(join(work, '.bitori', 'skills', 'demo.md'), '---\nname: demo\ndescription: 项目技能\n---\n正文', 'utf8');
+      expect(new SkillLoader(work, home).loadAll()).toEqual([]);
+      await trustWorkspace(work, home);
+      expect(new SkillLoader(work, home).loadAll()).toEqual([{name: 'demo', description: '项目技能', source: 'project'}]);
+    } finally {
+      rmSync(work, {recursive: true, force: true});
+      rmSync(home, {recursive: true, force: true});
     }
   });
 
@@ -56,7 +72,7 @@ describe('Skill 系统', () => {
       const path = join(directory, 'demo.md');
       const write = (field: string) => writeFileSync(path, `---\nname: demo\n${field}\n---\n正文`, 'utf8');
       write('mode: inline');
-      const loader = new SkillLoader(work, join(work, 'home'));
+      const loader = new SkillLoader(work, join(work, 'home'), true);
       loader.loadAll();
       const active = new ActiveSkills();
       const tool = new LoadSkillTool(loader, new SkillExecutor(active));

@@ -21,7 +21,7 @@ const localCommands = [
   {name: 'plan', aliases: [], description: '切换到计划模式'},
   {name: 'do', aliases: [], description: '执行最近计划'},
   {name: 'compact', aliases: ['c'], description: '手动压缩上下文'},
-  {name: 'permission', aliases: ['permissions', 'mode'], description: '切换权限档：strict、default 或 bypass', argumentHint: 'strict | default | bypass'},
+  {name: 'permission', aliases: ['permissions', 'mode'], description: '切换权限档；bypass 需同一聊天内二次确认，切换聊天后失效', argumentHint: 'strict | default | bypass [confirm]'},
   {name: 'undo', aliases: [], description: '撤销最近一次 Bitori 文件修改（可指定路径）', argumentHint: '[path]'},
 ] as const;
 

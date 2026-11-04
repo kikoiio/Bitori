@@ -1,64 +1,67 @@
 # 安全模型与审计记录
 
-> 审计日期：2026-11-01。本文是「模型可以驱动本地工具」前提下的信任边界记录：威胁、控制、验证证据与**已知残留风险**。
+> 审计日期：2026-11-03。本文记录 Bitori 的信任边界、具体控制、验证证据与仍无法消除的风险。模型可以提出本地工具调用；文件权限和审批仍是关键保护边界。
 
 ## 威胁模型
 
 | # | 威胁 | 入口 | 关键假设 |
 |---|------|------|----------|
-| T1 | Prompt injection 诱导执行高危操作 | 仓库文件内容、`read_file`/`run_command` 输出、MCP 返回、网页文本 | 注入文本会进入模型上下文，模型可能被指令劫持 |
-| T2 | 审批绕过 | 多工具并发轮次、会话/永久白名单复用、参数篡改 | 审批只覆盖了“某一次”调用 |
-| T3 | Shell 与路径穿越 | `run_command` 参数、`edit_file`/`write_file` 路径、符号链接 | 模型给出工作区外路径或逃逸进程树 |
-| T4 | 密钥泄漏 | 错误信息、日志、trace 导出、artifact、UI 快照、桌面渲染进程 | Provider 回显请求头，或密钥进入历史会话 |
-| T5 | 外链协议滥用 | Markdown 渲染的链接、`window.open`、导航 | `javascript:`/`file:` 之类伪协议被执行 |
-| T6 | 工作区自带扩展的启动信任 | 项目级 `.bitori/config.yaml`（MCP）与 `hooks.yaml` | clone 一个仓库即在其目录拉起进程 |
+| T1 | Prompt injection 诱导执行高危操作 | 项目文件、`read_file`/`run_command` 输出、MCP 返回、网页文本 | 注入文本会进入模型上下文，模型可能被指令劫持 |
+| T2 | 审批诱导或范围误判 | 工具名称、参数、命令与写入内容 | 用户可能未看清实际目标或副作用 |
+| T3 | Shell 与路径穿越 | `run_command` 参数、文件工具路径、符号链接 | 模型可能给出工作区外路径或逃逸进程树 |
+| T4 | 密钥或会话机密泄漏 | 错误信息、日志、trace 导出、会话归档、UI 快照 | Provider 回显请求头，或模型复述读到的秘密 |
+| T5 | 外链协议滥用 | Markdown 链接、`window.open`、导航 | `javascript:`/`file:` 等伪协议可能被执行 |
+| T6 | 项目内容未经审查即影响模型或运行时 | 项目指令、skills、命令、agents、权限、MCP/Hooks | clone 仓库后自动加载内容或启动进程 |
 
 ## 控制与验证证据
 
-### T1 注入 → 高危工具
-- 默认权限档下所有 `effect: 'write' | 'command'` 的工具调用都必须逐次审批，读取类工具自动放行；审批面板展示**真实的命令/路径/diff**，用户看到的即将被执行的。
-- 注入文本无论出现在文件、工具结果还是模型输出中，都只影响模型提议，不能直接触发执行——执行入口只有 Agent 循环 → `SafetyBatchScheduler` → 审批。
-- 验证：`tests/integration/security-boundaries.test.ts`（读取含「跳过审批」指令的文件后仍必须审批，拒绝后命令未执行）。
+### T1/T6 项目信任与注入
 
-### T2 审批绑定
-- 审批决定与具体 `callId` 绑定：同轮两个写入只放行被批准的一个（测试覆盖）。
-- `approved_once` 不复用；`approved_session` 按对话 `sessionId` 隔离；`approved_permanent` 写入 `.bitori/permissions.local.yaml` 的**精确匹配**规则（`tests/unit/tools/permission-engine.test.ts`、`tests/unit/agent/runner.test.ts`）。
-- 取消/拒绝在审批发布瞬间被竞态处理不丢失决定（`tests/unit/agent/runner.test.ts`）。
+- 工作区只有在用户执行 `bitori trust` 或确认桌面“信任并打开”后，才会加载项目级 MCP/Hooks、提示、记忆、skills、commands、agents、权限规则及 `permissions.local.yaml`。未信任时这些项目内容默认拒载；用户级配置仍可用。`bitori doctor` 与 `bitori trust --json` 会把项目记忆目录计入项目内容提示。
+- 组装提示时会说明项目文件、工具输出、MCP 内容及扩展文本是数据，不能覆盖安全要求或审批边界。该提示能降低注入影响，不能保证模型始终遵守。
+- 验证：`tests/integration/workspace-trust.test.ts`、`tests/integration/security-boundaries.test.ts`、`tests/unit/config/trust.test.ts`、skills/commands/agents/permissions/instructions 的定向单测。
+
+### T2 审批与权限
+
+- 默认档下写入和命令需逐次审批。审批请求携带精确工具参数，并提示检查命令与参数、目标路径和完整内容或 diff。审批决定绑定具体调用；会话批准按会话 ID 隔离，永久批准写入精确参数规则。
+- `/permission bypass` 只提出启用请求；须在 60 秒内、同一聊天中再次输入 `/permission bypass confirm`。切换聊天时立即清除该聊天的 bypass；旧文件中的持久化 `bypass` 会降为 `default`。当前聊天 bypass 仍会跳过逐项审批，用户应在可信环境临时使用。
+- 验证：`tests/integration/security-boundaries.test.ts`、`tests/unit/tools/permission-engine.test.ts`、`tests/unit/tools/approval-coordinator.test.ts`。
 
 ### T3 Shell 与路径
-- `WorkspacePaths` 以 `realpath` 归一并校验，父目录与符号链接均不可逃逸工作区（`src/tools/workspace-paths.ts`）。
-- `write_file` 排他创建、`edit_file` 唯一字面匹配失败即拒绝执行；提交均走临时文件 + 原子 rename，取消不留半写入（工具单测覆盖提交点前后的中断）。
-- `run_command` 超时与进程树清理由 `OwnedProcessTree` 保证（`shared/owned-process-tree.ts`）。
-- 撤销同样验证内容哈希：当前内容与 Bitori 写入结果不一致（被外部修改）时**拒绝盲目覆盖**（`tests/unit/tools/snapshots.test.ts`）。
 
-### T4 密钥脱敏
-- 单一出口 `redactSecrets`/全局 redactor：日志文件（`shared/logger.ts`）、trace 导出（`trace/export.ts` 默认脱敏，`--raw` 才关闭）、Provider 错误归一化（`providers/errors.ts`）。
-- UI/快照边界只携带 `ProfileSummary`（name/protocol/model），`main.cjs` 的 IPC 输入统一 `checkedText` 校验，桌面渲染进程永远拿不到 apiKey 值。
-- `bitori doctor` 与连接探测只输出来源变量名与布尔状态；错误文本再经脱敏。
-- 验证：`tests/unit/config/secrets.test.ts`、`tests/unit/providers/errors.test.ts`、`tests/unit/diagnostics/connection.test.ts`（探测输出不含密钥）、`tests/unit/cli/doctor.test.ts`（诊断 JSON 不含密钥）。
+- `WorkspacePaths` 以 `realpath` 归一并校验；文件工具拒绝越出工作区的路径。危险命令黑名单在权限档位之前判定。
+- `write_file` 排他创建、`edit_file` 唯一字面匹配失败即拒绝；提交使用临时文件和原子 rename。`run_command` 的超时与进程树清理由 `OwnedProcessTree` 管理。
+- 撤销操作验证当前内容与 Bitori 写入结果一致；外部修改后拒绝覆盖。
+- 验证：`tests/unit/tools/` 与 `tests/integration/security-boundaries.test.ts`。
+
+### T4 密钥与导出
+
+- 日志与 trace 默认使用 `redactSecrets`；trace 的 `--raw` 会关闭脱敏。Provider 错误归一化也会脱敏。UI/桌面 renderer 只拿到 `ProfileSummary`，不持有 API key。
+- 新建或复用的 trace 导出文件在 POSIX 系统设为 `0600`；会话归档临时文件也设为 `0600`。这限制其他本机账户读取，不防御当前登录账户。
+- 导出会话不包含配置或凭据字段，但消息、工具参数/输出和图片可能含项目秘密。未知秘密无法可靠自动识别；分享前应检查内容。`--raw` 仅用于用户明确需要保留原始 trace 的场景。
+- 验证：`tests/unit/trace/export.test.ts`、`tests/unit/storage/archive.test.ts`、`tests/unit/config/secrets.test.ts`、`tests/unit/providers/errors.test.ts`、`tests/unit/diagnostics/connection.test.ts`、`tests/unit/cli/doctor.test.ts`。
 
 ### T5 外链协议
-- Markdown 链接白名单 http/https/mailto，其余降级为文本；`img-src 'none'`；`setWindowOpenHandler` deny + `will-navigate` preventDefault（`tests/desktop/smoke.mjs` 断言 `<img>` 渲染数为 0）。
 
-### T6 工作区信任（本次新增）
-- 信任清单：`~/.bitori/trusted-workspaces.json`，`bitori trust [path] [--revoke]` 管理（`src/config/trust.ts`）。
-- 桌面端“信任并打开”对话框确认后**持久化**到清单（`main.cjs`）。
-- `bitori doctor` 输出「工作区信任」检查：项目级 MCP/Hooks 存在且未信任 → `warn` 并给出处置命令。
-- **默认拒载（2026-11-01 强制化）**：未信任工作区的 `loadConfig` 跳过项目级 `.bitori/config.yaml` 的 MCP 配置，`createAgentServices` 不加载项目级 `hooks.yaml`，并在 `AppConfig.notices`/运行时 warnings 中呈现原因；`bitori trust` 或桌面确认后才启用。验证：`tests/integration/workspace-trust.test.ts`、`tests/unit/config/loader.test.ts`、`tests/unit/config/trust.test.ts`。
+- Markdown 链接只允许 `http`、`https`、`mailto`；其他协议显示为文本。CSP 禁止远程图片，Electron 拒绝新窗口与页面导航。
+- 验证：`tests/desktop/smoke.mjs`（远程图片不渲染、导航策略）。
 
-## 已知残留风险（不得视为默认安全）
+### T6 信任清单存储
 
-1. ~~TUI 未强制拦截未信任工作区的项目扩展加载~~ → **已强制**：未信任工作区的项目级 MCP/Hooks 默认拒载（见上）。残留：`BITORI.md/AGENTS.md` 指令、skills、命令、agents 仍按现有文档加载策略读入——它们不能执行进程，但内容会进入模型上下文；克隆仓库前仍应自行审查。
-2. 模型可诱导用户**批准**恶意指令（审批文案即真实参数是最后防线，人仍是决策点）。
-3. `bitori trust` 是本地文件，无密码学保护；工作区路径移动后需重新 trust。
-4. bypass 档跳过逐次审批（UI 有持续横幅提示，见 `security-boundaries` 测试），仅应在受信环境使用。
-5. trace/历史消息保存模型输出的原文；若模型复述了它读到的机密，脱敏字典（仅 `.env`/配置内值）无法覆盖未知机密——导出共享前仍需人工检查。
+- `~/.bitori/trusted-workspaces.json` 必须是当前用户拥有、POSIX 权限不向组或其他用户开放的普通文件；读取拒绝符号链接和损坏内容。写入使用同目录私有临时文件与原子替换，进程内对 read-modify-write 排队。
+- 权限清单的原子发布、模式、符号链接和损坏输入由 `tests/unit/config/trust.test.ts` 覆盖。更改安全处理后还需在提交上完成 GitHub Actions Check。
 
-## 当前风险处置
+## 剩余风险
 
-2026-11-03：用户接受上述五项当前残留风险。决定记录于[安全风险接受记录](../decisions/0002-accept-current-security-residual-risks.md)。风险条目及现有控制继续按本文记录维护。
+1. 已信任的仓库仍可通过指令、skills、命令、agents、MCP/Hooks 或工具输出影响模型。系统提示将其标为不可信数据并不构成沙箱；信任前应审查来源与内容。
+2. 模型可能诱导用户批准恶意调用或用户可能误读审批内容。界面展示实际参数和风险提示，但最终决定仍由人作出。
+3. 信任清单是本地用户文件。文件所有者可自行修改它；进程内排队不协调其他进程；已有 `.bitori` 目录权限不会自动收紧。权限位不能抵御同一 OS 账户的恶意程序。
+4. 当前聊天启用 bypass 后，副作用调用仍会绕过逐项审批，直到切换聊天、切回其他档位或进程退出。二次确认减少误触，但不替代判断。
+5. trace、历史会话和归档可能保留模型复述的未知机密。已知配置秘密可脱敏，未知秘密须在分享前人工检查；POSIX 文件权限不能限制同一账户内的其他程序。
+
+2026-11-03 用户曾接受当时列出的五项残留风险。后续集成轮已增加上述控制；接受记录保留为历史决定，不表示风险已消失。变更与复核见[决策记录](../decisions/0002-accept-current-security-residual-risks.md)。
 
 ## 修复记录
 
-- 2026-11-01：审批四选项桌面统一、`/undo` 快照撤销、放行档持久提示、信任清单 + `bitori trust` + doctor 检查、探测/诊断输出脱敏测试补齐。
-- 2026-11-03：修复“本会话允许”曾跨聊天会话复用的问题；权限规则现在绑定 Agent 运行的对话 ID，并由引擎与 AgentRunner 测试覆盖。
+- 2026-11-01：审批四选项桌面统一、`/undo` 快照撤销、权限档位提示、工作区信任清单与诊断检查、探测脱敏测试补齐。
+- 2026-11-03：会话批准绑定会话 ID；未信任工作区默认拒载项目配置与上下文；bypass 改为二次确认且仅会话有效；信任清单使用私有权限、符号链接防护与原子替换；trace/归档文件设置私有权限；审批文案展示参数和副作用提示。

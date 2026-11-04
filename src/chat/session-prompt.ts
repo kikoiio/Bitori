@@ -8,7 +8,7 @@ import {collectEnvironment} from '../prompt/environment.js';
 /** 会话激活时构建提示，调用方在整个会话期间保留结果。 */
 export function buildSessionPrompt(profile: ProviderProfile, workspaceRoot: string, services: AgentServices | null): PromptBlock[] {
   const optional: PromptSection[] = [];
-  const instructions = services ? loadInstructions(workspaceRoot) : '';
+  const instructions = services ? loadInstructions(workspaceRoot, undefined, services.projectTrusted) : '';
   if (instructions) optional.push({id: 'customInstructions', priority: SECTION_PRIORITY.customInstructions, text: instructions});
   const memory = services?.memory.buildSystemReminder() ?? '';
   if (memory) optional.push({id: 'longTermMemory', priority: SECTION_PRIORITY.longTermMemory, text: memory});

@@ -8,7 +8,7 @@ export default tseslint.config(
   ...tseslint.configs.recommendedTypeChecked,
   {
     ...tseslint.configs.disableTypeChecked,
-    files: ['src/desktop/**/*.cjs', 'src/desktop/renderer/**/*.js', 'tests/desktop/**/*.mjs'],
+    files: ['src/desktop/**/*.cjs', 'src/desktop/renderer/**/*.js', 'tests/desktop/**/*.mjs', 'tests/acceptance/**/*.mjs'],
     languageOptions: {
       globals: {
         Buffer: 'readonly', __dirname: 'readonly', module: 'readonly', require: 'readonly',

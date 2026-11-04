@@ -4,6 +4,7 @@ import {ChatController} from '../chat/agent-controller.js';
 import {collectSecretValues, configPaths, resolveProfileWithApiKey} from '../config/loader.js';
 import type {AppConfig} from '../config/types.js';
 import {createLLMClient} from '../providers/factory.js';
+import {ProviderRequestLimiter} from '../providers/request-limiter.js';
 import type {LLMClient} from '../providers/types.js';
 import {configureLogging} from '../shared/logger.js';
 import type {LogLevel} from '../shared/logger.js';
@@ -15,6 +16,10 @@ import {cleanupExpiredTraces} from '../trace/retention.js';
 export interface ApplicationRuntime {
   controller: ChatController;
   warnings: string[];
+  /** Number of calls into ProviderClient.streamChat, excluding SDK-internal retries. */
+  providerRequestCount(): number;
+  /** Number of chat calls rejected by the optional hard limit. */
+  providerRequestBlockedCount(): number;
   close(): Promise<void>;
 }
 
@@ -37,6 +42,8 @@ export async function createApplicationRuntime(options: {
   autoResume?: boolean;
   /** Provider 内模型选择：只覆盖本次运行时的 model，不改配置文件。 */
   modelOverride?: string;
+  /** ProviderClient.streamChat 调用数硬上限；不统计 SDK 内部重试或回退。 */
+  providerRequestLimit?: number;
 }): Promise<ApplicationRuntime> {
   const {config} = options;
   const resolved = resolveProfileWithApiKey(config, options.profileName);
@@ -44,13 +51,14 @@ export async function createApplicationRuntime(options: {
   const profile = options.modelOverride === undefined ? resolved : {...resolved, model: options.modelOverride};
   const workspace = resolve(options.workspace);
   const cache = new Map<string, LLMClient>();
+  const providerRequests = new ProviderRequestLimiter(options.providerRequestLimit);
   const clientFor = (model: string | null): LLMClient => {
     const name = model === null ? profile.name : config.models[model] ?? model;
     const selected = name === profile.name ? profile : (config.profiles.find(item => item.name === name) ?? profile);
     if (selected.apiKey.length === 0) throw new Error(`请在 .env 中填写 ${selected.apiKeyVariable ?? 'API key'}`);
     const cached = cache.get(selected.name);
     if (cached) return cached;
-    const client = createLLMClient(selected);
+    const client = providerRequests.wrap(createLLMClient(selected));
     cache.set(selected.name, client);
     return client;
   };
@@ -78,7 +86,11 @@ export async function createApplicationRuntime(options: {
     const paths = configPaths();
     controller = new ChatController(client, repository, tools, undefined, {workspaceRoot: workspace, autoResume: options.autoResume ?? true, observability: {traceDirectory: paths.traces, usagePath: join(paths.usage, 'skills.jsonl')}, ...(options.maxIterations === undefined ? {} : {maxIterations: options.maxIterations})});
     await controller.initialize(profile);
-    return {controller, warnings: [...(config.notices ?? []), ...mcp.failed.map(item => `MCP Server ${item.name} 启动失败：${item.error.message}`)], close};
+    return {controller, providerRequestCount: () => providerRequests.count, providerRequestBlockedCount: () => providerRequests.blockedCount, warnings: [
+      ...(config.notices ?? []),
+      ...(tools.permissions.hadPersistedBypass ? ['已忽略配置文件中持久化的 bypass 档；如需使用，请在当前聊天中二次确认 /permission bypass。'] : []),
+      ...mcp.failed.map(item => `MCP Server ${item.name} 启动失败：${item.error.message}`),
+    ], close};
   } catch (error) {
     await close().catch(() => undefined);
     throw error;

@@ -11,7 +11,12 @@ export class ApprovalCoordinator {
   async request(call: ToolCall, force = false, reason?: string, signal?: AbortSignal): Promise<ApprovalDecision> {
     if (call.effect === 'read' && !force) return 'approved';
     if (this.#pending) throw new Error('已有工具正在等待审批');
-    const prompt: ToolApprovalPrompt = {callId: call.internalId, toolName: call.name, effect: call.effect, argumentSummary: JSON.stringify(call.arguments), riskMessage: call.effect === 'command' ? '批准的命令可能访问网络、启动子进程或影响工作区外资源。' : null, ...(reason === undefined ? {} : {reason})};
+    const riskMessage = call.effect === 'command'
+      ? '批准的命令可能访问网络、启动子进程或影响工作区外资源。核对完整命令与参数后再批准。'
+      : call.effect === 'write'
+        ? '此调用会创建或修改内容。核对目标路径与完整内容或 diff 后再批准。'
+        : null;
+    const prompt: ToolApprovalPrompt = {callId: call.internalId, toolName: call.name, effect: call.effect, argumentSummary: JSON.stringify(call.arguments), riskMessage, ...(reason === undefined ? {} : {reason})};
     return new Promise(resolve => {
       const abort = () => this.resolve(call.internalId, 'denied');
       this.#pending = {prompt, resolve: decision => { signal?.removeEventListener('abort', abort); resolve(decision); }};

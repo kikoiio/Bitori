@@ -3,6 +3,7 @@ import {join} from 'node:path';
 import {homedir} from 'node:os';
 import {CommandRegistry} from './registry.js';
 import {normalizeLineEndings} from '../shared/text.js';
+import {isWorkspaceTrusted} from '../config/trust.js';
 
 export interface UserCommandFrontmatter {description: string; argumentHint: string}
 
@@ -26,8 +27,9 @@ export function renderBody(body: string, args: string): string {
 }
 
 /** 扫描用户级与项目级 commands 目录；子目录形成 namespace。 */
-export function loadUserCommands(workDir: string, homeDirectory = homedir(), registry = new CommandRegistry()): CommandRegistry {
-  const roots = [join(homeDirectory, '.bitori', 'commands'), join(workDir, '.bitori', 'commands')];
+export function loadUserCommands(workDir: string, homeDirectory = homedir(), registry = new CommandRegistry(), projectTrusted = isWorkspaceTrusted(workDir, homeDirectory)): CommandRegistry {
+  const roots = [join(homeDirectory, '.bitori', 'commands')];
+  if (projectTrusted) roots.push(join(workDir, '.bitori', 'commands'));
   for (const root of roots) {
     if (!existsSync(root)) continue;
     for (const entry of readdirSync(root, {withFileTypes: true})) {

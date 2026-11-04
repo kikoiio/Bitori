@@ -137,7 +137,9 @@ describe('ChatController', () => {
     const client = new MockLLMClient([{type: 'completed', finishReason: 'stop'}]);
     const database = join(root, 'db.sqlite');
     const workerUrl = new URL('../fixtures/anthropic-storage-worker.ts', import.meta.url);
-    const controller = new ChatController(client, new SessionRepository(database, workerUrl), null, undefined, {workspaceRoot: root});
+    const services = createAgentServices({workDir: root, hooks: [], projectTrusted: true});
+    const tools = createToolSystem(root, {}, {services});
+    const controller = new ChatController(client, new SessionRepository(database, workerUrl), tools, undefined, {workspaceRoot: root});
     try {
       await controller.initialize(profile);
       await controller.sendMessage('/explain\t  note.ts');
@@ -145,6 +147,7 @@ describe('ChatController', () => {
       expect(controller.getState().messages[0]?.content).toBe('解释 note.ts 并说明调用者');
       expect(controller.getState().messages[0]?.displayContent).toBe('/explain\t  note.ts');
       await controller.shutdown();
+      await tools.close();
       const restored = new ChatController(client, new SessionRepository(database, workerUrl), null, undefined, {workspaceRoot: root});
       await restored.initialize(profile);
       await restored.sendMessage('继续');

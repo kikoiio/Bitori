@@ -2,7 +2,7 @@
 
 Bitori 是在本地工作区中运行的 AI 编码助手，提供跨平台终端 TUI 和 Linux 桌面界面。模型可读取文件、提出修改并调用工具；需要审批的操作会先显示实际参数。
 
-本地图片、版本化会话 JSON 交换和中断恢复已完成实现；提交 `f66f293` 的三平台全量 Check 和 Linux 桌面 smoke/打包验收均通过。云同步不在产品范围内，RSI 当前暂停。真实终端光标视觉验收仍为 `INCONCLUSIVE`；完整验收记录见 [开发与测试](docs/reference/development.md) 与 [PLAN.md](PLAN.md)。
+本地图片、版本化会话 JSON 交换和中断恢复已完成实现。当前整合轮还覆盖安全加固、真实 Linux PTY 光标行为和已配置模型的图片请求，最终证据见 [开发与测试](docs/reference/development.md) 与 [PLAN.md](PLAN.md)。云同步已取消；RSI 与 SWE-bench Lite 评测暂停。桌面图形应用当前只支持 Linux。
 
 ## 首次启动
 
@@ -28,9 +28,9 @@ npm run dev
 
 TUI 使用当前目录作为工作区。输入任务后按 Enter 发送，生成期间按 Esc 取消。`/model` 切换配置或模型，`/new` 新建会话，`/sessions` 打开历史会话，`/help` 浏览命令。文本和待发送图片草稿按会话保存于当前界面内存，未发送草稿不会在退出后恢复。
 
-Linux 桌面源码入口是 `npm run desktop`，该命令会先构建并准备 Electron。启动后在侧栏选择并信任工作区，再选择模型配置。Enter 发送，Shift+Enter 换行，停止按钮取消生成；侧栏可管理历史会话。工作区信任会允许加载项目级 MCP 和 Hook，确认前应审查仓库内容。
+Linux 桌面源码入口是 `npm run desktop`，该命令会先构建并准备 Electron。启动后在侧栏选择并信任工作区，再选择模型配置。Enter 发送，Shift+Enter 换行，停止按钮取消生成；侧栏可管理历史会话。工作区信任会允许加载项目配置、指令、记忆、skills、commands、agents、权限规则、MCP 和 Hook；确认前应审查仓库内容。
 
-工具审批可选择仅本次、本会话、永久允许或拒绝。会话批准仅在当前进程中对当前聊天生效；永久规则写入项目 `.bitori/permissions.local.yaml`。权限档位、规则优先级和限制见 [权限规则与审批](docs/reference/configuration.md#权限规则与审批)。
+工具审批可选择仅本次、本会话、永久允许或拒绝。会话批准仅在当前进程中对当前聊天生效；永久规则写入项目 `.bitori/permissions.local.yaml`。启用 bypass 要在 `/permission bypass` 后一分钟内、同一聊天中再输入 `/permission bypass confirm`；切换聊天时立即清除。权限档位、规则优先级和限制见 [权限规则与审批](docs/reference/configuration.md#权限规则与审批)。
 
 ## 图片、会话交换与恢复
 

@@ -23,7 +23,7 @@ describe('Markdown 扩展的换行兼容', () => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-crlf-')); roots.push(root);
     mkdirSync(join(root, '.bitori', 'commands'), {recursive: true});
     writeFileSync(join(root, '.bitori', 'commands', 'review.md'), '---\r\ndescription: 审查\r\n---\r\n检查 $ARGUMENTS', 'utf8');
-    const command = loadUserCommands(root, join(root, 'home')).find('review');
+    const command = loadUserCommands(root, join(root, 'home'), undefined, true).find('review');
     expect(command?.type === 'prompt' && command.handler({workDir: root, args: 'src'})).toBe('检查 src');
     const manager = new MemoryManager(root, join(root, 'home'));
     manager.write('project', 'note', {name: '知识', description: '说明', type: 'project'}, '内容');

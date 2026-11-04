@@ -22,7 +22,8 @@
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "desktop": "npm run build && node node_modules/electron/install.js && electron . --disable-gpu --no-sandbox",
     "desktop:package": "npm run build && electron-builder --linux AppImage deb --publish never",
-    "test:e2e:providers": "tsx tests/acceptance/e2e-providers.ts"
+    "test:e2e:providers": "tsx tests/acceptance/e2e-providers.ts",
+    "test:tui:cursor:pty": "python3 tests/acceptance/tui-cursor-pty.py"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

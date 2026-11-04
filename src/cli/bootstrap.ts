@@ -3,7 +3,7 @@ import {configureApplicationLogging, createApplicationRuntime} from '../app/runt
 import type {ApplicationRuntime} from '../app/runtime.js';
 import type {ChatController} from '../chat/agent-controller.js';
 import {loadConfig, resolveProfileWithApiKey} from '../config/loader.js';
-import {isWorkspaceTrusted, workspaceHasProjectExtensions} from '../config/trust.js';
+import {isWorkspaceTrusted, workspaceHasProjectContent} from '../config/trust.js';
 import {toProfileSummary} from '../config/types.js';
 import {probeProfile} from '../diagnostics/connection.js';
 import {getLogger} from '../shared/logger.js';
@@ -31,8 +31,8 @@ export async function bootstrap(options: CliOptions): Promise<void> {
   if (options.trust !== undefined) { process.exitCode = await runTrustCommand(options.trust); return; }
   // doctor 必须在 loadConfig 之前：配置本身坏掉时它正是来报告的。
   if (options.doctor !== undefined) { process.exitCode = await runDoctorCommand({...(options.profile === undefined ? {} : {profile: options.profile}), json: options.doctor.json}, workspace); return; }
-  if (workspaceHasProjectExtensions(workspace) && !isWorkspaceTrusted(workspace)) {
-    process.stderr.write(`工作区 ${workspace} 含项目级 MCP/Hooks 且未信任：已默认拒载。确认后运行 bitori trust（详见 docs/reference/security.md）。\n`);
+  if (workspaceHasProjectContent(workspace) && !isWorkspaceTrusted(workspace)) {
+    process.stderr.write(`工作区 ${workspace} 未信任：项目级 MCP/Hooks、指令、skills、commands、agents 与权限规则已默认拒载。确认来源后运行 bitori trust（详见 docs/reference/security.md）。\n`);
   }
   const config = loadConfig(undefined, workspace);
   configureApplicationLogging(config, options.logLevel);

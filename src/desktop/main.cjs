@@ -161,7 +161,7 @@ function registerHandlers() {
   handle('bitori:workspace', () => changeContext(async () => {
     const result = await dialog.showOpenDialog(window, {title: '选择工作区', defaultPath: workspace || homedir(), properties: ['openDirectory']});
     if (result.canceled || !result.filePaths[0] || closing) return null;
-    const choice = await dialog.showMessageBox(window, {type: 'warning', buttons: ['取消', '信任并打开'], defaultId: 0, cancelId: 0, message: '确认信任此工作区？', detail: '工作区配置和 Hook 可能在启动时运行命令，工具也可以读取此目录。'});
+    const choice = await dialog.showMessageBox(window, {type: 'warning', buttons: ['取消', '信任并打开'], defaultId: 0, cancelId: 0, message: '确认信任此工作区？', detail: '项目级配置和 Hook 可能启动进程；项目说明、skills、commands、agents 与权限规则会影响模型行为；工具可读取和修改此目录。只信任你已检查来源的工作区。'});
     if (choice.response !== 1 || closing) return null;
     workspace = result.filePaths[0];
     await core.trustWorkspace(workspace);

@@ -1,4 +1,4 @@
-import {mkdtemp, readFile, rm, truncate, writeFile} from 'node:fs/promises';
+import {chmod, mkdtemp, readFile, rm, stat, truncate, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
@@ -88,9 +88,12 @@ describe('session archive', () => {
     await writeSessionArchive(path, conversation);
     const loaded = await readSessionArchive(path);
     expect(loaded).toEqual(createSessionArchive(conversation).conversation);
+    if (process.platform !== 'win32') expect((await stat(path)).mode & 0o777).toBe(0o600);
 
+    if (process.platform !== 'win32') await chmod(path, 0o644);
     await expect(writeSessionArchive(path, conversation)).rejects.toThrow();
     expect(await readFile(path, 'utf8')).toContain('bitori-session');
+    if (process.platform !== 'win32') expect((await stat(path)).mode & 0o777).toBe(0o644);
   });
 
   it('rejects unsupported versions, cross-session references, and duplicate IDs', () => {

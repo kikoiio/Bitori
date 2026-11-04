@@ -20,6 +20,8 @@ describe('prompt sections', () => {
     expect(constraints).toBeDefined();
     expect(constraints!.text).toContain('工作区');
     expect(constraints!.text).toContain('批准');
+    expect(constraints!.text).toContain('不可信数据');
+    expect(constraints!.text).toContain('MCP/Hook 响应');
   });
 
   it('动作执行模块包含查找类任务的终止判据', () => {

@@ -1,5 +1,5 @@
 import {existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
-import {isWorkspaceTrusted} from './trust.js';
+import {isWorkspaceTrusted, workspaceHasProjectContent} from './trust.js';
 import {homedir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {parse as parseEnv} from 'dotenv';
@@ -280,10 +280,10 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     // 工作区为主目录时，同一文件只按用户配置解析，避免项目级严格校验重复读取。
     const sameConfig = resolve(projectPath) === resolve(paths.config) || (existsSync(projectPath) && realpathSync(projectPath) === realpathSync(paths.config));
     const notices: string[] = [];
+    const trustedWorkspace = isWorkspaceTrusted(workspaceRoot, homeDirectory);
     let project: ReturnType<typeof parseProjectConfig> = {};
     if (!sameConfig && existsSync(projectPath)) {
-      if (isWorkspaceTrusted(workspaceRoot, homeDirectory)) project = readProjectConfig(projectPath);
-      else notices.push(`工作区未信任：已跳过项目级 ${projectPath}（项目 MCP 不会启动）。确认后运行 bitori trust ${workspaceRoot}`);
+      if (trustedWorkspace) project = readProjectConfig(projectPath);
     }
     const explicitProfiles: ProviderProfile[] = parsed.profiles.map(source => {
       const modelExpansion = softExpand(source.model, environment);
@@ -321,8 +321,9 @@ export function loadConfig(homeDirectory = homedir(), workspaceRoot = process.cw
     // map 按 user → project 浅合并；同名 Server 由项目级完整覆盖。
     const sources = {...(parsed.mcp_servers ?? {}), ...(project.mcp_servers ?? {})};
     const mcpServers = Object.fromEntries(Object.entries(sources).map(([name, source]) => [name, resolveMcpServer(name, source, environment)]));
-    const workspaceHooksPath = join(workspaceRoot, '.bitori', 'hooks.yaml');
-    if (!isWorkspaceTrusted(workspaceRoot, homeDirectory) && !sameConfig && existsSync(workspaceHooksPath)) notices.push(`工作区未信任：已跳过项目级 ${workspaceHooksPath}。确认后运行 bitori trust ${workspaceRoot}`);
+    if (!trustedWorkspace && resolve(workspaceRoot) !== resolve(homeDirectory) && workspaceHasProjectContent(workspaceRoot)) {
+      notices.push(`工作区未信任：项目级 MCP/Hooks、指令、skills、commands、agents 与权限规则已默认拒载。确认来源后运行 bitori trust ${workspaceRoot}`);
+    }
     return {profiles, mcpServers, models: parsed.models ?? {}, logging: parsed.logging ?? {}, trace: parsed.trace ?? {}, ...(notices.length ? {notices} : {})};
   } catch (error) {
     // 已经是面向用户的配置错误就原样保留；Zod 错误则合并所有校验消息。

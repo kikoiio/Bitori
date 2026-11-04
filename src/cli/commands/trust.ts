@@ -1,5 +1,5 @@
 import {resolve} from 'node:path';
-import {isWorkspaceTrusted, revokeWorkspace, trustWorkspace, workspaceHasProjectExtensions} from '../../config/trust.js';
+import {isWorkspaceTrusted, revokeWorkspace, trustWorkspace, workspaceHasProjectContent} from '../../config/trust.js';
 
 /** `bitori trust [path] [--revoke]`：把当前/指定工作区加入(或移出)信任清单。 */
 export async function runTrustCommand(options: {path?: string; revoke: boolean; json: boolean}): Promise<number> {
@@ -12,10 +12,10 @@ export async function runTrustCommand(options: {path?: string; revoke: boolean; 
   }
   const already = isWorkspaceTrusted(workspace);
   await trustWorkspace(workspace);
-  const hasExtensions = workspaceHasProjectExtensions(workspace);
-  if (options.json) process.stdout.write(`${JSON.stringify({workspace, trusted: true, hasExtensions})}\n`);
+  const hasProjectContent = workspaceHasProjectContent(workspace);
+  if (options.json) process.stdout.write(`${JSON.stringify({workspace, trusted: true, hasProjectContent})}\n`);
   else {
-    process.stdout.write(`${already ? '已在' : '已加入'}信任清单：${workspace}${hasExtensions ? '' : '\n提示：该工作区当前没有项目级 MCP/Hooks；信任记录为将来克隆的扩展兜底。'}\n`);
+    process.stdout.write(`${already ? '已在' : '已加入'}信任清单：${workspace}${hasProjectContent ? '' : '\n提示：该工作区当前没有项目级内容；信任记录为将来新增项目内容时的保护。'}\n`);
   }
   return 0;
 }

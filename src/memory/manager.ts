@@ -1,6 +1,7 @@
 import {existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {normalizeLineEndings} from '../shared/text.js';
+import {isWorkspaceTrusted} from '../config/trust.js';
 
 export const MAX_MEMORY_INDEX_LINES = 200;
 export const MAX_MEMORY_INDEX_BYTES = 25_000;
@@ -34,20 +35,25 @@ export class MemoryManager {
   readonly #workDir: string;
   readonly #userDir: string;
   readonly #projectDir: string;
+  readonly #projectTrusted: boolean;
   #memories: MemoryFile[] = [];
 
-  constructor(workDir: string, homeDirectory = process.env.HOME ?? '') {
+  constructor(workDir: string, homeDirectory = process.env.HOME ?? '', projectTrusted = isWorkspaceTrusted(workDir, homeDirectory)) {
     this.#workDir = resolveWork(workDir);
     this.#userDir = join(homeDirectory, '.bitori', 'memory');
     this.#projectDir = join(this.#workDir, '.bitori', 'memory');
+    this.#projectTrusted = projectTrusted;
   }
 
-  get directories(): readonly string[] { return [this.#userDir, this.#projectDir]; }
+  get directories(): readonly string[] { return this.#projectTrusted ? [this.#userDir, this.#projectDir] : [this.#userDir]; }
   getMemories(): readonly MemoryFile[] { return [...this.#memories]; }
 
   loadAll(): MemoryFile[] {
     const files: MemoryFile[] = [];
-    for (const [directory, scope] of [[this.#userDir, 'user'], [this.#projectDir, 'project']] as const) {
+    const sources: ReadonlyArray<readonly [string, 'user' | 'project']> = this.#projectTrusted
+      ? [[this.#userDir, 'user'], [this.#projectDir, 'project']]
+      : [[this.#userDir, 'user']];
+    for (const [directory, scope] of sources) {
       if (!existsSync(directory)) continue;
       for (const entry of readdirSync(directory).filter(name => name.endsWith('.md') && name !== 'MEMORY.md').sort()) {
         const path = join(directory, entry);
@@ -68,6 +74,7 @@ export class MemoryManager {
   }
 
   rebuildIndex(): string {
+    if (!this.#projectTrusted) throw new Error('未信任工作区不能读取或写入项目记忆索引');
     this.loadAll();
     const lines = ['# Memory Index', ...this.#memories.map(memory => `- ${memory.name} (${memory.type}): ${memory.description}`)];
     let index = lines.slice(0, MAX_MEMORY_INDEX_LINES).join('\n');
@@ -86,6 +93,7 @@ export class MemoryManager {
   }
 
   write(scope: 'user' | 'project', filename: string, frontmatter: Frontmatter, content: string): string {
+    if (scope === 'project' && !this.#projectTrusted) throw new Error('未信任工作区不能写入项目记忆');
     const directory = scope === 'user' ? this.#userDir : this.#projectDir;
     mkdirSync(directory, {recursive: true});
     const path = join(directory, filename.endsWith('.md') ? filename : `${filename}.md`);

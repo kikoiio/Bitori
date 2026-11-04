@@ -14,6 +14,7 @@ import type {LLMClient} from '../providers/types.js';
 import {join} from 'node:path';
 
 export interface AgentServices {
+  projectTrusted: boolean;
   skills: SkillLoader;
   activeSkills: ActiveSkills;
   skillExecutor: SkillExecutor;
@@ -29,16 +30,17 @@ export interface AgentServices {
 export function createAgentServices(options: {workDir?: string; hooks?: readonly HookConfig[]; projectTrusted?: boolean} = {}): AgentServices {
   const workDir = options.workDir ?? process.cwd();
   const home = homedir();
-  // 未信任工作区的项目级 Hook 默认拒载；显式传入 hooks 数组时以调用方为准。
-  const includeProjectHooks = options.projectTrusted ?? isWorkspaceTrusted(workDir, home);
-  const skills = new SkillLoader(workDir, home);
+  const projectTrusted = options.projectTrusted ?? isWorkspaceTrusted(workDir, home);
+  // 项目内容可能影响模型指令或启动进程；信任前统一跳过项目级来源。
+  const skills = new SkillLoader(workDir, home, projectTrusted);
   skills.loadAll();
   const activeSkills = new ActiveSkills();
-  const memory = new MemoryManager(workDir, home);
+  const memory = new MemoryManager(workDir, home, projectTrusted);
   const extractors = new WeakMap<LLMClient, MemoryExtractor>();
   const ownedExtractors = new Set<MemoryExtractor>();
   let closed: Promise<void> | undefined;
   return {
+    projectTrusted,
     skills,
     activeSkills,
     skillExecutor: new SkillExecutor(activeSkills),
@@ -52,9 +54,9 @@ export function createAgentServices(options: {workDir?: string; hooks?: readonly
       ownedExtractors.add(extractor);
       return extractor;
     },
-    agents: loadAgentDefinitions(workDir, home),
+    agents: loadAgentDefinitions(workDir, home, projectTrusted),
     teams: new TeamManager(join(home, '.bitori', 'teams')),
-    hooks: new HookEngine(options.hooks ?? loadHookConfigs(workDir, home, includeProjectHooks)),
+    hooks: new HookEngine(options.hooks ?? loadHookConfigs(workDir, home, projectTrusted)),
     close: () => closed ??= Promise.all([...ownedExtractors].map(extractor => extractor.close())).then(() => { ownedExtractors.clear(); }),
   };
 }

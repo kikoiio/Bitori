@@ -14,6 +14,7 @@ import {mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, existsSync}
 import {join, resolve} from 'node:path';
 import {tmpdir, homedir} from 'node:os';
 import {createApplicationRuntime} from '../../src/app/runtime.js';
+import {imageAttachmentSchema, type ImageAttachment} from '../../src/attachments/images.js';
 import {inferProtocol} from '../../src/config/protocol.js';
 import {redactSecrets} from '../../src/config/secrets.js';
 import type {AppConfig, ProviderProfile, Protocol} from '../../src/config/types.js';
@@ -60,10 +61,24 @@ function safeLine(text: string): string {
   return redactSecrets(text, [profile]).replaceAll(apiKey, '<REDACTED_KEY>');
 }
 
-type Preset = 'loop' | 'fix-test' | 'add-test' | 'refactor';
+type Preset = 'loop' | 'fix-test' | 'add-test' | 'refactor' | 'image';
 const preset = ((process.env['BITORI_E2E_PRESET'] ?? 'loop') as Preset);
+const imagePresetAttachment: ImageAttachment = imageAttachmentSchema.parse({
+  name: 'color-stripes.png',
+  mediaType: 'image/png',
+  data: 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAe0lEQVR4nO3PMQ2AABDAQGywsOAFB5hEDjM22BHBcPmkSQX0lmfdR7fwgwD6IIA+CKAPAuiDAPoggD4IoA/+ArbrGF0AXQBdAF0AXQBdAF0A3XzAfj6jC6ALoAugC6ALoAugC6CbD3jvdXQBdAF0AXQBdAF0AXQBdOMBH9E6aTz7Cjb2AAAAAElFTkSuQmCC',
+});
 
-function setupPreset(): {task: string; verify: () => boolean} {
+function setupPreset(): {task: string; verify: (reply: string) => boolean} {
+  if (preset === 'image') {
+    return {
+      task: '请观察附件中四条水平色带，从上到下列出颜色，颜色请用英文小写。不要调用工具。只按格式回复 `IMAGE_OK: <颜色1>, <颜色2>, <颜色3>, <颜色4>`，不要添加其他内容。',
+      verify: reply => {
+        const match = reply.trim().match(/^IMAGE_OK:\s*([a-z]+)\s*,\s*([a-z]+)\s*,\s*([a-z]+)\s*,\s*([a-z]+)$/i);
+        return match !== null && match.slice(1).map(color => color.toLowerCase()).join(',') === 'red,green,blue,yellow';
+      },
+    };
+  }
   if (preset === 'fix-test') {
     writeFileSync(join(workspace, 'math.mjs'), 'export function double(n) {\n  return n * 3; // BUG: 应为 n * 2\n}\n', 'utf8');
     writeFileSync(join(workspace, 'math.test.mjs'), 'import {test} from \u0027node:test\u0027;\nimport assert from \u0027node:assert/strict\u0027;\nimport {double} from \u0027./math.mjs\u0027;\ntest(\u0027double\u0027, () => { assert.equal(double(2), 4); });\n', 'utf8');
@@ -110,7 +125,7 @@ function setupPreset(): {task: string; verify: () => boolean} {
 
 const presetRun = setupPreset();
 const task = presetRun.task;
-const markerWords: Record<Preset, string> = {loop: 'E2E DONE', 'fix-test': 'FIXED', 'add-test': 'ADDED', refactor: 'REFACTORED'};
+const markerWords: Record<Exclude<Preset, 'image'>, string> = {loop: 'E2E DONE', 'fix-test': 'FIXED', 'add-test': 'ADDED', refactor: 'REFACTORED'};
 
 interface Evidence {
   at: string;
@@ -124,8 +139,10 @@ interface Evidence {
   iterations: number;
   toolCalls: Array<{name: string; approval: string; execution: string}>;
   usage: {inputTokens: number; outputTokens: number; credits?: number};
+  providerChatCalls: number;
+  blockedProviderChatCalls: number;
   reply: string;
-  planFileMatches: boolean;
+  taskVerified: boolean;
   budgetExceeded: boolean;
   visibleError: string | null;
   passed: boolean;
@@ -160,14 +177,14 @@ async function main(): Promise<number> {
     // Leave the field null when Git status is unavailable.
   }
   const commitSha = revision !== undefined && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(revision) ? revision : null;
-  const runtime = await createApplicationRuntime({config, profileName: 'e2e', workspace, databasePath: join(workspace, '.bitori', 'bitori.db'), maxIterations: 12});
+  const runtime = await createApplicationRuntime({config, profileName: 'e2e', workspace, databasePath: join(workspace, '.bitori', 'bitori.db'), maxIterations: preset === 'image' ? 1 : 12, ...(preset === 'image' ? {providerRequestLimit: 1} : {})});
   const {controller} = runtime;
   const unwatch = controller.subscribe(state => {
     if (state.approvalPrompt) controller.resolveToolApproval('approved_session');
   });
   const started = Date.now();
   try {
-    await controller.sendMessage(task);
+    await controller.sendMessage(task, preset === 'image' ? [imagePresetAttachment] : []);
   } finally {
     unwatch();
     await runtime.close();
@@ -175,15 +192,18 @@ async function main(): Promise<number> {
   const state = controller.getState();
   const usage = state.runUsage;
   const budgetExceeded = (usage.credits ?? 0) > maxCredits || (usage.inputTokens + usage.outputTokens) > maxTokens;
-  const planOk = presetRun.verify();
   const reply = [...state.messages].findLast(message => message.role === 'assistant')?.content ?? '';
+  const planOk = presetRun.verify(reply);
+  const markerOk = preset === 'image' ? planOk : reply.includes(markerWords[preset]);
   const names = state.toolCalls.map(call => call.toolName);
+  const toolBehaviorOk = preset === 'image' ? names.length === 0 : names.some(name => name === 'read_file' || name === 'edit_file' || name === 'write_file');
   const passed = state.requestStatus !== 'failed'
     && !budgetExceeded
     && planOk
-    && reply.includes(markerWords[preset])
+    && markerOk
+    && (preset !== 'image' || (runtime.providerRequestCount() === 1 && runtime.providerRequestBlockedCount() === 0))
     && (usage.inputTokens + usage.outputTokens > 0 || (usage.credits ?? 0) > 0)
-    && names.some(name => name === 'read_file' || name === 'edit_file' || name === 'write_file');
+    && toolBehaviorOk;
   const evidence: Evidence = {
     at: new Date().toISOString(),
     commitSha,
@@ -196,8 +216,10 @@ async function main(): Promise<number> {
     iterations: state.iteration,
     toolCalls: state.toolCalls.map(call => ({name: call.toolName, approval: call.approvalStatus, execution: call.executionStatus})),
     usage,
+    providerChatCalls: runtime.providerRequestCount(),
+    blockedProviderChatCalls: runtime.providerRequestBlockedCount(),
     reply: safeLine(reply).slice(0, 400),
-    planFileMatches: planOk,
+    taskVerified: planOk,
     budgetExceeded,
     visibleError: state.visibleError === null ? null : safeLine(state.visibleError),
     passed,
@@ -213,7 +235,7 @@ async function main(): Promise<number> {
     `  状态 ${evidence.status} · 停止 ${evidence.stopReason ?? '-'} · 迭代 ${evidence.iterations}`,
     `  工具 ${evidence.toolCalls.map(call => `${call.name}:${call.execution}`).join(', ') || '无'}`,
     `  用量 ${usage.inputTokens}↓ ${usage.outputTokens}↑${usage.credits === undefined ? '' : ` credits ${usage.credits}`}${budgetExceeded ? ' [超预算!]' : ''}`,
-    `  产物校验 ${planOk ? 'OK' : 'FAIL'} · 证据 ${outFile}`,
+    `  Provider 聊天调用 ${evidence.providerChatCalls}（拦截 ${evidence.blockedProviderChatCalls}）· 任务校验 ${planOk ? 'OK' : 'FAIL'} · 证据 ${outFile}`,
     evidence.visibleError === null ? '' : `  错误: ${evidence.visibleError}`,
   ].join('\n'))}\n`);
   return passed ? 0 : 1;

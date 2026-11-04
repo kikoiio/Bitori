@@ -76,7 +76,7 @@ export interface AppConfig {
   logging: LoggingConfig;
   /** trace 配置；字段缺省时使用默认保留期。 */
   trace: TraceConfig;
-  /** 加载期产生的用户可见提示（如未信任工作区的项目扩展被跳过）。 */
+  /** 加载期产生的用户可见提示（如未信任工作区的项目级内容被跳过）。 */
   notices?: string[];
 }
 

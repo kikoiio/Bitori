@@ -536,6 +536,7 @@ export async function writeSessionArchive(path: string, conversation: StoredConv
   const temporary = await open(temporaryPath, 'wx', 0o600);
   let closed = false;
   try {
+    if (process.platform !== 'win32') await temporary.chmod(0o600);
     await temporary.writeFile(text, 'utf8');
     await temporary.sync();
     await temporary.close();

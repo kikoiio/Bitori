@@ -28,6 +28,8 @@ node dist/bin/bitori.js --help
 
 `npm test` 的 `pretest` 会先构建；`npm run check` 包含 `npm test` 和再次构建。直接调用 `npx vitest run <test-path>` 不会运行 npm 的 `pretest`。存储集成测试会启动 `dist/storage/worker.js`，必须先在同一份代码上构建，不能用旧 `dist/` 代表当前源码。Check 中的终端 UI 测试使用模拟终端，不会启动 CLI 做交互验收。自动测试使用模拟客户端、临时 SQLite 或本地服务；真实模型验收依赖凭据、网络及供应商配额，结果应单独记录，不能由模拟测试推断。
 
+Linux 的真实 PTY 行为可用 `npm run test:tui:cursor:pty` 验收。脚本在隔离伪终端内实际启动 Ink `PromptInput`，核对渲染后的边框/输入行和 ANSI 光标控制序列，并分别验证 ASCII 与中文的列位置。该检查不提供真实终端的像素截图；Ptyxis 外观仍需按终端环境单独确认。GitHub Check 在 Linux runner 上执行同一脚本。
+
 真实 Provider 端到端（会产生费用，必须显式开启）：
 
 ```sh
@@ -37,7 +39,7 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:provider
 
 `BITORI_E2E_PROTOCOL` 可以省略：此时按 `LLM_BASE_URL` 与密钥形状推断方言，与 `~/.bitori/config.yaml` 的规则一致；凭据仍从 `~/.bitori/.env` 读取。
 
-脚本在临时工作区跑“读取 → pwd → 编辑 → 校验 → 回答”的完整编码任务，断言工具链、diff、回复与用量（tokens 或 credits 至少其一真实非零），证据写入 `evaluation/results/e2e-providers/`（自动脱敏，日志不打印密钥）。`BITORI_E2E_PRESET=fix-test|add-test|refactor` 另跑「修复失效测试 / 补测试 / 小重构」三类真实编码场景（2026-11-01 全部用 Qoder 通过）。旧的 `tests/acceptance/e2e-openrouter.ts` 保留可用。
+脚本在临时工作区跑“读取 → pwd → 编辑 → 校验 → 回答”的完整编码任务，断言工具链、diff、回复与用量（tokens 或 credits 至少其一真实非零），证据写入 `evaluation/results/e2e-providers/`（自动脱敏，日志不打印密钥）。`BITORI_E2E_PRESET=image` 发起一次本地图像请求，并要求模型按顺序识别四条色带；该场景最多发起一轮模型请求且不执行工具。`fix-test|add-test|refactor` 另跑「修复失效测试 / 补测试 / 小重构」三类真实编码场景（2026-11-01 全部用 Qoder 通过）。旧的 `tests/acceptance/e2e-openrouter.ts` 保留可用。
 
 历史真实闭环证据：Qoder 见 `2026-11-01-qoder*.json`（credits 计费），OpenAI 兼容协议见 `2026-11-03-openai-chat.json`（Groq `openai/gpt-oss-120b`，token 计费），Anthropic 兼容网关见 `2026-11-03-anthropic.json`。这些文件没有运行提交 SHA。验收脚本现写入 `commitSha` 与 `workingTreeClean`；本地 SHA 只标识 Git HEAD，必须同时确认工作树为 clean 才能代表完整被测代码。没有本地凭据时，可经授权手动运行 E2E 工作流：它读取 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL`，真实发送请求，并只上传本次运行的证据 JSON artifact 保留 7 天；下载后按同样格式归档到 `evaluation/results/e2e-providers/`。
 
@@ -63,6 +65,10 @@ Run 41679968530 在提交 `f66f293` 上完成三平台 `npm run check`，包括�
 | TUI 与桌面 | 命令与文件对话框入口、审批、默认模型恢复、会话切换及重命名草稿；桌面增加相应 smoke 覆盖 |
 
 TUI 模拟测试覆盖光标行列、中文折行、流式更新、输入与取消，但不等于真实终端视觉验收。本机 Ptyxis 曾显示 Bitori 的可访问树，因截图能力受限且出现已有会话内容，未继续输入，光标视觉结论为 `INCONCLUSIVE`。当前桌面目标仅为 Linux；三平台 Check 通过不代表 Windows 或 macOS 桌面已支持。
+
+## 当前非 RSI 整合轮
+
+截至 2026-11-03，本轮新增工作覆盖工作区信任清单与项目内容门控、bypass 二次确认、审批风险提示、trace/会话归档文件权限、真实 Linux PTY 光标行为及当前仓库 Provider 的图片请求。安全剩余风险、Ptyxis 像素结论、Provider 图片端点结果和最终 GitHub Actions 提交 SHA 以 [`PLAN.md`](../../PLAN.md) 为准。SWE-bench Lite 按用户决定归入 RSI 评测范围，与 RSI 一并暂停；Windows/macOS 桌面不在目标内。
 
 ## Ubuntu 资源与本机兜底
 
@@ -93,11 +99,11 @@ TUI 模拟测试覆盖光标行列、中文折行、流式更新、输入与取�
 | 层 | 测什么 | 在哪跑 | 何时 |
 |---|---|---|---|
 | Check | 类型、lint、单元/集成/TUI 测试、`dist/` 构建 | GitHub-hosted Ubuntu/Windows/macOS | 每个 PR 和 `master` |
-| 终端 | TUI 模拟终端测试；CLI 交互与光标观感 | 自动测试在 Check；交互观感需用户目标终端验收 | 自动测试随 Check；真实终端按环境验收 |
+| 终端 | TUI 模拟终端测试；Linux 隔离 PTY 的实际光标行列行为；终端像素观感 | Check + `npm run test:tui:cursor:pty`；像素观感需目标终端环境 | PTY 脚本随 Linux Check；终端截图仍按环境验收 |
 | 桌面未打包 | 开发入口会话、审批、工作区信任、图片/归档、重命名 caret | GitHub Actions + Xvfb | 当前 `master` 的 run 41680030634 通过 |
 | 桌面包 | 开发版、AppImage、解包 deb 启动 | GitHub Actions + Xvfb；截图与安装包 artifact 留 7 天 | run 41680030634 通过；artifact 已核实上传 |
-| 真实模型 | Provider 端到端（Qoder/OpenAI 兼容等）+ OpenRouter/Groq | 获授权的手动 `e2e.yml`，或确需本地环境的定向脚本 | 明确授权并确认预算后 |
-| SWE-bench Lite 开发集 | 单题或 23 题开发集；最近 23 题结果为 8 个 agent 错误、7 个未解决、8 个环境错误 | GitHub Actions + Docker；每题串行 | 需选 Provider/model、运行范围和预算后授权 |
+| 真实模型 | Provider 端到端（当前配置的图片请求或常规编码场景） | 获授权的手动 `e2e.yml` | `image` 对 `LLMClient.streamChat` 调用硬限一次，禁用 thinking fallback；SDK 重试关闭；token/credit 阈值是事后检查，不是费用硬上限 |
+| SWE-bench Lite 开发集 | 用户决定归入 RSI；当前暂停 | 本轮不派发，不向 Provider 发送任务 | 既有结果仅作历史诊断 |
 | RSI smoke | 受控单题 RSI 实验 | 当前暂停 | 单独恢复立项并明确授权、数据范围和预算后 |
 
 ## GitHub Actions
@@ -108,8 +114,8 @@ TUI 模拟测试覆盖光标行列、中文折行、流式更新、输入与取�
 |---|---|---|
 | [Check](../../.github/workflows/check.yml) | push 到 `master` 或 `desktop/**`、所有 PR、手动；三平台执行 `npm run check` | 未声明模型 secrets 或显式写权限。 |
 | [Linux desktop](../../.github/workflows/desktop.yml) | push 到 `desktop/**`、所有 PR、手动；模拟服务冒烟并逐一启动 `linux-unpacked`、AppImage、解包 deb | 未调用真实模型；上传 7 天 AppImage/deb 与截图 artifact。master 上需手动触发；本轮正在安排与最终产品提交一致的复验。 |
-| [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选择接口方言、覆盖模型和事后用量阈值 | 统一读 `secrets.LLM_API_KEY` 与 `vars.LLM_BASE_URL`、`vars.LLM_MODEL`；先跑 `bitori doctor` 用真实凭据验证连通性与模型列表，再跑统一验收脚本 `npm run test:e2e:providers`。token 阈值可选 25k/50k/100k/150k，Qoder 可选 1/2/5 credits；脚本运行后才检查用量，不会阻止请求超额，实际费用可能高于阈值。需另确认供应商账户级费用限额；只上传本次运行的证据 JSON 并保留 7 天。 |
-| [SWE-bench Lite development](../../.github/workflows/swe-bench-lite.yml) | 手动运行单题或 23 题开发集；每题隔离运行，`max-parallel: 1` | 使用所选模型供应商的 secret 和 model var；向供应商发送公开任务内容。容器中的 agent 可访问容器凭据与网络；上传 result/trajectory/diagnosis/patch/artifact 白名单与汇总，保留 7 天。全量运行没有统一 token 或美元费用上限。 |
+| [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选 `image` 单请求图片识别或常规编码 preset；可选接口方言、模型与事后用量阈值 | 统一读 `secrets.LLM_API_KEY` 与 `vars.LLM_BASE_URL`、`vars.LLM_MODEL`；先用真实凭据执行 `bitori doctor`，再执行验收脚本。`image` 最多一轮模型请求且不执行工具。token/credit 阈值在运行后检查，不会阻止超额请求，实际费用可能高于阈值；需核对供应商账户限额。只上传本次运行证据 JSON 并保留 7 天。 |
+| [SWE-bench Lite development](../../.github/workflows/swe-bench-lite.yml) | 用户决定归入 RSI；当前暂停 | 本轮不派发任务、不向 Provider 发送题目；既有结果仅作历史诊断 |
 | [RSI smoke](../../.github/workflows/rsi.yml) | 当前暂停；恢复后手动运行受控单题 RSI smoke；默认分支代码、完整基线 SHA 和确认短语 | 读取仓库通用 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL` 配置；向配置的 Provider 发送第 0 题内容，上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，不上传 gold、凭据、worktree 或构建产物。 |
 
 模型发送的数据取决于实际测试任务和脚本，不能仅凭此表认定没有敏感内容。工作流、配置或行为变更应同步审查文档和示例，并在 PR 中记录未验证项。

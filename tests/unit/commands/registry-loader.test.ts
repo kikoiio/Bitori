@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
 import {createDefaultRegistry, parseCommand, permissionTierArgument, CommandRegistry} from '../../../src/commands/registry.js';
 import {loadUserCommands, renderBody} from '../../../src/commands/loader.js';
+import {trustWorkspace} from '../../../src/config/trust.js';
 
 describe('Slash 命令', () => {
   it('解析命令名与参数', () => {
@@ -31,11 +32,23 @@ describe('Slash 命令', () => {
     onTestFinished(() => rmSync(home, {recursive: true, force: true}));
     mkdirSync(join(work, '.bitori', 'commands', 'review'), {recursive: true});
     writeFileSync(join(work, '.bitori', 'commands', 'review', 'security.md'), '---\ndescription: 安全审查\n---\n请审查 $ARGUMENTS 的安全问题', 'utf8');
-    const registry = loadUserCommands(work, home, createDefaultRegistry());
+    const registry = loadUserCommands(work, home, createDefaultRegistry(), true);
     const command = registry.find('review/security');
     expect(command?.description).toBe('安全审查');
     expect(command?.type === 'prompt' && command.handler({workDir: work, args: 'login.ts'})).toContain('login.ts');
     expect(renderBody('没有占位', '参数')).toContain('参数');
+  });
+
+  it('项目 Slash Command 只在信任工作区后加载', async ({onTestFinished}) => {
+    const work = mkdtempSync(join(tmpdir(), 'bitori-cmd-trust-'));
+    onTestFinished(() => rmSync(work, {recursive: true, force: true}));
+    const home = mkdtempSync(join(tmpdir(), 'bitori-home-'));
+    onTestFinished(() => rmSync(home, {recursive: true, force: true}));
+    mkdirSync(join(work, '.bitori', 'commands'), {recursive: true});
+    writeFileSync(join(work, '.bitori', 'commands', 'review.md'), '---\ndescription: 审查\n---\n检查代码', 'utf8');
+    expect(loadUserCommands(work, home).find('review')).toBeUndefined();
+    await trustWorkspace(work, home);
+    expect(loadUserCommands(work, home).find('review')?.description).toBe('审查');
   });
 
   it('权限档参数只接受规定值及中文别名', () => {

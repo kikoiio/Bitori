@@ -32,6 +32,7 @@ import type {AgentServices} from '../agent/services.js';
 import type {AgentRunResult, AgentStopReason} from '../agent/types.js';
 import {createDefaultRegistry, parseCommand, permissionTierArgument, type CommandRegistry} from '../commands/registry.js';
 import {loadUserCommands} from '../commands/loader.js';
+import {isWorkspaceTrusted} from '../config/trust.js';
 import {createSessionArchive, parseSessionArchive} from '../storage/archive.js';
 
 type StateListener = (state: AppState) => void;
@@ -139,11 +140,13 @@ export class ChatController {
   readonly #memoryClient: LLMClient | null;
   readonly #maxIterations: number;
   readonly #autoResume: boolean;
+  #pendingBypassExpiresAt = 0;
   // trace 写入器与每 profile 的投影 tap；组合根未注入观测目录时保持 null，测试因此不写用户主目录。
   #traceWriter: TraceWriter | null = null;
   #tap: AgentTraceTap | null = null;
   // 技能与命令使用统计（JSONL）；可丢弃数据。
   readonly #usage: UsageRecorder | null;
+  #pendingBypassSessionId: string | null = null;
 
   constructor(client: LLMClient, repository: SessionRepositoryContract, tools: ControllerToolSystem | null = null, runner?: AgentRunner, options: {workspaceRoot?: string; maxIterations?: number; autoResume?: boolean; observability?: {traceDirectory: string; usagePath: string}} = {}) {
     this.#repository = repository; this.#client = client; this.#workspaceRoot = options.workspaceRoot ?? process.cwd();
@@ -160,7 +163,7 @@ export class ChatController {
     const withServices: ControllerToolSystemWithServices | null = tools;
     this.#services = withServices?.services ?? null;
     this.#memoryClient = withServices?.memoryClient ?? null;
-    this.#commands = loadUserCommands(this.#workspaceRoot, undefined, createDefaultRegistry());
+    this.#commands = loadUserCommands(this.#workspaceRoot, undefined, createDefaultRegistry(), this.#services?.projectTrusted ?? isWorkspaceTrusted(this.#workspaceRoot));
     this.#runner = runner ?? new AgentRunner(client, registry, new StreamCollector(), new SafetyBatchScheduler(executor, approvals, undefined, this.#services?.hooks ?? null), this.#services?.hooks ?? null);
     this.#maxIterations = options.maxIterations ?? 20;
     this.#autoResume = options.autoResume ?? true;
@@ -200,7 +203,7 @@ export class ChatController {
     const conversation = await this.#repository.getConversation(session.id);
     const messages = conversation?.messages ?? await this.#repository.getMessages(session.id);
     await this.#services?.hooks.fire('session_start', {event: 'session_start', message: session.id});
-    this.#publish({...initialAppState(toProfileSummary(profile)), session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls: conversation?.toolCalls ?? [], ...restoredRunState(messages, conversation?.agentRuns ?? [])});
+    this.#publish({...initialAppState(toProfileSummary(profile)), session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tierFor(session.id) ?? 'default', messages, toolCalls: conversation?.toolCalls ?? [], ...restoredRunState(messages, conversation?.agentRuns ?? [])});
     await this.#prepareRecovery(this.#autoResume);
   }
   async sendMessage(text: string, attachments: ImageAttachment[] = []): Promise<void> {
@@ -365,16 +368,46 @@ export class ChatController {
   async #sendMessage(text: string, attachments: ImageAttachment[], signal: AbortSignal): Promise<void> {
     if (signal.aborted) return;
     const parsed = attachments.length === 0 ? parseCommand(text) : null;
+    const currentSessionId = this.#state.session?.id ?? null;
+    const parsedCommand = parsed === null ? null : this.#commands.find(parsed.name);
+    const commandAction = parsedCommand !== null && parsedCommand !== undefined && 'action' in parsedCommand ? parsedCommand.action : undefined;
+    const confirmingBypass = commandAction === 'permission' && parsed?.args === 'bypass confirm'
+      && currentSessionId !== null && this.#pendingBypassSessionId === currentSessionId;
+    if (!confirmingBypass) {
+      this.#pendingBypassExpiresAt = 0;
+      this.#pendingBypassSessionId = null;
+    }
     if (parsed !== null) {
-      const known = this.#commands.find(parsed.name);
+      const known = parsedCommand;
       if (!known) { this.#error(`未知命令：${text.trim()}。输入 /help 查看可用命令`); return; }
       // 命令使用统计与 trace 事实；prompt 与 local 命令都算一次使用。
       this.#usage?.record({kind: 'command', name: known.name, source: 'user', sessionId: this.#state.session?.id ?? '', ...(this.#profile === null ? {} : {profileName: this.#profile.name})});
       if (this.#state.session) this.#tap?.fact(this.#state.session.id, 'command_executed', {name: known.name});
       if (known.type === 'prompt') { await this.#startRun(text, known.handler({workDir: this.#workspaceRoot, args: parsed.args}), 'message', signal); return; }
       if (known.action === 'permission') {
+        if (parsed.args === 'bypass') {
+          if (currentSessionId === null) { this.#error('请先打开会话，再启用放行档。'); return; }
+          this.#pendingBypassExpiresAt = Date.now() + 60_000;
+          this.#pendingBypassSessionId = currentSessionId;
+          this.#error('放行档会跳过逐项审批，并只在当前聊天有效。二次确认前请检查命令和工作区来源，再输入 /permission bypass confirm；一分钟后确认失效。');
+          return;
+        }
+        if (parsed.args === 'bypass confirm') {
+          if (this.#pendingBypassSessionId !== currentSessionId || this.#pendingBypassExpiresAt < Date.now()) {
+            this.#error('放行档确认已过期；如仍需要，请重新输入 /permission bypass。');
+            return;
+          }
+          this.#pendingBypassExpiresAt = 0;
+          this.#pendingBypassSessionId = null;
+          this.#setPermissionTier('bypass');
+          return;
+        }
         const tier = permissionTierArgument(parsed.args);
-        if (tier) this.#setPermissionTier(tier); else this.#error('权限档必须是 strict、default 或 bypass');
+        if (tier === 'bypass') {
+          this.#error('放行档只能通过 /permission bypass 后再输入 /permission bypass confirm 启用。');
+          return;
+        }
+        if (tier) this.#setPermissionTier(tier); else this.#error('权限档必须是 strict、default、bypass 或 bypass confirm');
         return;
       }
       if (known.action === 'undo') {
@@ -449,7 +482,7 @@ export class ChatController {
     if (!finished) throw new Error('Agent 未生成终态事件');
     const restored = await this.#repository.getSession(session.id); if (restored) this.#publish({...this.#state, session: restored, agentMode: restored.agentMode});
     // 回合自然停止后异步提取记忆；提取失败不影响本轮结果。
-    if (this.#services && this.#profile && this.#memoryClient) {
+    if (this.#services?.projectTrusted && this.#profile && this.#memoryClient) {
       const dialogue = [...this.#state.messages].slice(-20).map(message => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`).join('\n');
       // 记忆提取失败记录日志，不影响当前回合。
       void this.#services.memoryExtractor(this.#memoryClient).extract(dialogue).catch((error: unknown) => { logger.warn('记忆提取失败', {error: errorMessage(error)}); });
@@ -464,7 +497,10 @@ export class ChatController {
     if (store === undefined) return {ok: false, message: '当前工具系统未启用快照存储,无法撤销'};
     return store.undo(path);
   }
-  setPermissionTier(tier: PermissionTier): void { this.#setPermissionTier(tier); }
+  setPermissionTier(tier: Exclude<PermissionTier, 'bypass'>): void {
+    if ((tier as string) === 'bypass') { this.#error('放行档只能通过聊天命令二次确认启用。'); return; }
+    this.#setPermissionTier(tier);
+  }
   async createSession(): Promise<void> { if (!this.#canChangeSession() || !this.#profile) return; const profile = this.#profile; await this.#changeSession(async signal => { this.#rebuildSystemPrompt(); const session = await this.#repository.createSession(profile.name); if (signal.aborted) return; this.#tap?.fact(session.id, 'session_created', {profileName: profile.name}); await this.#publishSession(session, [], [], [], signal); }); }
   async listSessions(): Promise<Session[]> { return this.#profile ? this.#repository.listSessions(this.#profile.name) : []; }
   async switchSession(sessionId: string): Promise<void> {
@@ -579,7 +615,19 @@ export class ChatController {
     return this.#shutdownPromise;
   }
   async #setMode(mode: 'plan' | 'execute'): Promise<void> { const session = this.#state.session; if (!session) return; const updated = await this.#repository.setSessionMode(session.id, mode); this.#tap?.fact(session.id, 'mode_switch', {mode}); this.#publish({...this.#state, session: updated, agentMode: mode, visibleError: null}); }
-  #setPermissionTier(tier: PermissionTier): void { if (!this.#tools.permissions) { this.#error('当前工具系统未启用权限引擎'); return; } this.#tools.permissions.setTier(tier); this.#publish({...this.#state, permissionTier: tier, visibleError: tier === 'bypass' ? '已切换到放行档：写入与命令将跳过逐个审批，仅受路径与 Hooks 底线约束。用 /permission default 恢复。' : null}); }
+  #setPermissionTier(tier: PermissionTier): void {
+    const permissions = this.#tools.permissions;
+    if (!permissions) { this.#error('当前工具系统未启用权限引擎'); return; }
+    const sessionId = this.#state.session?.id;
+    if (tier === 'bypass') {
+      if (sessionId === undefined) { this.#error('请先打开会话，再启用放行档。'); return; }
+      permissions.enableSessionBypass(sessionId);
+    } else {
+      if (sessionId !== undefined) permissions.clearSessionBypass(sessionId);
+      permissions.setTier(tier);
+    }
+    this.#publish({...this.#state, permissionTier: permissions.tierFor(sessionId), visibleError: tier === 'bypass' ? '当前聊天已临时启用放行档：写入与命令将跳过逐项审批。切换聊天或退出程序后失效。' : null});
+  }
   /** 会话激活时采集环境并冻结系统提示；同一会话内逐字节稳定，保证 Anthropic 可缓存前缀不被破坏。 */
   #rebuildSystemPrompt(): void {
     if (!this.#profile) { this.#systemBlocks = null; return; }
@@ -592,7 +640,19 @@ export class ChatController {
     await active.promise;
   }
   #canChangeSession(): boolean { if (this.#closed) return false; if (this.#active) { this.#error('生成期间不能新建或切换会话'); return false; } return true; }
-  async #publishSession(session: Session, messages: StoredMessage[], toolCalls: ToolCallRecord[] = [], agentRuns: AgentRunRecord[] = [], signal?: AbortSignal): Promise<void> { await this.#services?.hooks.fire('session_end', {event: 'session_end'}); if (signal?.aborted) return; this.#publish({...this.#state, screen: 'chat', session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tier ?? 'default', messages, toolCalls, requestStatus: 'idle', ...restoredRunState(messages, agentRuns), activeRunId: null, recovery: null, iteration: 0, agentPhase: null, expandedThinkingIds: new Set(), selectedMessageId: null, visibleError: null, approvalPrompt: null, liveToolCalls: []}); }
+  async #publishSession(session: Session, messages: StoredMessage[], toolCalls: ToolCallRecord[] = [], agentRuns: AgentRunRecord[] = [], signal?: AbortSignal): Promise<void> {
+    await this.#services?.hooks.fire('session_end', {event: 'session_end'});
+    if (signal?.aborted) return;
+    const previousSessionId = this.#state.session?.id;
+    if (previousSessionId !== undefined && previousSessionId !== session.id) {
+      this.#tools.permissions?.clearSessionBypass(previousSessionId);
+      if (this.#pendingBypassSessionId === previousSessionId) {
+        this.#pendingBypassExpiresAt = 0;
+        this.#pendingBypassSessionId = null;
+      }
+    }
+    this.#publish({...this.#state, screen: 'chat', session, agentMode: session.agentMode, permissionTier: this.#tools.permissions?.tierFor(session.id) ?? 'default', messages, toolCalls, requestStatus: 'idle', ...restoredRunState(messages, agentRuns), activeRunId: null, recovery: null, iteration: 0, agentPhase: null, expandedThinkingIds: new Set(), selectedMessageId: null, visibleError: null, approvalPrompt: null, liveToolCalls: []});
+  }
   #rejectQoderImages(attachments: readonly ImageAttachment[]): boolean {
     if (attachments.length === 0 || this.#profile?.protocol !== 'qoder') return false;
     this.#error('Qoder 不支持图片附件，图片未发送。');

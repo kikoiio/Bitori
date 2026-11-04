@@ -64,7 +64,7 @@ doctor：
   doctor                  检查配置、凭据、工作区、连通性与可用模型；默认探测全部 profile，输出不含密钥
 
 trust：
-  trust [path]            把工作区加入信任清单（项目级 MCP/Hooks 需要信任后才会启动）
+  trust [path]            信任工作区（项目配置、上下文、扩展与权限规则只在信任后加载）
   --revoke                从信任清单移除
   --json                  机器可读输出
 

@@ -3,6 +3,7 @@ import {homedir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {parse as parseYaml, stringify as stringifyYaml} from 'yaml';
 import {WorkspacePaths, WorkspacePathError} from './workspace-paths.js';
+import {isWorkspaceTrusted} from '../config/trust.js';
 import type {ToolCall, ToolExecutionResult} from './types.js';
 
 export type PermissionTier = 'strict' | 'default' | 'bypass';
@@ -10,7 +11,8 @@ export type PermissionDecision = 'allow' | 'ask' | 'deny';
 export type PermissionSource = 'blacklist' | 'sandbox' | 'rule' | 'tier';
 export interface PermissionRule {tool: string; pattern: string; decision: PermissionDecision; exact?: boolean}
 export interface PermissionCheck {decision: PermissionDecision; source: PermissionSource; reason: string; rule?: PermissionRule}
-export interface PermissionEngineOptions {workspaceRoot: string; userRulesPath?: string; projectRulesPath?: string; localRulesPath?: string; tools?: readonly string[]}
+export interface PermissionEngineOptions {workspaceRoot: string; userRulesPath?: string; projectRulesPath?: string; localRulesPath?: string; tools?: readonly string[]; projectTrusted?: boolean}
+type PersistentPermissionTier = Exclude<PermissionTier, 'bypass'>;
 
 const toolNames = new Set(['read_file', 'write_file', 'edit_file', 'find_files', 'search_text', 'run_command']);
 // MCP 工具名由适配层生成；允许它们进入同一规则与人在回路系统。
@@ -72,33 +74,41 @@ function callValue(call: ToolCall): string | null {
 /** 五层权限判定核心：危险命令、真实路径、规则、档位与人在回路。 */
 export class PermissionEngine {
   readonly workspaceRoot: string; readonly userRulesPath: string; readonly projectRulesPath: string; readonly localRulesPath: string;
-  #tier: PermissionTier; #rules: PermissionRule[]; #localRules: PermissionRule[]; #paths: WorkspacePaths | null = null;
+  #tier: PersistentPermissionTier; #rules: PermissionRule[]; #localRules: PermissionRule[]; #paths: WorkspacePaths | null = null;
+  readonly hadPersistedBypass: boolean;
   readonly #sessionRules = new Map<string, PermissionRule[]>();
+  readonly #sessionBypass = new Set<string>();
   readonly #registered: ReadonlySet<string>;
   constructor(options: PermissionEngineOptions) {
     this.workspaceRoot = options.workspaceRoot; const userDirectory = join(homedir(), '.bitori');
     this.#registered = new Set(options.tools ?? toolNames);
     this.userRulesPath = options.userRulesPath ?? join(userDirectory, 'permissions.yaml'); this.projectRulesPath = options.projectRulesPath ?? join(options.workspaceRoot, '.bitori', 'permissions.yaml'); this.localRulesPath = options.localRulesPath ?? join(options.workspaceRoot, '.bitori', 'permissions.local.yaml');
-    const user = readRulesFile(this.userRulesPath, this.#registered); const project = readRulesFile(this.projectRulesPath, this.#registered); const local = readRulesFile(this.localRulesPath, this.#registered);
-    this.#rules = [...user.rules, ...project.rules, ...local.rules]; this.#localRules = [...local.rules]; this.#tier = local.tier ?? 'default';
+    const user = readRulesFile(this.userRulesPath, this.#registered);
+    const projectTrusted = options.projectTrusted ?? isWorkspaceTrusted(options.workspaceRoot);
+    const project = projectTrusted ? readRulesFile(this.projectRulesPath, this.#registered) : {rules: []};
+    const local = projectTrusted ? readRulesFile(this.localRulesPath, this.#registered) : {rules: []};
+    this.#rules = [...user.rules, ...project.rules, ...local.rules]; this.#localRules = [...local.rules];
+    this.hadPersistedBypass = local.tier === 'bypass';
+    this.#tier = local.tier === 'bypass' ? 'default' : local.tier ?? 'default';
   }
-  get tier(): PermissionTier { return this.#tier; }
+  get tier(): PersistentPermissionTier { return this.#tier; }
+  tierFor(sessionId?: string): PermissionTier { return sessionId !== undefined && this.#sessionBypass.has(sessionId) ? 'bypass' : this.#tier; }
   allRules(): readonly PermissionRule[] { return [...this.#rules, ...[...this.#sessionRules.values()].flat()]; }
   async evaluate(call: ToolCall, sessionId?: string): Promise<PermissionCheck> {
     if (call.effect === 'command') { const command = typeof call.arguments.command === 'string' ? call.arguments.command : ''; const blocked = blacklist.find(item => item.pattern.test(command)); if (blocked) return {decision: 'deny', source: 'blacklist', reason: `命令命中危险黑名单：${blocked.name}`}; }
     try { await this.#assertSandbox(call); }
     catch (error) { return {decision: 'deny', source: 'sandbox', reason: error instanceof Error ? error.message : '路径未通过工作区沙箱'}; }
-    const value = callValue(call) ?? ''; const sessionRules = this.#sessionRules.get(sessionId ?? '') ?? [];
+    const value = callValue(call) ?? ''; const sessionRules = this.#sessionRules.get(sessionId ?? '') ?? []; const tier = this.tierFor(sessionId);
     const matching = [...this.#rules, ...sessionRules].filter(rule => rule.tool === call.name && (rule.exact ? rule.pattern === value : matches(rule.pattern.replaceAll('\\', '/'), value)));
     const strongest = matching.find(rule => rule.decision === 'deny') ?? matching.find(rule => rule.decision === 'ask') ?? matching.find(rule => rule.decision === 'allow');
     if (strongest) {
       if (strongest.decision === 'deny') return {decision: 'deny', source: 'rule', reason: `命中 deny 规则：${strongest.tool}(${strongest.pattern})`, rule: strongest};
-      if (strongest.decision === 'ask') return this.#tier === 'bypass' ? {decision: 'allow', source: 'tier', reason: '放行档自动放行 ask 规则', rule: strongest} : {decision: 'ask', source: 'rule', reason: `命中 ask 规则：${strongest.tool}(${strongest.pattern})`, rule: strongest};
-      if (this.#tier === 'strict') return {decision: 'ask', source: 'tier', reason: '严格档不采纳 allow 规则'};
+      if (strongest.decision === 'ask') return tier === 'bypass' ? {decision: 'allow', source: 'tier', reason: '放行档自动放行 ask 规则', rule: strongest} : {decision: 'ask', source: 'rule', reason: `命中 ask 规则：${strongest.tool}(${strongest.pattern})`, rule: strongest};
+      if (tier === 'strict') return {decision: 'ask', source: 'tier', reason: '严格档不采纳 allow 规则'};
       return {decision: 'allow', source: 'rule', reason: `命中 allow 规则：${strongest.tool}(${strongest.pattern})`, rule: strongest};
     }
-    if (this.#tier === 'strict') return {decision: 'ask', source: 'tier', reason: '严格档要求所有工具调用确认'};
-    if (this.#tier === 'bypass') return {decision: 'allow', source: 'tier', reason: '放行档自动放行'};
+    if (tier === 'strict') return {decision: 'ask', source: 'tier', reason: '严格档要求所有工具调用确认'};
+    if (tier === 'bypass') return {decision: 'allow', source: 'tier', reason: '放行档自动放行'};
     return {decision: call.effect === 'read' ? 'allow' : 'ask', source: 'tier', reason: call.effect === 'read' ? '默认档自动放行只读工具' : '默认档要求副作用工具确认'};
   }
   denialResult(check: PermissionCheck): ToolExecutionResult { return {status: 'denied', error: {code: 'permission_denied', message: `工具调用被拒绝（${check.source}）：${check.reason}`, retryable: false, details: {source: check.source, reason: check.reason}}}; }
@@ -107,14 +117,22 @@ export class PermissionEngine {
     rules.push(this.#exactRule(call)); this.#sessionRules.set(key, rules);
   }
   addPermanentAllow(call: ToolCall): void { const rule = this.#exactRule(call); this.#writeLocal(this.#tier, [...this.#localRules, rule]); this.#localRules.push(rule); this.#rules.push(rule); }
-  setTier(tier: PermissionTier): void { this.#writeLocal(tier, this.#localRules); this.#tier = tier; }
+  enableSessionBypass(sessionId: string): void {
+    if (!sessionId) throw new Error('放行档必须绑定到活动会话');
+    this.#sessionBypass.add(sessionId);
+  }
+  clearSessionBypass(sessionId: string): void { this.#sessionBypass.delete(sessionId); }
+  setTier(tier: PersistentPermissionTier): void {
+    this.#writeLocal(tier, this.#localRules);
+    this.#tier = tier;
+  }
   #exactRule(call: ToolCall): PermissionRule { return parseRule({tool: call.name, pattern: callValue(call) ?? '', decision: 'allow', exact: true}, this.localRulesPath, this.#localRules.length, this.#registered); }
   async #assertSandbox(call: ToolCall): Promise<void> {
     if (call.effect === 'command' || !toolNames.has(call.name)) return; const paths = this.#paths ??= await WorkspacePaths.create(this.workspaceRoot);
     try { if (call.name === 'read_file' || call.name === 'edit_file') await paths.existingFile(callValue(call) ?? ''); else if (call.name === 'write_file') await paths.newFile(callValue(call) ?? ''); else { const pattern = call.name === 'search_text' ? call.arguments.filePattern : call.arguments.pattern; paths.validateRelative(typeof pattern === 'string' && pattern ? pattern : '.'); } }
     catch (error) { if (error instanceof WorkspacePathError && error.code === 'path_outside_workspace') throw error; if (!(error instanceof WorkspacePathError)) throw new WorkspacePathError('path_outside_workspace', '路径无法通过工作区沙箱校验'); }
   }
-  #writeLocal(tier: PermissionTier, rules: readonly PermissionRule[]): void { mkdirSync(dirname(this.localRulesPath), {recursive: true}); writeFileSync(this.localRulesPath, stringifyYaml({mode: tier, rules}), 'utf8'); }
+  #writeLocal(tier: PersistentPermissionTier, rules: readonly PermissionRule[]): void { mkdirSync(dirname(this.localRulesPath), {recursive: true}); writeFileSync(this.localRulesPath, stringifyYaml({mode: tier, rules}), 'utf8'); }
 }
 
 export {toolNames};

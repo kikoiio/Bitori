@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {parse as parseYaml} from 'yaml';
 import {BUILTIN_AGENTS, type AgentDefinition} from './types.js';
 import {normalizeLineEndings} from '../shared/text.js';
+import {isWorkspaceTrusted} from '../config/trust.js';
 
 export function parseAgentDefinition(content: string): AgentDefinition | null {
   try {
@@ -36,9 +37,9 @@ function loadDirectory(directory: string, definitions: AgentDefinition[]): void 
 }
 
 /** 内置 → 用户级 → 项目级；项目级同名完整覆盖。 */
-export function loadAgentDefinitions(workDir: string, homeDirectory = homedir()): AgentDefinition[] {
+export function loadAgentDefinitions(workDir: string, homeDirectory = homedir(), projectTrusted = isWorkspaceTrusted(workDir, homeDirectory)): AgentDefinition[] {
   const definitions = [...BUILTIN_AGENTS];
   loadDirectory(join(homeDirectory, '.bitori', 'agents'), definitions);
-  loadDirectory(join(workDir, '.bitori', 'agents'), definitions);
+  if (projectTrusted) loadDirectory(join(workDir, '.bitori', 'agents'), definitions);
   return definitions;
 }

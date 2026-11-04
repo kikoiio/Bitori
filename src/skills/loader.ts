@@ -1,6 +1,7 @@
 import {existsSync, readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {getLogger} from '../shared/logger.js';
+import {isWorkspaceTrusted} from '../config/trust.js';
 import {parseSkillFile} from './parser.js';
 import type {Skill, SkillCatalogEntry} from './types.js';
 
@@ -10,16 +11,20 @@ const logger = getLogger('skills');
 export class SkillLoader {
   readonly #workDir: string;
   readonly #homeDir: string;
+  readonly #projectTrusted: boolean;
   #skills = new Map<string, Skill>();
 
-  constructor(workDir: string, homeDirectory = process.env.HOME ?? '') {
+  constructor(workDir: string, homeDirectory = process.env.HOME ?? '', projectTrusted = isWorkspaceTrusted(workDir, homeDirectory)) {
     this.#workDir = workDir;
     this.#homeDir = homeDirectory;
+    this.#projectTrusted = projectTrusted;
   }
 
   loadAll(): SkillCatalogEntry[] {
     this.#skills = new Map();
-    for (const [root, source] of [[join(this.#homeDir, '.bitori', 'skills'), 'user'], [join(this.#workDir, '.bitori', 'skills'), 'project']] as const) {
+    const roots: Array<[string, 'user' | 'project']> = [[join(this.#homeDir, '.bitori', 'skills'), 'user']];
+    if (this.#projectTrusted) roots.push([join(this.#workDir, '.bitori', 'skills'), 'project']);
+    for (const [root, source] of roots) {
       if (!existsSync(root)) continue;
       for (const path of this.#candidatePaths(root)) {
         try {

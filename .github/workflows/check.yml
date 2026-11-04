@@ -26,5 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify TUI cursor in a Linux PTY
+        if: runner.os == 'Linux'
+        run: npm run test:tui:cursor:pty
+
       - name: Run full check
         run: npm run check

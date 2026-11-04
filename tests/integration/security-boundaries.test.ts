@@ -115,7 +115,7 @@ describe('安全边界（prompt injection / 审批绑定 / 权限档提示）', 
     await tools.close();
   });
 
-  it('放行档切换带有持久可见的安全提示', async () => {
+  it('放行档需要二次确认、仅当前会话有效并持续显示提示', async () => {
     const root = mkdtempSync(join(tmpdir(), 'bitori-security-')); roots.push(root);
     const services = createAgentServices({workDir: root, hooks: []});
     const tools = createToolSystem(root, {}, {services});
@@ -125,11 +125,30 @@ describe('安全边界（prompt injection / 审批绑定 / 权限档提示）', 
     const controller = new ChatController(new MockLLMClient([[{type: 'text_delta', text: 'ok'}, {type: 'completed', finishReason: 'stop'}]]), repository, tools, undefined, {workspaceRoot: root});
     await controller.initialize(profile);
     const unwatch = controller.subscribe(state => { states.push({permissionTier: state.permissionTier, visibleError: state.visibleError}); });
+    await controller.sendMessage('/permission 放行');
+    expect(states.at(-1)?.permissionTier).toBe('default');
+    expect(states.at(-1)?.visibleError).toContain('/permission bypass');
     await controller.sendMessage('/permission bypass');
-    const afterBypass = states.at(-1);
-    expect(afterBypass?.permissionTier).toBe('bypass');
-    expect(afterBypass?.visibleError).toContain('放行档');
-    await controller.sendMessage('/permission default');
+    expect(states.at(-1)?.permissionTier).toBe('default');
+    expect(states.at(-1)?.visibleError).toContain('二次确认');
+    const firstSessionId = controller.getState().session!.id;
+    await controller.createSession();
+    const secondSessionId = controller.getState().session!.id;
+    expect(secondSessionId).not.toBe(firstSessionId);
+    await controller.sendMessage('/mode bypass confirm');
+    expect(states.at(-1)?.permissionTier).toBe('default');
+    expect(states.at(-1)?.visibleError).toContain('过期');
+    await controller.sendMessage('/mode bypass');
+    await controller.sendMessage('/permissions bypass confirm');
+    expect(states.at(-1)?.permissionTier).toBe('bypass');
+    expect(states.at(-1)?.visibleError).toContain('当前聊天');
+    await controller.createSession();
+    expect(states.at(-1)?.permissionTier).toBe('default');
+    await controller.switchSession(secondSessionId);
+    expect(states.at(-1)?.permissionTier).toBe('default');
+    await controller.switchSession(firstSessionId);
+    expect(states.at(-1)?.permissionTier).toBe('default');
+    await controller.sendMessage('/permission strict');
     expect(states.at(-1)?.visibleError).toBeNull();
     unwatch();
     await controller.shutdown();

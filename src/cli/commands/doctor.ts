@@ -4,7 +4,7 @@ import {configPaths, loadConfig} from '../../config/loader.js';
 import {redactSecrets} from '../../config/secrets.js';
 import type {AppConfig, ProviderProfile} from '../../config/types.js';
 import {probeProfile} from '../../diagnostics/connection.js';
-import {isWorkspaceTrusted, workspaceHasProjectExtensions} from '../../config/trust.js';
+import {isWorkspaceTrusted, workspaceHasProjectContent} from '../../config/trust.js';
 
 type CheckStatus = 'ok' | 'warn' | 'fail';
 export interface DoctorCheck {name: string; status: CheckStatus; detail: string}
@@ -45,9 +45,9 @@ export async function buildDoctorChecks(options: {profile?: string; json: boolea
     checks.push({name: `凭据 ${profile.name}`, status: 'ok', detail: `来源 ${profile.apiKeyVariable ?? 'config'}(值不显示)`});
   }
   checks.push({name: '工作区', status: existsSync(workspace) ? 'ok' : 'fail', detail: workspace});
-  const hasExtensions = workspaceHasProjectExtensions(workspace);
+  const hasProjectContent = workspaceHasProjectContent(workspace);
   const trusted = isWorkspaceTrusted(workspace);
-  checks.push({name: '工作区信任', status: hasExtensions && !trusted ? 'warn' : 'ok', detail: hasExtensions ? (trusted ? '项目级 MCP/Hooks 已信任并将加载' : '未信任：项目级 MCP/Hooks 已默认拒载；确认后运行 bitori trust 启用') : '未发现项目级 MCP/Hooks'});
+  checks.push({name: '工作区信任', status: hasProjectContent && !trusted ? 'warn' : 'ok', detail: hasProjectContent ? (trusted ? '项目级扩展与上下文已信任并将加载' : '未信任：项目级 MCP/Hooks、提示、记忆、skills、commands、agents 和权限规则已默认拒载；确认后运行 bitori trust 启用') : '未发现项目级扩展或上下文'});
   const databasePath = join(workspace, '.bitori', 'bitori.db');
   if (existsSync(databasePath)) {
     const size = statSync(databasePath).size;

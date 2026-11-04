@@ -40,7 +40,7 @@ export function createToolSystem(workspaceRoot: string, mcpServers: Record<strin
   ];
   if (options.clientFor) coreTools.push(new AgentTool(services.agents, options.clientFor));
   for (const tool of coreTools) registry.register(tool);
-  const permissions = new PermissionEngine({workspaceRoot, tools: registry.entries().map(tool => tool.name)});
+  const permissions = new PermissionEngine({workspaceRoot, tools: registry.entries().map(tool => tool.name), projectTrusted: services.projectTrusted});
   const mcp = new McpManager(registry, mcpServers, workspaceRoot);
   return {registry, executor: new ToolExecutor(registry, {workspaceRoot, limits: fixedToolLimits, permissions}), approvals: new ApprovalCoordinator(), permissions, snapshots, mcp, services, memoryClient: options.memoryClient ?? null, close: async () => { await Promise.all([services.close(), mcp.close()]); }};
 }

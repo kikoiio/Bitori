@@ -1,29 +1,64 @@
 # Bitori 项目级待办执行计划
 
-更新时间：2026-11-03
-基线：`master`，`a354503bc75633091943b0818abe47beb7d25d8e`。产品及 caret 修正提交 `f66f293` 的三平台 Check、Linux 桌面/打包验收均通过；Windows 测试限时修正提交 `fb6741e` 的 [run 41682368460](https://github.com/kikoiio/Bitori/actions/runs/41682368460) 与最终计划/审计提交 `69e5c13` 的 [run 41683263653](https://github.com/kikoiio/Bitori/actions/runs/41683263653) 三平台均全部通过。项目待办范围已完成；真实终端像素级光标观感仍明确标为 `INCONCLUSIVE`，RSI 暂停、云同步取消。
+更新时间：2026-11-04
+前一轮产品交付基线：`master`，`8e0281333edd553b0da27dc97bf86cda284e8104`。提交 `f66f293` 的三平台 Check、Linux 桌面/打包验收，以及最终计划/审计提交 `8e02813` 的 [run 41684199794](https://github.com/kikoiio/Bitori/actions/runs/41684199794) 均已通过。本节记录用户随后要求的“整合整个项目除了 RSI 外的所有待办”，不把前一轮的“产品待办完成”误作全项目无待办。
 
-## 当前优先级（用户最新决定）
+## 当前整合轮次（2026-11-03）
+
+### 目标与完成谓词
+
+范围包括五项此前已接受安全风险的缓解、TUI 光标的真实 PTY 行为验收、当前已配置 Provider 的多模态真实端点验收、状态与文档同步、完整检查及 master 同步。RSI 与 SWE-bench Lite 均归 RSI/评测暂停范围，不运行；Windows/macOS 桌面不在目标内；云同步保持取消。只有用户当前已配置的一组真实模型凭据可用于 Provider 验收，不将它代表成其他协议。
+
+完成谓词：安全文档列出的每项风险都有具体代码控制和回归覆盖，或被明确标为无法消除的剩余风险；TUI 在隔离 PTY 中实际启动并验证光标行为，无法取得像素证据时仍如实标记 `INCONCLUSIVE`；当前 Provider 的图片端点有真实请求证据，或记录其不能支持/不能验证的确切原因；README、架构、配置/安全/开发参考、索引和本计划状态一致；所需 GitHub Actions 检查对最终提交成功；最终本地与远端仅有 `master` 且 SHA 相同。
+
+### 工作规模与并行安排
+
+预计三个代码切片、约 10–20 个源代码/测试文件及 6–8 份状态文档。Trust 清单文件写入与解析、trace 导出处理各由一名 worker 独立负责不重叠路径；主执行者负责项目指令的信任边界、bypass/审批、PTY 验收、Provider 验收与集成。worker 只做定向代码修改，不启动构建、全量测试、GUI 或云端任务。主执行者审阅每个 diff，再按依赖顺序运行定向检查；三平台完整 Check、Provider E2E 以及任何桌面 GUI 均只安排在 GitHub Actions，避免本机争用。
+
+### 阶段与核验
+
+1. **基线与风险归因。** 已读取项目计划、审计记录、代码与验证工作流；从风险控制本身定位修复点。
+2. **并行安全修复。** Trust 清单和 trace 导出切片分别实现并加回归；主线处理提示注入、审批及 bypass 风险。
+3. **实际产品验收。** 用隔离的真实伪终端进程核对 TUI 光标；用已有 GitHub 配置和受限任务核对 Provider 图片请求。图片验收在 `LLMClient.streamChat` 边界硬限一次调用；该验收禁用 thinking fallback，当前协议 SDK retries 为 0，因此对应一次模型聊天请求。token/credit 阈值仍属于事后报警，不是费用硬上限。
+4. **集成与文档。** 逐项审阅 diff，跑相关轻量回归；同步风险处置、剩余限制、验收证据和非目标。
+5. **云端验证与同步。** 先跑完整 GitHub Actions Check，必要时运行当前 Provider E2E；结果成功后提交并推送，查询 GitHub 证据、分支和 SHA 进行二次确认。
+
+### 当前轮次清单
+
+- [x] 核实干净的 `master` 基线及 `origin/master`。
+- [x] 明确 RSI/SWE-bench、Windows/macOS 桌面及云同步边界。
+- [x] 实施并回归验证工作区信任清单文件权限与原子写入。
+- [x] 降低 trace/会话导出的机密泄漏风险并覆盖回归。
+- [x] 降低项目指令注入、审批诱导及 bypass 档风险；保留不可消除风险说明。
+- [x] 对隔离 PTY 中实际运行的 TUI 做 ASCII/CJK 光标行列验收；Ptyxis 像素级外观仍为环境限制。
+- [ ] 对唯一已配置 Provider 做图片端点验收；其他协议不冒充覆盖。
+- [ ] 同步项目文档、计划表格和审计轨迹。
+- [ ] 运行定向检查与 GitHub Actions 完整检查，修复失败并复验。
+- [ ] 提交、推送并确认本地和远端只有内容一致的 `master`。
+
+前一轮交付记录如下。
+
+## 前一轮优先级与决策（历史记录）
 
 用户明确要求“先暂停 RSI，完成产品本身先”。RSI 现暂停，历史 smoke 报告保留；不启动新的 RSI、候选生成或基准扩跑。产品范围包括首次配置、TUI/桌面对话、工具审批、会话保存、多模态、会话导入/导出和自动断点续跑；已完成实现、三平台 Check 和 Linux 桌面/打包验收。桌面 caret 回归现通过真实 Chromium/Electron smoke；本机 Ptyxis 像素级光标观感仍为 `INCONCLUSIVE`。云同步继续取消。
 
 本轮并行：图片/provider、会话归档、恢复逻辑、TUI、桌面和文档分属独立文件边界。主执行者集成存储、处理交叉审查问题、更新计划并统一验证。重型构建、全量测试、桌面 GUI 和打包放在 GitHub Actions。
 
-## 完成条件
+## 前一轮产品完成条件（已达成）
 
 本轮产品工作完成条件：图片从 TUI/桌面入口进入存储和有图片能力的 Provider；不支持图片的协议明确报错且不降级重发；版本化 JSON 可从 CLI/TUI/桌面导出与导入，导入事务失败不留下半个会话；断点续跑使用持久检查点、遵守累计预算，已完成工具不重复执行，不确定的写入/命令先确认；首次使用与功能边界写入文档；相关回归、三平台 Check、Linux 桌面 smoke/打包通过。最后提交并推送 master，确认远端与本地只有 master 且 SHA 相同。
 
-## 工作规模与严谨度
+## 前一轮工作规模与边界（历史记录）
 
 历史记录仍包括桌面和 Provider 验收、四种 Provider 协议、SWE-bench Lite 23 题、五项已接受的安全残留风险、RSI smoke，以及桌面临时审批范围缺陷。本轮 RSI 不运行；SWE-bench、更多真实 Provider 端点、Windows/macOS 桌面和真实终端视觉检查不属于当前已确认的产品功能范围，分别保留在待决/受限状态中。
 
-## 吞吐安排
+## 前一轮吞吐安排（历史记录）
 
 - **并行工作。** 图片/provider、会话交换、恢复、TUI、桌面和文档按不重叠路径推进；主执行者负责存储 worker、事务、trace 脱敏和跨切片集成。
 - **资源安排。** 本机只运行定向单测、TUI 测试、类型检查和静态语法检查；GitHub Actions 承担完整三平台 Check、Electron GUI、打包与构件启动。
 - **外部验证。** 用户已授权本轮免费 GitHub Actions 工作流。模型/RSI 实验保持暂停；不把历史单端点 E2E 当作本轮多模态 Provider 的实时端点验收。
 
-## 本轮产品工作清单
+## 前一轮产品工作清单（已完成）
 
 - [x] RSI 暂停、云同步取消及本轮功能范围决策已写入计划与意图文档。
 - [x] 空统计下 `usage stats --json` 保持合法 JSON，相关 9 项定向测试通过。
@@ -48,9 +83,9 @@
 
 轻量分析和非冲突编辑并行；存储与共享契约由主执行者整合。代理不运行构建、GUI、全量测试或云端任务；主执行者在定向检查后统一安排 GitHub Actions 全量验证和桌面 smoke。RSI 与基准扩跑不参与本轮验收。
 
-## 当前证据
+## 前一轮证据（历史记录）
 
-- GitHub 当前没有开放 issue 或 PR。仓库没有 TODO 或 roadmap 文件；代码搜索只在一个测试样例中找到字面量 `TODO`。
+- 本整合轮只读查询 GitHub，开放 issue 与 PR 均为 0。仓库内源码扫描未发现可执行的 TODO/FIXME；命中项仅为 E2E fixture 中名为 `todo.md` 的临时文件及研究文档术语。
 - 初始基线的 GitHub `Check` 曾在 Ubuntu、Windows 和 macOS 通过：[run 41629488646](https://github.com/kikoiio/Bitori/actions/runs/41629488646)。光标测试修正后的提交 `7bca1f1` 也由三平台 Check 验证通过；当前提交 `1eb870f` 的 Check 已全部通过，见 run 41644656315。
 - 本轮提交 `7d58863` 的首轮 `Check` 为 [run 41636113358](https://github.com/kikoiio/Bitori/actions/runs/41636113358)：Ubuntu 与 macOS 通过；Windows 的快速流式光标稳定性测试在 20 秒截止时仍处于 streaming。后续提交将测试改为等待 `sendMessage` 自然结束，复验通过。
 - 首轮 Linux 桌面验收 [run 41636209387](https://github.com/kikoiio/Bitori/actions/runs/41636209387) 的 AppImage 步骤失败：Playwright 会在传入参数前加调试参数，使 `--appimage-extract-and-run` 不再是首参数。后续改用 AppImage 官方支持的 `APPIMAGE_EXTRACT_AND_RUN=1` 环境变量，完整复验通过。
@@ -59,7 +94,7 @@
 - 用户指出 GitHub 已配置模型并授权调用。`E2E LLM` 在提交 `1cfbed5feaf30cf368e8694314f0b33805c3ba41` 自动识别 Anthropic 协议和模型 `DeepSeek-V4.1-Flash-1017-Event`；[run 41638870512](https://github.com/kikoiio/Bitori/actions/runs/41638870512) 通过，5 次迭代、309 输出 token、任务产物校验通过、事后阈值未超额。对应 artifact `e2e-evidence-auto`（604 字节）已核实上传，保留至 2026-11-10；JSON 确认 `workingTreeClean: true` 和完整 commit SHA。当前 GitHub 只配置这一组通用 endpoint/key/model，因此不将同一 Anthropic endpoint 冒充成其余三种协议。
 - 本计划开始前最近一次 Linux 桌面 smoke 和打包成功记录是 2026-10-28。那次只启动开发入口和 `linux-unpacked`；AppImage 与 deb 只构建并上传，未启动，桌面 smoke 也没有覆盖“本会话”和“永久允许”。当前完整验收已在 run 41637023628 通过。
 - 最近一次 SWE-bench Lite 23 题开发集记录为 2026-10-28、agent SHA `ff9a4fb8ea70d9c0a7d2191086af99925a07069d`：23/23 题有结果，但 8 个 `agent_error`、7 个 `unresolved`、8 个 `infrastructure_error`，没有 `resolved`。结果中的问题包括模型工具调用错误、Groq 速率/上下文限制及 gold 环境验证失败；不能当作当前版本验收。
-- 提交 `8ac6b32` 上第 0 题在 run [41640309946](https://github.com/kikoiio/Bitori/actions/runs/41640309946)（5 次迭代）与 [41641115352](https://github.com/kikoiio/Bitori/actions/runs/41641115352)（10 次迭代）均以 `agent_error` 结束、补丁为空。轨迹证明初始 Git ownership 报错随后由 Agent 自行加入精确 `safe.directory` 配置并恢复；不能将它当作持续根因。第二次轨迹还显示 Agent shell 的 `python` 是系统 3.11.5，复现代码因 `collections.Mapping` 失败；gold grader 使用镜像内 `/opt/miniconda3/envs/testbed/bin/python`。随后为 Agent shell 统一 testbed `PATH`，并修正合法 U+FFFD 字符被误判为轨迹截断及固定写死“20 次”的迭代上限错误提示。补丁和 9 项 Python runner 测试、17 项 AgentRunner 测试已通过；提交 `1eb870f` 的 Check 已由 run 41644656315 全平台通过。单题复验将在最终文档/证据提交的 Check 通过后派发。
+- 提交 `8ac6b32` 上第 0 题在 run [41640309946](https://github.com/kikoiio/Bitori/actions/runs/41640309946)（5 次迭代）与 [41641115352](https://github.com/kikoiio/Bitori/actions/runs/41641115352)（10 次迭代）均以 `agent_error` 结束、补丁为空。轨迹证明初始 Git ownership 报错随后由 Agent 自行加入精确 `safe.directory` 配置并恢复；不能将它当作持续根因。第二次轨迹还显示 Agent shell 的 `python` 是系统 3.11.5，复现代码因 `collections.Mapping` 失败；gold grader 使用镜像内 `/opt/miniconda3/envs/testbed/bin/python`。随后为 Agent shell 统一 testbed `PATH`，并修正合法 U+FFFD 字符被误判为轨迹截断及固定写死“20 次”的迭代上限错误提示。补丁和 9 项 Python runner 测试、17 项 AgentRunner 测试已通过；提交 `1eb870f` 的 Check 已由 run 41644656315 全平台通过。后续曾计划在最终文档 Check 通过后派发单题复验；该计划因用户将 SWE-bench Lite 划入 RSI 暂停范围而取消，本轮未派发。
 - TUI 的模拟终端测试覆盖光标行列、中文折行、输入、排队和取消，且已由修复后提交 `7bca1f1` 的三平台 `Check` 运行并通过。它没有启动 CLI 做真实终端交互验收。
 - 本轮产品实现提交 `507d3d3e1def769d647a957e3f54a42e18dd7229` 的三平台 `Check` [run 41669917762](https://github.com/kikoiio/Bitori/actions/runs/41669917762) 全部通过。Ubuntu 完成类型检查、lint、构建及 111 个测试文件的 737 项测试；Windows 和 macOS 的完整 `npm run check` 也通过。此前该集成检查发现控制器将带本地 checkpoint 的会话直接送入严格归档 schema，已修复为经过版本化归档白名单规范化；回归与存储 worker 集成测试通过。
 - 最终文档提交 `6a56090ce8541e5b9cbee92f2a3f3bb514c2f5a4` 的三平台 `Check` [run 41670936682](https://github.com/kikoiio/Bitori/actions/runs/41670936682) 全部通过。Linux desktop [run 41670975726](https://github.com/kikoiio/Bitori/actions/runs/41670975726) 在首个桌面 smoke 发现 Electron 45 移除了旧 `clipboard.readImage/writeImage` API；已改为异步 ClipboardItem 接口。[后续复验 run 41671689523](https://github.com/kikoiio/Bitori/actions/runs/41671689523) 确认 smoke 主进程 evaluator 不提供 `require`，故测试改用 Node/Web 标准全局 API 创建 ClipboardItem 图片；当时仍待复验的后续结果与最终修复见下文。
@@ -86,13 +121,13 @@
 - Anthropic SDK 在自定义 base URL 后请求 `/v1/messages`；RSI gateway 归一化原本会丢失自定义 `/anthropic` 前缀的 `/v1`。现已在 `upstream_base` 为该协议补齐版本段，并由测试覆盖根地址、自定义前缀和完整 endpoint 地址。
 - 本机 `/usr/bin/x-terminal-emulator` 指向 Ptyxis。新窗口成功显示 Bitori TUI 的可访问树；Orca Linux provider 报告截图能力不支持，且启动时出现已有本地会话文本。为避免更改该会话，没有输入；真实光标视觉验收为 `INCONCLUSIVE`。
 
-## 并行安排
+## 前一轮并行安排（历史记录）
 
 本轮已完成的并行切片分别包括 TUI、桌面、Provider/图片、会话交换、恢复和文档。主执行者审阅并整合存储 worker、计划/索引、trace 脱敏、归档事务和跨层验证。重型验证统一由 GitHub Actions 运行，不在本机并行启动。
 
-## 待办状态
+## 前一轮待办状态（当前整合轮之前）
 
-| 项目 | 当前状态 | 完成证据或门槛 |
+| 项目 | 前一轮结束时状态 | 该轮证据或门槛 |
 |---|---|---|
 | 当前三平台代码检查 | 已通过 | 产品提交 `f66f293` 的 [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530)、Windows 测试限时修正提交 `fb6741e` 的 [run 41682368460](https://github.com/kikoiio/Bitori/actions/runs/41682368460)，以及最终文档证据提交 `69e5c13` 的 [run 41683263653](https://github.com/kikoiio/Bitori/actions/runs/41683263653) 均在 Ubuntu/Windows/macOS 全通过 |
 | Linux 桌面 GUI/打包 | 已通过 | [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 的开发版、打包版、AppImage、解包 deb smoke 全通过；`desktop-packaged-linux` 236,896,325 bytes 与 `desktop-screenshots` 962,896 bytes 已核实上传，保留至 2026-11-10 |
@@ -115,7 +150,7 @@
 | trace/历史包含未知机密 | 用户接受当前风险 | 已知配置密钥会脱敏；分享前仍需人工检查未知内容，见 ADR 0002 |
 | RSI | 用户明确暂停；产品本身优先 | run 41652747706：网关 30/30 请求成功、计量 747,715 tokens；Agent 达 30 轮上限，部分补丁未评分，最终 `no_candidate`。artifact 已核验；不重复同配置调用 |
 
-## 阶段
+## 前一轮阶段记录
 
 1. **完成盘点。** 已汇总三个独立审查与当前项目文档；把实现缺陷、验收缺口、风险处置、产品决定和暂停项目分别记录。
 2. **补齐本地可执行实现。** 已按会话 ID 隔离临时授权；桌面 smoke 增加四项审批选择和范围断言；Linux 工作流新增 AppImage/deb 启动；Provider 证据新增提交 SHA 与工作树洁净标记及独立结果目录。定向测试（23 项）、类型检查、改动文件 lint、脚本语法、工作流 YAML 解析、6 份文档本地链接与差异检查均通过。
@@ -126,18 +161,18 @@
 7. **RSI 已暂停（以下保留历史执行记录）。** 用户明确要求继续并授权可用模型；使用已配置的 Anthropic/DeepSeek profile 及 `smoke.json` 的硬预算。第一轮由安全符号链接快照问题在模型调用前中断；第二轮因 Anthropic 认证头不匹配在首请求失败（1 请求、0 tokens、无上游调用）。修正网关协议凭证并由 85 项测试覆盖后，`a4da145` 三平台 Check 通过，第三轮 run 41652747706 正常完成 preflight 和 baseline；网关 30/30 成功，计量 747,715 tokens。Agent 达 30 轮上限并留下部分补丁，但评测器按正常完成规则将其记录为 `agent_error`、不评分，最终 `no_candidate`。artifact 已核实，不自动合并、不重复同条件模型调用。
 8. **最终核验。** 产品代码、Linux 桌面、打包和最终文档提交的三平台 Check 均通过；README、架构、意图、开发说明、计划和审计轨迹已同步。真实终端视觉与真实图片 Provider 端点按范围记录为 `INCONCLUSIVE`/未验；RSI 暂停，云同步取消。最后确认仅有 `master` 且本地/远端 SHA 一致。
 
-## 已完成的云端验收
+## 前一轮已完成的云端验收
 
 - 用户授权使用免费云资源后，将 `master` 推送至提交 `7d58863`，并触发三平台检查；初次运行暴露 Windows 光标稳定性测试的 20 秒截止问题，已在 `7bca1f1` 修复并由 run 41636966238 全平台复验通过。
 - 手动运行 Linux desktop workflow，初次 AppImage 测试因 AppImage 参数顺序失败；改用 `APPIMAGE_EXTRACT_AND_RUN=1` 后，run 41637023628 的所有 smoke 通过。`desktop-packaged-linux`（237,007,447 字节）与 `desktop-screenshots`（870,292 字节）已只读核实上传，保留至 2026-11-10。
 
-## 剩余范围与成本边界
+## 前一轮剩余范围与成本边界（后续调整见本轮状态）
 
 - **Provider 覆盖范围。** 当前 Anthropic/DeepSeek 配置已通过一次固定任务；25k token / 1 credit 阈值是运行后检查，不是硬限制。若要验收 Qoder、OpenAI Chat 或 OpenAI Responses，需分别配置正确 endpoint/key，不能把 Anthropic endpoint 直接当作这些协议。
-- **SWE-bench Lite 开发集。** 工作流可运行单题，历史计划的下一次第 0 题诊断最多 10 次迭代/600 秒；当前先完成产品主线，未派发新任务。工作流没有总 token/美元硬上限。Docker runner 会下载固定公开数据和镜像，将公开任务发送给 Provider；隔离容器中的 Agent 可访问配置凭据和网络。结果、轨迹、诊断、补丁和汇总 artifact 保留 7 天。完整 23 题集仍未授权。
+- **SWE-bench Lite 开发集。** 前一轮曾列出第 0 题诊断（最多 10 次迭代/600 秒），但没有在当前整合轮派发。用户随后明确将 SWE-bench Lite 归入 RSI；本轮与 RSI 一并暂停。该工作流没有总 token/美元硬上限。
 - **RSI smoke。** 用户授权使用可用模型。实验配置为 Docker、90 分钟、100 次请求、2,000,000 累计 tokens，每次请求最多输出 32,000 tokens。run 41647782174 在 preflight 因依赖树内安全相对链接失败，0 请求；`tree_digest` 修复并通过 14 项 sandbox 测试。run 41650351744 在 Anthropic SDK 的 `x-api-key` 与网关 Bearer 不匹配时以 1 请求、0 tokens、0 上游调用中断；网关已按协议校验临时凭证，目标测试 85 项通过。最终 run 41652747706 完成 preflight/baseline，30 次请求均成功、计量 747,715 tokens；Agent 达迭代上限，提交了部分补丁，但按评测契约未正常完成，因此 `agent_error`、跳过评分、没有 RSI 候选。artifact `rsi-smoke-41652747706`（33,754 bytes）已核实，保留 7 天；不自动合并、不重复同配置调用。额度是实验硬上限，不是价格承诺。
 - **产品功能。** 云同步已由用户取消，保持不支持。多模态、会话导入和自动断点续跑已获确认并纳入本轮；当前状态见本计划表格。
-- **安全风险处置。** 用户接受 `docs/reference/security.md` 列出的五项当前残留风险：仓库说明/skills/命令进入模型上下文；模型可能诱导用户批准；本地工作区信任清单无密码学保护；bypass 档跳过逐次审批；trace/历史可能包含未知机密。事实和现有控制保留在安全文档，见 ADR 0002。
+- **安全风险处置。** 用户于 2026-11-03 曾接受当时列出的五项残留风险；本次整合轮已新增项目内容信任门控、审批提示、bypass 二次确认、信任清单保护和导出权限。无法由这些控制消除的部分仍列于安全文档，见 ADR 0002。
 - **终端与桌面范围。** 已将本机默认终端 Ptyxis 设为真实光标/输入验收目标；实际显示仍未核验。Windows/macOS 桌面支持仍在现有范围之外。
 
 ## 验收记录

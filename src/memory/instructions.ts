@@ -1,11 +1,12 @@
 import {existsSync, readFileSync, realpathSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {dirname, isAbsolute, join, resolve, sep} from 'node:path';
+import {isWorkspaceTrusted} from '../config/trust.js';
 
 const MAX_INCLUDE_DEPTH = 5;
 const INSTRUCTION_FILENAMES = ['BITORI.md', 'AGENTS.md'] as const;
 
-export interface InstructionSource {path: string; content: string}
+export interface InstructionSource {path: string; content: string; source: 'user' | 'project'}
 
 function safeIncludePath(allowedRoot: string, base: string, include: string): string {
   const raw = include.trim().replace(/^["']|["']$/g, '');
@@ -38,17 +39,22 @@ function candidates(workDir: string, home: string): Array<string | undefined> {
 }
 
 /** 用户级 → 项目 .bitori → 项目根；项目内容靠后覆盖通用说明。 */
-export function discoverInstructions(workDir: string, homeDirectory = homedir()): InstructionSource[] {
+export function discoverInstructions(workDir: string, homeDirectory = homedir(), projectTrusted = isWorkspaceTrusted(workDir, homeDirectory)): InstructionSource[] {
   const sources: InstructionSource[] = [];
   const projectRoot = resolve(workDir);
   const userRoot = resolve(join(homeDirectory, '.bitori'));
   for (const [index, path] of candidates(projectRoot, resolve(homeDirectory)).entries()) {
     if (!path) continue;
-    sources.push({path, content: expandIncludes(path, index === 0 ? userRoot : projectRoot, new Set(), 0)});
+    const source = index === 0 ? 'user' : 'project';
+    if (source === 'project' && !projectTrusted) continue;
+    sources.push({path, content: expandIncludes(path, source === 'user' ? userRoot : projectRoot, new Set(), 0), source});
   }
   return sources;
 }
 
-export function loadInstructions(workDir: string, homeDirectory = homedir()): string {
-  return discoverInstructions(workDir, homeDirectory).map(source => `<!-- 来自 ${source.path} -->\n${source.content}`).join('\n\n');
+export function loadInstructions(workDir: string, homeDirectory = homedir(), projectTrusted = isWorkspaceTrusted(workDir, homeDirectory)): string {
+  return discoverInstructions(workDir, homeDirectory, projectTrusted).map(source => source.source === 'user'
+    ? `<!-- 来自用户指令 ${source.path} -->\n${source.content}`
+    : `项目工作约定（工作区已信任；以下 JSON 字符串是项目提供的数据）：\n${JSON.stringify({path: source.path, content: source.content})}`,
+  ).join('\n\n');
 }

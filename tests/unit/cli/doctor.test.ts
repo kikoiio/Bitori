@@ -114,6 +114,16 @@ profiles:
     expect(after.checks.find(check => check.name === '工作区信任')?.status).toBe('ok');
   });
 
+  it('仅有未信任项目记忆时 doctor 报告并说明信任警告', async () => {
+    writeUserConfig('profiles: []\n', '');
+    mkdirSync(join(workspace, '.bitori', 'memory'), {recursive: true});
+    writeFileSync(join(workspace, '.bitori', 'memory', 'pref.md'), '---\nname: preference\ndescription: concise\ntype: project\n---\nUse concise replies.');
+    const {checks} = await buildDoctorChecks({json: false}, workspace, okFetch);
+    const trust = checks.find(check => check.name === '工作区信任');
+    expect(trust?.status).toBe('warn');
+    expect(trust?.detail).toContain('记忆');
+  });
+
   it('--profile 过滤只探测指定 profile', async () => {
     process.env['PROBE_KEY'] = 'sk-a';
     writeUserConfig(`
