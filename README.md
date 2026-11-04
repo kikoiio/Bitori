@@ -2,7 +2,7 @@
 
 Bitori 是在本地工作区中运行的 AI 编码助手，提供跨平台终端 TUI 和 Linux 桌面界面。模型可读取文件、提出修改并调用工具；需要审批的操作会先显示实际参数。
 
-本地图片、版本化会话 JSON 交换和中断恢复已完成实现。当前整合轮还覆盖安全加固、真实 Linux PTY 光标行为和已配置模型的图片请求；实测模型称未收到图像，因此该模型/网关组合未通过图像识别验收。证据见 [开发与测试](docs/reference/development.md) 与 [PLAN.md](PLAN.md)。云同步已取消；RSI 与 SWE-bench Lite 评测暂停。桌面图形应用当前只支持 Linux。
+本地图片、版本化会话 JSON 交换和中断恢复已完成实现。本轮整合的产品提交 `12335b0` 的三平台 Check 与 Linux 桌面/安装包 smoke 均通过；真实图片请求中，已配置模型称未收到图像，因此该模型/网关组合未通过图像识别验收。验证细节见 [开发与测试](docs/reference/development.md) 与 [PLAN.md](PLAN.md)。云同步已取消；RSI 与 SWE-bench Lite 评测暂停。桌面图形应用当前只支持 Linux。
 
 ## 首次启动
 

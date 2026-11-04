@@ -3,7 +3,7 @@
 更新时间：2026-11-04
 前一轮产品交付基线：`master`，`8e0281333edd553b0da27dc97bf86cda284e8104`。提交 `f66f293` 的三平台 Check、Linux 桌面/打包验收，以及最终计划/审计提交 `8e02813` 的 [run 41684199794](https://github.com/kikoiio/Bitori/actions/runs/41684199794) 均已通过。本节记录用户随后要求的“整合整个项目除了 RSI 外的所有待办”，不把前一轮的“产品待办完成”误作全项目无待办。
 
-## 当前整合轮次（2026-11-03）
+## 当前整合轮次（2026-11-03 至 2026-11-04）
 
 ### 目标与完成谓词
 
@@ -33,12 +33,15 @@
 - [x] 对隔离 PTY 中实际运行的 TUI 做 ASCII/CJK 光标行列验收；Ptyxis 像素级外观仍为环境限制。
 - [x] 对唯一已配置 Provider 做单次图片端点验收；Anthropic/`DeepSeek-V4.1-Flash-1017-Event` 返回称未收到图片，故当前端点与模型组合未通过视觉验收。单次证据不能区分模型不支持与网关丢图，已明确记录，不重试同一请求。
 - [x] 同步项目文档、计划表格和审计轨迹；图片端点限制与首轮 CI 根因已记录。
-- [ ] 运行定向检查与 GitHub Actions 完整检查，修复失败并复验。
-- [ ] 提交、推送并确认本地和远端只有内容一致的 `master`。
+- [x] 运行定向检查与 GitHub Actions 完整检查并修复失败：typecheck、两文件 lint、24 项测试、CI 环境 PTY 均通过；最终三平台 Check `41770176066` 在 `12335b0909985e4c3d84aa792b90625e1a830a31` 全通过。
+- [x] 在支持的平台复验 Linux 桌面开发版、AppImage 与 deb：run `41770535976` 对同一 SHA 全通过，artifact 已核实上传。
+- [x] 提交并推送本轮所有实现、计划和证据；最终核验本地/远端仅有 `master` 且 SHA 一致。
 
 当前 Provider 证据：提交 `bab4ac2b23d97db78b84fb4108586bc484f97050` 的 [E2E LLM run 41768902090](https://github.com/kikoiio/Bitori/actions/runs/41768902090) 完成 build 与 doctor 连通性检查，随后发出 1 次图片聊天调用（0 次被上限拦截，输出用量 165 tokens，未超事后阈值）。模型回复“我没有收到任何附件或图像内容”，任务校验失败，artifact `e2e-evidence-auto-image` 已上传并核验。应用和 Anthropic adapter 的定向回归确认附件进入请求且编码为 base64 image block；现有证据定位为当前模型/网关组合未向模型提供可观察图像，不能从单次响应判定究竟由模型能力还是网关处理造成。
 
-首轮整合提交 `bab4ac2` 的三平台 Check [run 41768858090](https://github.com/kikoiio/Bitori/actions/runs/41768858090) 未通过：Ubuntu PTY 子进程继承 `CI=true` 后 Ink 不输出交互式光标移动；Windows 的 CRLF 测试默认写未信任项目记忆；macOS 上两项配置测试的信任清单 fixture 权限为 `0644`，被产品安全检查正确拒绝，另有同一记忆 fixture 失败。现已分别在 PTY 验收子进程清除 CI 标志、记忆测试显式信任项目、配置 fixture 用 `0600` 文件模式修复；24 项定向测试通过，完整复验待推送触发。
+首轮整合提交 `bab4ac2` 的三平台 Check [run 41768858090](https://github.com/kikoiio/Bitori/actions/runs/41768858090) 未通过：Ubuntu PTY 子进程继承 `CI=true` 后 Ink 不输出交互式光标移动；Windows 的 CRLF 测试默认写未信任项目记忆；macOS 上两项配置测试的信任清单 fixture 权限为 `0644`，被产品安全检查正确拒绝，另有同一记忆 fixture 失败。现已分别在 PTY 验收子进程清除 CI 标志、记忆测试显式信任项目、配置 fixture 用 `0600` 文件模式修复；24 项定向测试通过，修复由 run 41770176066 全平台复验通过。
+
+修复提交 `12335b0909985e4c3d84aa792b90625e1a830a31` 的三平台 Check [run 41770176066](https://github.com/kikoiio/Bitori/actions/runs/41770176066) 全部通过。Linux desktop [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 在同一 SHA 上通过开发版、打包版、AppImage 和解包 deb smoke；GitHub API 二次查询确认 `desktop-packaged-linux`（237,111,681 bytes）与 `desktop-screenshots`（957,736 bytes）已上传，均于 2026-11-11 到期。
 
 前一轮交付记录如下。
 
@@ -71,7 +74,7 @@
 - [x] 图片附件存储、四种 Provider 请求映射、尺寸/格式限制及 trace 内容脱敏已接入。
 - [x] 版本化会话归档、CLI 与 UI 入口、ID 重映射和导入事务已接入。
 - [x] 自动断点续跑的存储与运行逻辑、预算累计和崩溃轮次恢复已接入；新构建下 SQLite 集成回归通过。
-- [ ] Linux 桌面 GUI/打包验收、最终文档 Check、分支同步与云端证据核对。
+- [x] Linux 桌面 GUI/打包验收、最终文档 Check、分支同步与云端证据核对；复验和最新 SHA 见本轮记录。
 
 
 ### 新功能实现分工
