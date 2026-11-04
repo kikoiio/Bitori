@@ -91,18 +91,14 @@ class LoopTestCase(unittest.TestCase):
         self.assertEqual(loop.upstream_base('https://api.anthropic.com', 'anthropic'),
                          'https://api.anthropic.com')
 
-    def test_proposer_trusts_only_disposable_workspace_with_explicit_tool_rules(self):
-        workspace = self.root / 'proposer-workspace'
+    def test_proposer_uses_isolated_user_permissions_with_explicit_tool_rules(self):
         home = self.root / 'proposer-home'
-        workspace.mkdir()
 
-        loop.configure_proposer_permissions(workspace, home)
+        loop.configure_proposer_permissions(home)
 
         config_dir = home / '.bitori'
-        trust_path = config_dir / 'trusted-workspaces.json'
-        self.assertEqual(json.loads(trust_path.read_text()), ['/workspace'])
-        self.assertEqual(trust_path.stat().st_mode & 0o777, 0o600)
-        policy = (workspace / '.bitori' / 'permissions.local.yaml').read_text()
+        self.assertFalse((config_dir / 'trusted-workspaces.json').exists())
+        policy = (config_dir / 'permissions.yaml').read_text()
         self.assertIn('mode: default', policy)
         self.assertNotIn('mode: bypass', policy)
         for tool in ('run_command', 'edit_file', 'write_file'):

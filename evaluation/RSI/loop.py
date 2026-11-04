@@ -348,17 +348,11 @@ def collect_proposal(workspace, output_dir, env):
     return {'hypothesis': hypothesis, 'patch': patch}
 
 
-def configure_proposer_permissions(workspace, home):
-    """Trust only the disposable workspace and grant its bounded tool set."""
+def configure_proposer_permissions(home):
+    """Grant the disposable proposer its bounded tool set through its isolated HOME."""
     config_dir = Path(home) / '.bitori'
     config_dir.mkdir(parents=True, exist_ok=True)
-    trusted_workspaces = config_dir / 'trusted-workspaces.json'
-    trusted_workspaces.write_text(json.dumps(['/workspace']) + '\n', encoding='utf-8')
-    trusted_workspaces.chmod(0o600)
-
-    permissions = Path(workspace) / '.bitori'
-    permissions.mkdir(exist_ok=True)
-    (permissions / 'permissions.local.yaml').write_text("""mode: default
+    (config_dir / 'permissions.yaml').write_text("""mode: default
 rules:
   - tool: run_command
     pattern: '**'
@@ -381,7 +375,7 @@ def run_proposer(*, workspace, evidence, home, out, agent_root, image, dependenc
               '\n    model: ' + json.dumps(model) + '\n    base_url: ' + json.dumps(gateway_url) +
               '\n    api_key: ${BITORI_RUN_TOKEN}\n    context_window: 131072\n')
     (config_dir / 'config.yaml').write_text(config)
-    configure_proposer_permissions(workspace, home)
+    configure_proposer_permissions(home)
     task = ('exec node /opt/bitori/dist/bin/bitori.js exec --profile rsi '
             '--workspace /workspace --task "$(cat /evidence/prompt.md)" '
             f'--max-iterations {int(max_iterations)} --json')
