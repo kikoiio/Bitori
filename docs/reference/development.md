@@ -51,7 +51,11 @@ Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-
 
 ## 本轮产品开发与验证状态
 
-截至 2026-11-03，本地图片、版本化会话 JSON 和自动恢复已完成实现；RSI 暂停。提交 `f66f293` 的三平台完整 Check [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 全部通过；Linux 桌面 GUI/打包 smoke [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 全部通过，包含重命名输入保持 caret 选区。Ubuntu 完成类型检查、lint、构建及 111 个测试文件的 737 项测试；用户入口与限制见 [配置参考](configuration.md#图片附件)。
+截至 2026-11-04，本地图片、版本化会话 JSON 和自动恢复已完成实现；RSI 暂停。提交 `f66f293` 的三平台完整 Check [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 全部通过；Linux 桌面 GUI/打包 smoke [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 全部通过，包含重命名输入保持 caret 选区。Ubuntu 完成类型检查、lint、构建及 111 个测试文件的 737 项测试；用户入口与限制见 [配置参考](configuration.md#图片附件)。
+
+本轮图片 Provider 实测见 [run 41768902090](https://github.com/kikoiio/Bitori/actions/runs/41768902090)：build 与 `bitori doctor` 成功，Anthropic/`DeepSeek-V4.1-Flash-1017-Event` 的单次图片请求得到模型“未收到附件或图像内容”的回复，严格任务校验失败；`e2e-evidence-auto-image` artifact 已核验。应用和适配器测试确认附件进入请求并被编码为 base64 image block；该模型/网关组合仍未展示视觉能力，当前证据无法区分是模型不支持图片还是网关未转发图片。未重试以避免重复请求。
+
+首轮整合提交 `bab4ac2` 的 [Check run 41768858090](https://github.com/kikoiio/Bitori/actions/runs/41768858090) 未通过：Ubuntu 的 PTY 子进程受 `CI=true` 影响而没有 Ink 光标序列；Windows CRLF 测试未显式信任其临时项目；macOS 配置测试 fixture 的 trust manifest 权限不满足产品要求。相应测试夹具和 PTY 环境已修复，24 项定向测试通过，等待推送后的三平台复验。
 
 本轮产品代码由三平台 Check [run 41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 和 Linux 桌面工作流 [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 验收通过。一个 Anthropic 兼容端点的历史真实文本工具任务不验收本轮图片能力；Qoder、OpenAI Chat 和 Anthropic 的早期证据未记录提交 SHA；OpenAI Responses 没有真实端点验收证据，不能把适配器单测当作真实端点成功。
 
@@ -114,7 +118,7 @@ TUI 模拟测试覆盖光标行列、中文折行、流式更新、输入与取�
 |---|---|---|
 | [Check](../../.github/workflows/check.yml) | push 到 `master` 或 `desktop/**`、所有 PR、手动；三平台执行 `npm run check` | 未声明模型 secrets 或显式写权限。 |
 | [Linux desktop](../../.github/workflows/desktop.yml) | push 到 `desktop/**`、所有 PR、手动；模拟服务冒烟并逐一启动 `linux-unpacked`、AppImage、解包 deb | 未调用真实模型；上传 7 天 AppImage/deb 与截图 artifact。master 上需手动触发；本轮正在安排与最终产品提交一致的复验。 |
-| [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选 `image` 单请求图片识别或常规编码 preset；可选接口方言、模型与事后用量阈值 | 统一读 `secrets.LLM_API_KEY` 与 `vars.LLM_BASE_URL`、`vars.LLM_MODEL`；先用真实凭据执行 `bitori doctor`，再执行验收脚本。`image` 最多一轮模型请求且不执行工具。token/credit 阈值在运行后检查，不会阻止超额请求，实际费用可能高于阈值；需核对供应商账户限额。只上传本次运行证据 JSON 并保留 7 天。 |
+| [E2E LLM](../../.github/workflows/e2e.yml) | 手动；可选 `image` 单次图片识别或常规编码 preset；可选接口方言、模型与事后用量阈值 | 统一读 `secrets.LLM_API_KEY` 与 `vars.LLM_BASE_URL`、`vars.LLM_MODEL`；先用真实凭据执行 `bitori doctor`，再执行验收脚本。`image` 对 Provider 聊天调用硬限一次且不执行工具。当前配置图片结果记录在本节。token/credit 阈值在运行后检查，不是费用硬上限；只上传运行证据 JSON 并保留 7 天。 |
 | [SWE-bench Lite development](../../.github/workflows/swe-bench-lite.yml) | 用户决定归入 RSI；当前暂停 | 本轮不派发任务、不向 Provider 发送题目；既有结果仅作历史诊断 |
 | [RSI smoke](../../.github/workflows/rsi.yml) | 当前暂停；恢复后手动运行受控单题 RSI smoke；默认分支代码、完整基线 SHA 和确认短语 | 读取仓库通用 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL` 配置；向配置的 Provider 发送第 0 题内容，上传报告、账本、诊断、假设、补丁、检查、比较、验证和轨迹，不上传 gold、凭据、worktree 或构建产物。 |
 

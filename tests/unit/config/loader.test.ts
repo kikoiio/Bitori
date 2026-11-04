@@ -20,7 +20,9 @@ function home(yaml: string, environment = 'API_KEY=test-secret\n'): string {
 }
 
 function trust(homeRoot: string, workspace: string): void {
-  writeFileSync(join(homeRoot, '.bitori', 'trusted-workspaces.json'), JSON.stringify([workspace]));
+  // Trust manifests are deliberately rejected when group/other readable; keep
+  // the fixture portable across runners with different default umasks.
+  writeFileSync(join(homeRoot, '.bitori', 'trusted-workspaces.json'), JSON.stringify([workspace]), {mode: 0o600});
 }
 
 function project(yaml: string): string {

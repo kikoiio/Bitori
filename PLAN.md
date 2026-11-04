@@ -21,7 +21,7 @@
 2. **并行安全修复。** Trust 清单和 trace 导出切片分别实现并加回归；主线处理提示注入、审批及 bypass 风险。
 3. **实际产品验收。** 用隔离的真实伪终端进程核对 TUI 光标；用已有 GitHub 配置和受限任务核对 Provider 图片请求。图片验收在 `LLMClient.streamChat` 边界硬限一次调用；该验收禁用 thinking fallback，当前协议 SDK retries 为 0，因此对应一次模型聊天请求。token/credit 阈值仍属于事后报警，不是费用硬上限。
 4. **集成与文档。** 逐项审阅 diff，跑相关轻量回归；同步风险处置、剩余限制、验收证据和非目标。
-5. **云端验证与同步。** 先跑完整 GitHub Actions Check，必要时运行当前 Provider E2E；结果成功后提交并推送，查询 GitHub 证据、分支和 SHA 进行二次确认。
+5. **云端验证与同步。** 本地检查后先提交并推送代码，观察自动 Check 并派发已授权的 Provider E2E；修复 CI 缺陷、如实记录 Provider 支持结果，再提交最终文档与证据并复验。最终查询 Actions、分支和 SHA 二次确认。
 
 ### 当前轮次清单
 
@@ -31,10 +31,14 @@
 - [x] 降低 trace/会话导出的机密泄漏风险并覆盖回归。
 - [x] 降低项目指令注入、审批诱导及 bypass 档风险；保留不可消除风险说明。
 - [x] 对隔离 PTY 中实际运行的 TUI 做 ASCII/CJK 光标行列验收；Ptyxis 像素级外观仍为环境限制。
-- [ ] 对唯一已配置 Provider 做图片端点验收；其他协议不冒充覆盖。
-- [ ] 同步项目文档、计划表格和审计轨迹。
+- [x] 对唯一已配置 Provider 做单次图片端点验收；Anthropic/`DeepSeek-V4.1-Flash-1017-Event` 返回称未收到图片，故当前端点与模型组合未通过视觉验收。单次证据不能区分模型不支持与网关丢图，已明确记录，不重试同一请求。
+- [x] 同步项目文档、计划表格和审计轨迹；图片端点限制与首轮 CI 根因已记录。
 - [ ] 运行定向检查与 GitHub Actions 完整检查，修复失败并复验。
 - [ ] 提交、推送并确认本地和远端只有内容一致的 `master`。
+
+当前 Provider 证据：提交 `bab4ac2b23d97db78b84fb4108586bc484f97050` 的 [E2E LLM run 41768902090](https://github.com/kikoiio/Bitori/actions/runs/41768902090) 完成 build 与 doctor 连通性检查，随后发出 1 次图片聊天调用（0 次被上限拦截，输出用量 165 tokens，未超事后阈值）。模型回复“我没有收到任何附件或图像内容”，任务校验失败，artifact `e2e-evidence-auto-image` 已上传并核验。应用和 Anthropic adapter 的定向回归确认附件进入请求且编码为 base64 image block；现有证据定位为当前模型/网关组合未向模型提供可观察图像，不能从单次响应判定究竟由模型能力还是网关处理造成。
+
+首轮整合提交 `bab4ac2` 的三平台 Check [run 41768858090](https://github.com/kikoiio/Bitori/actions/runs/41768858090) 未通过：Ubuntu PTY 子进程继承 `CI=true` 后 Ink 不输出交互式光标移动；Windows 的 CRLF 测试默认写未信任项目记忆；macOS 上两项配置测试的信任清单 fixture 权限为 `0644`，被产品安全检查正确拒绝，另有同一记忆 fixture 失败。现已分别在 PTY 验收子进程清除 CI 标志、记忆测试显式信任项目、配置 fixture 用 `0600` 文件模式修复；24 项定向测试通过，完整复验待推送触发。
 
 前一轮交付记录如下。
 

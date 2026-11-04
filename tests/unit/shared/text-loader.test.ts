@@ -25,7 +25,9 @@ describe('Markdown 扩展的换行兼容', () => {
     writeFileSync(join(root, '.bitori', 'commands', 'review.md'), '---\r\ndescription: 审查\r\n---\r\n检查 $ARGUMENTS', 'utf8');
     const command = loadUserCommands(root, join(root, 'home'), undefined, true).find('review');
     expect(command?.type === 'prompt' && command.handler({workDir: root, args: 'src'})).toBe('检查 src');
-    const manager = new MemoryManager(root, join(root, 'home'));
+    // This test covers CRLF parsing, so explicitly trust its temporary project
+    // instead of depending on a host-specific trust manifest.
+    const manager = new MemoryManager(root, join(root, 'home'), true);
     manager.write('project', 'note', {name: '知识', description: '说明', type: 'project'}, '内容');
     const path = join(root, '.bitori', 'memory', 'note.md');
     writeFileSync(path, readFileAsCrLf(path), 'utf8');

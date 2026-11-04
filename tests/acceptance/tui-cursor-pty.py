@@ -26,6 +26,9 @@ def run_case(value: str, expected: tuple[int, int]) -> None:
     pid, master = pty.fork()
     if pid == 0:
         env = os.environ.copy()
+        # GitHub Actions sets CI=true, which makes Ink suppress interactive cursor movement even with a PTY.
+        env.pop('CI', None)
+        env.pop('GITHUB_ACTIONS', None)
         env["TERM"] = "xterm-256color"
         env["COLUMNS"] = "40"
         env["LINES"] = "12"
