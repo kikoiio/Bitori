@@ -444,7 +444,9 @@ describe('trusted RSI model gateway', () => {
       if (phase === 'during_stream') { res.writeHead(200, {'content-type': 'text/event-stream'}); res.write(': waiting\n\n'); }
     });
     const config = options(baseURL, 'openai-chat');
-    config.limits.deadlineEpochMs = Date.now() + 200;
+    // The gateway binds two local HTTP servers before the request starts; 200 ms
+    // can expire during that setup on slower CI runners, before upstream is sent.
+    config.limits.deadlineEpochMs = Date.now() + 2_000;
     const gateway = await start(config);
     let result: {status: number; text: string};
     if (phase === 'during_body') {
