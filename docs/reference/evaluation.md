@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-截至 2026-11-04，SWE-bench Lite 扩跑仍暂停；最近的受控 RSI smoke 使用当前代码 SHA `fa73ce99c3dbbd4410a284cd2e9279cab57c89ec`，并未找到改进候选。当前没有后台定时运行，后续实验需重新核对授权范围与预算。项目产品实现的验收边界见[开发参考](development.md)。
+截至 2026-11-04，SWE-bench Lite 扩跑仍暂停；最近的受控 RSI smoke 使用 Agent 基线与 verifier SHA `fa73ce99c3dbbd4410a284cd2e9279cab57c89ec`，并未找到改进候选。此后提交只调整了测试和文档，没有改变该次运行覆盖的 Agent 权限逻辑。当前没有后台定时运行，后续实验需重新核对授权范围与预算。项目产品实现的验收边界见[开发参考](development.md)。
 
 最新运行是 [41838378031](https://github.com/kikoiio/Bitori/actions/runs/41838378031)，对应 artifact [13328600372](https://github.com/kikoiio/Bitori/actions/runs/41838378031/artifacts/13328600372)，SHA256 为 `62d63c685171071b42609aef72be9130af934cc3fe6a8c5ea2253cafea549d11`。报告记录 24 次请求、752,118 tokens、343.3 秒，均低于 100 次请求、2,000,000 tokens、90 分钟的预算。task 0 基线结果为 `resolved`，Agent 自然结束；58 条事件的轨迹完整。22 次 `run_command` 没有人工审批拒绝；一次 `read_file` 因模型提供绝对路径而被工作区沙箱拒绝。
 

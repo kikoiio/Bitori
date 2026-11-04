@@ -48,7 +48,7 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:provider
 
 ## 最近验证与未验收边界
 
-截至 2026-11-04，最新已完成三平台 Check 是提交 `fa73ce9` 的 [run 41838253124](https://github.com/kikoiio/Bitori/actions/runs/41838253124)：Ubuntu 与 macOS 通过，Windows 的 `enforces the hard deadline before_headers` 单测因 200 ms deadline 在上游请求发出前过期而失败。测试窗口已在本地提交 `8857ffb` 扩到 2 秒；本机复现受 sandbox `listen EPERM` 限制，等待推送后的 GitHub Check 验证。Linux 桌面开发版及打包 smoke 在 [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 通过。
+截至 2026-11-04，最近一次验证应用代码的三平台完整 Check 是提交 `5865729` 的 [run 41883853936](https://github.com/kikoiio/Bitori/actions/runs/41883853936)，Ubuntu、Windows 和 macOS 全部通过。它验证了 Windows deadline 单测从 200 ms 调整到 2 秒后的结果；此前 `fa73ce9` 的 [run 41838253124](https://github.com/kikoiio/Bitori/actions/runs/41838253124) 曾在该单测中因上游请求尚未发出而失败。Linux 桌面开发版及打包 smoke 在 [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 通过。
 
 当前已知的两项验收边界：
 
