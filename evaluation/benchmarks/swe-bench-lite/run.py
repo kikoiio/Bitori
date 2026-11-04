@@ -526,14 +526,16 @@ def run_instance(args, environment=None):
         stage = 'agent_setup'
         # Root only prepares this disposable filesystem. The agent runs as uid
         # 1000, with no capabilities, no privilege escalation, no host home/socket.
+        # The container drops CAP_CHOWN, so keep these placeholder-only config
+        # files root-owned and readable instead of trying to change ownership.
         setup = ("mkdir -p /tmp/bitori-home/.bitori /testbed/.bitori; "
                  "touch /tmp/bitori-home/.bitori/.env; "
                  "cat > /tmp/bitori-home/.bitori/permissions.yaml <<'BITORI_PERMISSIONS'\n"
                  + BENCHMARK_PERMISSIONS + "\nBITORI_PERMISSIONS\n"
                  + "cat > /tmp/bitori-home/.bitori/config.yaml; "
                  + "chmod -R a+rwX /tmp/bitori-home /testbed; "
-                 + "chown 1000:1000 /tmp/bitori-home/.bitori/permissions.yaml; "
-                 + "chmod 600 /tmp/bitori-home/.bitori/permissions.yaml")
+                 + "chmod 644 /tmp/bitori-home/.bitori/permissions.yaml "
+                   "/tmp/bitori-home/.bitori/config.yaml")
         config = (f'profiles:\n  - name: bench\n    protocol: {json.dumps(protocol)}\n'
                   f'    model: {json.dumps(environment["BITORI_MODEL"])}\n'
                   f'    base_url: {json.dumps(base_url)}\n'

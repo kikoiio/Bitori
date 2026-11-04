@@ -182,6 +182,9 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(syntax.returncode, 0, syntax.stderr)
         self.assertIn('/tmp/bitori-home/.bitori/permissions.yaml', setup)
         self.assertIn('mode: default', setup)
+        self.assertIn('chmod 644 /tmp/bitori-home/.bitori/permissions.yaml /tmp/bitori-home/.bitori/config.yaml', setup)
+        self.assertNotIn('chown ', setup)
+        self.assertNotIn('chmod 600 /tmp/bitori-home/.bitori/permissions.yaml', setup)
         for tool in ('run_command', 'edit_file', 'write_file'):
             self.assertRegex(
                 setup,
