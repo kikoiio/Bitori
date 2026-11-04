@@ -60,7 +60,8 @@ function readRulesFile(filePath: string, registered: ReadonlySet<string>): Loade
 function globRegex(pattern: string): RegExp {
   const normalized = pattern.replaceAll('\\', '/'); let source = '^';
   for (let index = 0; index < normalized.length; index++) { const char = normalized[index]!; if (char === '*' && normalized[index + 1] === '*' && normalized[index + 2] === '/') { source += '(?:.*/)?'; index += 2; } else if (char === '*') { if (normalized[index + 1] === '*') { source += '.*'; index++; } else source += '[^/]*'; } else if (char === '?') source += '[^/]'; else source += /[\\^$+.()|{}[\]]/.test(char) ? `\\${char}` : char; }
-  return new RegExp(`${source}$`, 'i');
+  // `**` also covers newline characters in complete run_command strings.
+  return new RegExp(`${source}$`, 'is');
 }
 function matches(pattern: string, value: string): boolean { return pattern.includes('*') || pattern.includes('?') ? globRegex(pattern).test(value) : pattern.toLowerCase() === value.toLowerCase(); }
 function callValue(call: ToolCall): string | null {

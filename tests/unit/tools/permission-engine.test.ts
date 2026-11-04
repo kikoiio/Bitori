@@ -52,6 +52,7 @@ describe('PermissionEngine', () => {
 `});
 
     await expect(permissions.evaluate(call('run_command', 'command', {command: 'cd /testbed && npm test'}))).resolves.toMatchObject({decision: 'allow', source: 'rule'});
+    await expect(permissions.evaluate(call('run_command', 'command', {command: 'cd /testbed && npm test\nnpm run lint'}))).resolves.toMatchObject({decision: 'allow', source: 'rule'});
     await expect(permissions.evaluate(call('edit_file', 'write', {path: 'src/nested/existing.ts', old_text: 'old', new_text: 'new'}))).resolves.toMatchObject({decision: 'allow', source: 'rule'});
     await expect(permissions.evaluate(call('write_file', 'write', {path: 'src/nested/new.ts', content: 'new'}))).resolves.toMatchObject({decision: 'allow', source: 'rule'});
   });
