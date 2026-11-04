@@ -49,4 +49,4 @@ Linux 桌面源码入口是 `npm run desktop`，该命令会先构建并准备 E
 
 ## 开发与限制
 
-[文档索引](docs/README.md) 汇总配置、架构、安全与验收说明。提交 `f66f293` 的完整构建和全量测试由 GitHub Actions run [41679968530](https://github.com/kikoiio/Bitori/actions/runs/41679968530) 在 Ubuntu、Windows、macOS 全部通过；Linux 开发版、打包版、AppImage 和解包 deb 的 smoke 由 [run 41680030634](https://github.com/kikoiio/Bitori/actions/runs/41680030634) 全部通过。真实终端光标视觉验收目前为 `INCONCLUSIVE`；Windows 和 macOS 桌面不在当前目标范围内。
+[文档索引](docs/README.md) 汇总配置、架构、安全与验收说明。本轮产品提交 `12335b0` 的三平台 Check [run 41770176066](https://github.com/kikoiio/Bitori/actions/runs/41770176066) 和 Linux 开发版、打包版、AppImage、deb smoke [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 全部通过；最终证据提交 `d681327` 的三平台 Check [run 41771262395](https://github.com/kikoiio/Bitori/actions/runs/41771262395) 也通过。真实终端光标视觉验收目前为 `INCONCLUSIVE`；Windows 和 macOS 桌面不在当前目标范围内。

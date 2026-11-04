@@ -51,13 +51,13 @@ Qoder 协议事件 fixture 来自真实录制：`npx tsx tests/acceptance/qoder-
 
 ## 本轮产品开发与验证状态
 
-截至 2026-11-04，本地图片、版本化会话 JSON 和自动恢复已完成实现；RSI 暂停。整合修复提交 `12335b0` 的三平台 Check [run 41770176066](https://github.com/kikoiio/Bitori/actions/runs/41770176066) 全部通过；同一 SHA 的 Linux 桌面/打包 smoke [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 全部通过。`desktop-packaged-linux`（237,111,681 bytes）与 `desktop-screenshots`（957,736 bytes）已核实上传，保留至 2026-11-11。此前提交 `f66f293` 的 caret smoke 也确认重命名时保留选区。用户入口与限制见 [配置参考](configuration.md#图片附件)。
+截至 2026-11-04，本地图片、版本化会话 JSON 和自动恢复已完成实现；RSI 暂停。整合修复提交 `12335b0` 的三平台 Check [run 41770176066](https://github.com/kikoiio/Bitori/actions/runs/41770176066) 全部通过；同一 SHA 的 Linux 桌面/打包 smoke [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 全部通过。最终证据提交 `d681327` 的三平台 Check [run 41771262395](https://github.com/kikoiio/Bitori/actions/runs/41771262395) 也全部通过。`desktop-packaged-linux`（237,111,681 bytes）与 `desktop-screenshots`（957,736 bytes）已核实上传，保留至 2026-11-11。此前提交 `f66f293` 的 caret smoke 也确认重命名时保留选区。用户入口与限制见 [配置参考](configuration.md#图片附件)。
 
 本轮图片 Provider 实测见 [run 41768902090](https://github.com/kikoiio/Bitori/actions/runs/41768902090)：build 与 `bitori doctor` 成功，Anthropic/`DeepSeek-V4.1-Flash-1017-Event` 的单次图片请求得到模型“未收到附件或图像内容”的回复，严格任务校验失败；`e2e-evidence-auto-image` artifact 已核验。应用和适配器测试确认附件进入请求并被编码为 base64 image block；该模型/网关组合仍未展示视觉能力，当前证据无法区分是模型不支持图片还是网关未转发图片。未重试以避免重复请求。
 
 首轮整合提交 `bab4ac2` 的 [Check run 41768858090](https://github.com/kikoiio/Bitori/actions/runs/41768858090) 未通过：Ubuntu 的 PTY 子进程受 `CI=true` 影响而没有 Ink 光标序列；Windows CRLF 测试未显式信任其临时项目；macOS 配置测试 fixture 的 trust manifest 权限不满足产品要求。相应测试夹具和 PTY 环境已修复，24 项定向测试通过，修复提交的三平台复验见 run 41770176066，全部通过。
 
-当前整合提交的三平台检查、Linux 桌面入口、安装包、AppImage 和解包 deb 均分别由 run 41770176066 与 41770535976 验收通过。一个 Anthropic 兼容端点的历史真实文本工具任务不验收本轮图片能力；Qoder、OpenAI Chat 和 Anthropic 的早期证据未记录提交 SHA；OpenAI Responses 没有真实端点验收证据，不能把适配器单测当作真实端点成功。
+当前整合产品提交的三平台检查、Linux 桌面入口、安装包、AppImage 和解包 deb 均分别由 run 41770176066 与 41770535976 验收通过；最终证据提交 `d681327` 的完整 Check 由 run 41771262395 复验通过。一个 Anthropic 兼容端点的历史真实文本工具任务不验收本轮图片能力；Qoder、OpenAI Chat 和 Anthropic 的早期证据未记录提交 SHA；OpenAI Responses 没有真实端点验收证据，不能把适配器单测当作真实端点成功。
 
 Run 41679968530 在提交 `f66f293` 上完成三平台 `npm run check`，包括类型检查、lint、构建和全量 Vitest；Ubuntu 为 111 files / 737 tests。Linux desktop run 41680030634 通过开发版、安装包、AppImage 和 deb smoke，并已核实 artifact 上传。计划/文档提交 `42e1f1c` 的 run 41681394512 在 Windows 遇到 Unicode shell 用例 10 秒 timeout；对应 Windows command timeout 调为 30 秒、Vitest 用例限时调为 40 秒后，提交 `fb6741e` 的 [run 41682368460](https://github.com/kikoiio/Bitori/actions/runs/41682368460) 和最终文档提交 `69e5c13` 的 [run 41683263653](https://github.com/kikoiio/Bitori/actions/runs/41683263653) 均在 Ubuntu、Windows、macOS 全部通过。
 
@@ -72,7 +72,7 @@ TUI 模拟测试覆盖光标行列、中文折行、流式更新、输入与取�
 
 ## 当前非 RSI 整合轮
 
-截至 2026-11-03，本轮新增工作覆盖工作区信任清单与项目内容门控、bypass 二次确认、审批风险提示、trace/会话归档文件权限、真实 Linux PTY 光标行为及当前仓库 Provider 的图片请求。安全剩余风险、Ptyxis 像素结论、Provider 图片端点结果和最终 GitHub Actions 提交 SHA 以 [`PLAN.md`](../../PLAN.md) 为准。SWE-bench Lite 按用户决定归入 RSI 评测范围，与 RSI 一并暂停；Windows/macOS 桌面不在目标内。
+截至 2026-11-04，本轮新增工作覆盖工作区信任清单与项目内容门控、bypass 二次确认、审批风险提示、trace/会话归档文件权限、真实 Linux PTY 光标行为及当前仓库 Provider 的图片请求。安全剩余风险、Ptyxis 像素结论、Provider 图片端点结果和最终 GitHub Actions 提交 SHA 以 [`PLAN.md`](../../PLAN.md) 为准。SWE-bench Lite 按用户决定归入 RSI 评测范围，与 RSI 一并暂停；Windows/macOS 桌面不在目标内。
 
 ## Ubuntu 资源与本机兜底
 

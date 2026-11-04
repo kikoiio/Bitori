@@ -46,12 +46,12 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 | 方向 | 状态 | 依据与后续 |
 |---|---|---|
 | 终端交互、模型协议、会话 | 已实现 | `src/tui/`、`src/providers/`、`src/storage/`；协议含 Anthropic、OpenAI Responses/Chat 与官方 Qoder Cloud Agents。Devin 风格对话流、`/` 命令面板、流式工具草稿、内联 diff、`Ctrl+O` 详情与 `Ctrl+/-` 密度已落地。`/model` 两级选择（profile → Provider 真实模型列表）、会话面板输入搜索 / `r` 重命名 / `d` 两步删除、`/undo` 撤销快照。Qoder 只上报 credits（`span.model_request_end`），UI/trace/存储显示 credits 而非伪造 0 tokens；busy 换会话、agent 版本 409 重取版本重试、断流带 `Last-Event-ID` 续读，事件形状由 `tests/fixtures/streams/qoder/` 真实录制回放。真实终端观感仍需按环境验收。 |
-| 桌面工作台 | 已实现；Linux GUI/打包验收通过 | `src/desktop/`；Claude Desktop 风格深色布局、斜杠命令、流式工具卡片与 `Ctrl+/-` 页面缩放。edit/write 卡片默认展开行级 diff 并提供撤销按钮；审批有一次/本会话/永久/拒绝四种选择。smoke 覆盖四种选择、会话授权复用边界、diff/撤销、模型列表、图片/归档入口、会话管理和重命名编辑期间 caret 稳定；run 41680030634 通过开发版、AppImage 与解包 deb 启动。 |
+| 桌面工作台 | 已实现；Linux GUI/打包验收通过 | `src/desktop/`；Claude Desktop 风格深色布局、斜杠命令、流式工具卡片与 `Ctrl+/-` 页面缩放。edit/write 卡片默认展开行级 diff 并提供撤销按钮；审批有一次/本会话/永久/拒绝四种选择。smoke 覆盖四种选择、会话授权复用边界、diff/撤销、模型列表、图片/归档入口、会话管理和重命名编辑期间 caret 稳定；当前整合提交 run 41770535976 通过开发版、AppImage 与解包 deb 启动。 |
 | 多轮工具、Plan/Do、权限、MCP | 已实现 | `src/agent/`、`src/tools/`、`src/mcp/`；命令和 MCP 不构成操作系统沙箱。 |
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
 | 自动化验收与模型兼容性 | 自动映射有单测；真实端点按配置逐项验收 | `tests/` 和 `.github/workflows/`；某一个配置端点的图片请求结果只适用于该模型/endpoint，不代表其他协议或供应商；本轮证据见[项目待办计划](../PLAN.md)。 |
-| 桌面图形应用 | Linux 初版已验收 | `src/desktop/` 提供 Electron 界面。run 41680030634 已通过开发版、AppImage 和解包 deb 启动；Windows/macOS 桌面明确不在当前目标内。打包路径见 [开发与测试](reference/development.md)。 |
+| 桌面图形应用 | Linux 初版已验收 | `src/desktop/` 提供 Electron 界面。当前整合提交 run 41770535976 已通过开发版、AppImage 和解包 deb 启动；Windows/macOS 桌面明确不在当前目标内。打包路径见 [开发与测试](reference/development.md)。 |
 | 多模态、会话导入、自动断点续跑 | 实现、三平台 Check、SQLite 集成和 Linux 桌面验收通过 | 本地图片贯通 TUI/桌面及支持图像的 Provider；不支持图像的 Provider 明确拒绝；版本化 JSON 由 CLI/TUI/桌面交换；持久检查点恢复并要求不确定副作用确认。真实图片请求的当前端点证据见[项目待办计划](../PLAN.md)。 |
 | 云同步 | 已取消，保持不支持 | 见 ADR 0001。 |
 
-状态依据 2026-11-03 的代码与验证记录。Linux 隔离 PTY 核对实际 Ink 组件的 ANSI 光标行列；Ptyxis 像素外观仍需在目标终端环境单独验收。RSI 与 SWE-bench Lite 已暂停；Windows/macOS 桌面不在范围内。
+状态依据 2026-11-04 的代码与验证记录。Linux 隔离 PTY 核对实际 Ink 组件的 ANSI 光标行列；Ptyxis 像素外观仍需在目标终端环境单独验收。RSI 与 SWE-bench Lite 已暂停；Windows/macOS 桌面不在范围内。
