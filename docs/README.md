@@ -10,4 +10,4 @@
 | 配置参考 | 持续维护；首次配置、图片限制、会话 JSON 与自动恢复 | 2026-11-03 | [配置、扩展与权限](reference/configuration.md) |
 | 安全模型与审计 | 持续维护；本轮控制已补齐，保留五项剩余限制 | 2026-11-03 | [安全模型与审计](reference/security.md) |
 | 开发参考 | 持续维护；命令、最新验证和未验收边界 | 2026-11-04 | [开发与测试](reference/development.md) |
-| 评测参考 | RSI smoke 为 no_candidate；runner 本地修复完成，云端复验待授权；基准扩跑仍暂停 | 2026-11-04 | [评测说明](reference/evaluation.md) |
+| 评测参考 | 当前代码的 RSI 复验轨迹完整，基线解决任务但无候选；图片 Provider 单次识别未通过；基准扩跑仍暂停 | 2026-11-04 | [评测说明](reference/evaluation.md) |

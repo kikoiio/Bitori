@@ -48,11 +48,11 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:provider
 
 ## 最近验证与未验收边界
 
-截至 2026-11-04，最新记录的三平台完整 Check 是提交 `d681327` 的 [run 41771262395](https://github.com/kikoiio/Bitori/actions/runs/41771262395)，Ubuntu、Windows 和 macOS 均通过。Linux 桌面开发版及打包 smoke 在 [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 通过。它们早于本文档整理，不代表本次文档改动重新运行了产品检查。
+截至 2026-11-04，最新已完成三平台 Check 是提交 `fa73ce9` 的 [run 41838253124](https://github.com/kikoiio/Bitori/actions/runs/41838253124)：Ubuntu 与 macOS 通过，Windows 的 `enforces the hard deadline before_headers` 单测因 200 ms deadline 在上游请求发出前过期而失败。测试窗口已在本地提交 `8857ffb` 扩到 2 秒；本机复现受 sandbox `listen EPERM` 限制，等待推送后的 GitHub Check 验证。Linux 桌面开发版及打包 smoke 在 [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 通过。
 
 当前已知的两项验收边界：
 
-- [图片 Provider run 41768902090](https://github.com/kikoiio/Bitori/actions/runs/41768902090) 中，已配置的 Anthropic/DeepSeek 端点没有向模型呈现可识别的图片内容。应用适配器测试确认图片以 base64 image block 发送；单次实测无法区分模型能力与网关转发问题。该组合未通过图片识别验收。
+- [图片 Provider run 41826598229](https://github.com/kikoiio/Bitori/actions/runs/41826598229) 对已配置的 Anthropic/DeepSeek 端点只发起一次请求；模型输出 166 tokens、未报告图片输入，也没能识别四色条纹。连接检查通过，单次实测无法区分模型能力与网关转发问题；该端点未通过图片识别验收，未追加模型请求。
 - Linux 隔离 PTY 已验证 ASCII 与中文输入后的 ANSI 光标位置；用户提供的 Ptyxis 实际窗口截图显示提示区和文本末尾光标，像素验收完成。
 
 图片端点仍未通过识别验收；Ptyxis 截图只确认了提示区和插入光标的实际显示。评测工作流及 RSI 状态见[评测参考](evaluation.md)。
