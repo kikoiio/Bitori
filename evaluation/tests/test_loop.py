@@ -91,6 +91,23 @@ class LoopTestCase(unittest.TestCase):
         self.assertEqual(loop.upstream_base('https://api.anthropic.com', 'anthropic'),
                          'https://api.anthropic.com')
 
+    def test_proposer_trusts_only_disposable_workspace_with_explicit_tool_rules(self):
+        workspace = self.root / 'proposer-workspace'
+        home = self.root / 'proposer-home'
+        workspace.mkdir()
+
+        loop.configure_proposer_permissions(workspace, home)
+
+        config_dir = home / '.bitori'
+        trust_path = config_dir / 'trusted-workspaces.json'
+        self.assertEqual(json.loads(trust_path.read_text()), ['/workspace'])
+        self.assertEqual(trust_path.stat().st_mode & 0o777, 0o600)
+        policy = (workspace / '.bitori' / 'permissions.local.yaml').read_text()
+        self.assertIn('mode: default', policy)
+        self.assertNotIn('mode: bypass', policy)
+        for tool in ('run_command', 'edit_file', 'write_file'):
+            self.assertIn(f'  - tool: {tool}\n    pattern: \'**\'\n    decision: allow', policy)
+
     def experiment(self, config, output):
         return loop.Experiment(config, self.repo, self.base, output,
                                environment=self.environment())
