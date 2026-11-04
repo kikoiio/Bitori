@@ -1,6 +1,6 @@
 # 当前架构
 
-核对日期：2026-11-02。以下是当前实现的代码导航与主要数据路径，非完整依赖图；产品意图见 [项目意图](intent.md)。
+核对日期：2026-11-04。以下是当前实现的代码导航与主要数据路径，非完整依赖图；产品意图见 [项目意图](intent.md)。
 
 ```mermaid
 flowchart LR
@@ -31,7 +31,7 @@ Provider 请求提供 `items` 时始终使用该有序上下文，即使它为�
 
 `evaluation/RSI/` 是独立于运行时 harness 的 Python 控制面：runner 从固定基准 SHA 构建被测版本并记录安全证据，`analyze.py` 做保守的规则诊断，`loop.py` 在预算内编排基线、候选分支、可信检查、配对评测和 verifier 决策。候选代码只在临时容器中构建和执行；真实模型密钥仅注入可信转发器 `model_gateway.ts`，执行容器只持有实验级短期令牌并连接内部网络。`verifier.py` 是纯决策函数，只接受绑定 experiment/base/head/verifier SHA 的可信执行回执，从不写 Git 或授权合并；`report.json` 的 `merge_authorized` 恒为 false，合并仍由人工审查和仓库规则决定。
 
-该控制面的离线测试和既有评测均有记录；真实 Docker 隔离、受控云端 smoke、GitHub 必需检查与分支保护验收目前暂停，不作为近期目标。trace 与评测证据仍可能包含工作区内容，只在明确白名单和脱敏后上传。
+该控制面的离线测试和既有评测均有记录；额外的 Docker 基准扩跑与云端 RSI 复验需各自取得明确授权，不属于常规产品运行。实验结果及运行边界见[评测说明](reference/evaluation.md)。trace 与评测证据仍可能包含工作区内容，只在明确白名单和脱敏后上传。
 
 ## 桌面进程边界
 
@@ -49,9 +49,9 @@ Linux 桌面端选择 Electron，以复用 TypeScript 业务核心和 SQLite Wor
 | 桌面工作台 | 已实现；Linux GUI/打包验收通过 | `src/desktop/`；Claude Desktop 风格深色布局、斜杠命令、流式工具卡片与 `Ctrl+/-` 页面缩放。edit/write 卡片默认展开行级 diff 并提供撤销按钮；审批有一次/本会话/永久/拒绝四种选择。smoke 覆盖四种选择、会话授权复用边界、diff/撤销、模型列表、图片/归档入口、会话管理和重命名编辑期间 caret 稳定；当前整合提交 run 41770535976 通过开发版、AppImage 与解包 deb 启动。 |
 | 多轮工具、Plan/Do、权限、MCP | 已实现 | `src/agent/`、`src/tools/`、`src/mcp/`；命令和 MCP 不构成操作系统沙箱。 |
 | 记忆、上下文压缩、扩展和可观察性 | 已实现基础能力 | `src/memory/`、`src/compact/`、`src/skills/`、`src/hooks/`、`src/trace/`；以实际代码为准。 |
-| 自动化验收与模型兼容性 | 自动映射有单测；真实端点按配置逐项验收 | `tests/` 和 `.github/workflows/`；某一个配置端点的图片请求结果只适用于该模型/endpoint，不代表其他协议或供应商；本轮证据见[项目待办计划](../PLAN.md)。 |
+| 自动化验收与模型兼容性 | 自动映射有单测；真实端点按配置逐项验收 | `tests/` 和 `.github/workflows/`；某个配置端点的图片请求结果只适用于该模型/endpoint，不代表其他协议或供应商；当前图片端点结果见[开发参考](reference/development.md)。 |
 | 桌面图形应用 | Linux 初版已验收 | `src/desktop/` 提供 Electron 界面。当前整合提交 run 41770535976 已通过开发版、AppImage 和解包 deb 启动；Windows/macOS 桌面明确不在当前目标内。打包路径见 [开发与测试](reference/development.md)。 |
-| 多模态、会话导入、自动断点续跑 | 实现、三平台 Check、SQLite 集成和 Linux 桌面验收通过 | 本地图片贯通 TUI/桌面及支持图像的 Provider；不支持图像的 Provider 明确拒绝；版本化 JSON 由 CLI/TUI/桌面交换；持久检查点恢复并要求不确定副作用确认。真实图片请求的当前端点证据见[项目待办计划](../PLAN.md)。 |
+| 多模态、会话导入、自动断点续跑 | 实现、三平台 Check、SQLite 集成和 Linux 桌面验收通过 | 本地图片贯通 TUI/桌面及支持图像的 Provider；不支持图像的 Provider 明确拒绝；版本化 JSON 由 CLI/TUI/桌面交换；持久检查点恢复并要求不确定副作用确认。已配置图片端点的实测边界见[开发参考](reference/development.md)。 |
 | 云同步 | 已取消，保持不支持 | 见 ADR 0001。 |
 
-状态依据 2026-11-04 的代码与验证记录。Linux 隔离 PTY 核对实际 Ink 组件的 ANSI 光标行列；Ptyxis 像素外观仍需在目标终端环境单独验收。RSI 与 SWE-bench Lite 已暂停；Windows/macOS 桌面不在范围内。
+状态依据 2026-11-04 的代码与验证记录。Linux 隔离 PTY 核对实际 Ink 组件的 ANSI 光标行列；用户提供的 Ptyxis 截图确认提示区与文本末尾光标可见。RSI 与 SWE-bench Lite 的后续云端实验仍需授权；Windows/macOS 桌面不在范围内。

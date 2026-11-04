@@ -1,5 +1,6 @@
 import base64
 import contextlib
+import gzip
 import importlib.util
 import io
 import json
@@ -77,6 +78,7 @@ class FakeRunner:
         self.patch = patch
         self.agent_environments = []
         self.agent_commands = []
+        self.container_setup = None
 
     def __call__(self, args, *, input=None, env=None, cwd=None, timeout=120,
                  max_output=1024 * 1024, check=True):
@@ -104,6 +106,8 @@ class FakeRunner:
                 raise subprocess.TimeoutExpired(args, timeout)
             return completed(args, returncode=self.agent_returncode, stdout=self.agent_stdout)
         if 'sh' in args:
+            if '-ec' in args:
+                self.container_setup = args[args.index('-ec') + 1]
             return completed(args)
         raise AssertionError(f'unexpected command: {args}')
 
@@ -169,6 +173,23 @@ class RunnerTests(unittest.TestCase):
         shell_script = agent_command[agent_command.index('sh') + 2]
         self.assertIn('export PATH="/opt/miniconda3/envs/testbed/bin:$PATH"', shell_script)
 
+    def test_benchmark_grants_noninteractive_tools_with_user_scoped_rules(self):
+        fake = FakeRunner(trace=trace_lines())
+        self.run_instance(fake)
+        setup = fake.container_setup
+        self.assertIsNotNone(setup)
+        syntax = subprocess.run(['sh', '-n', '-c', setup], capture_output=True, text=True)
+        self.assertEqual(syntax.returncode, 0, syntax.stderr)
+        self.assertIn('/tmp/bitori-home/.bitori/permissions.yaml', setup)
+        self.assertIn('mode: default', setup)
+        for tool in ('run_command', 'edit_file', 'write_file'):
+            self.assertRegex(
+                setup,
+                rf"tool: {tool}\n    pattern: '\*\*'\n    decision: allow",
+            )
+        self.assertNotIn('mode: bypass', setup)
+        self.assertNotIn('permissions.local.yaml', setup)
+
     def test_valid_replacement_character_does_not_mark_trace_truncated(self):
         data = trace_lines().replace('assistant text', 'assistant � text').encode('utf-8')
         private = Path(self.temporary.name) / 'trace'
@@ -179,6 +200,30 @@ class RunnerTests(unittest.TestCase):
             _, integrity = runner.collect_trace('container', json.loads(summary()), private, [])
         self.assertTrue(integrity['complete'])
         self.assertFalse(integrity['truncated'])
+
+    def test_compressed_trace_larger_than_old_limit_is_collected_completely(self):
+        data = trace_lines().encode() + b'\n' + (b' ' * (1024 * 1024) + b'\n') * 9
+        reader_root = Path(self.temporary.name) / 'reader-root'
+        trace_dir = reader_root / 'tmp' / 'bitori-home' / '.bitori' / 'traces'
+        trace_dir.mkdir(parents=True)
+        (trace_dir / 'session-1.jsonl').write_bytes(data)
+        reader = runner.TRACE_READER.replace(
+            "fd = os.open('/',",
+            f"fd = os.open({json.dumps(str(reader_root))},")
+        reader_output = io.StringIO()
+        with mock.patch.object(sys, 'argv', ['trace-reader', 'session-1', str(runner.MAX_TRACE)]), \
+                contextlib.redirect_stdout(reader_output):
+            exec(compile(reader, '<trace-reader>', 'exec'), {})
+        envelope = json.loads(reader_output.getvalue())
+        self.assertEqual(envelope['encoding'], 'gzip+base64')
+        self.assertEqual(gzip.decompress(base64.b64decode(envelope['data'])), data)
+        private = Path(self.temporary.name) / 'large-trace'
+        private.mkdir()
+        with mock.patch.object(runner, 'command', return_value=completed([], stdout=json.dumps(envelope))):
+            events, integrity = runner.collect_trace('container', json.loads(summary()), private, [])
+        self.assertTrue(integrity['complete'])
+        self.assertEqual(integrity['bytes'], len(data))
+        self.assertEqual(events[-1]['type'], 'run_finished')
 
     def test_normal_completion_exports_safe_complete_evidence(self):
         result = self.run_instance(FakeRunner(trace=trace_lines()))

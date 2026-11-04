@@ -35,6 +35,27 @@ describe('PermissionEngine', () => {
     await expect(permissions.evaluate(call('read_file', 'read', {path: '.env'}))).resolves.toMatchObject({decision: 'deny', source: 'rule'});
   });
 
+  it('双星 glob 覆盖命令参数和嵌套工作区路径', async () => {
+    const root = mkdtempSync('bitori-permission-'); roots.push(root);
+    mkdirSync(join(root, 'src', 'nested'), {recursive: true});
+    writeFileSync(join(root, 'src', 'nested', 'existing.ts'), 'old', 'utf8');
+    const permissions = engine(root, {user: `rules:
+  - tool: run_command
+    pattern: "**"
+    decision: allow
+  - tool: edit_file
+    pattern: "**"
+    decision: allow
+  - tool: write_file
+    pattern: "**"
+    decision: allow
+`});
+
+    await expect(permissions.evaluate(call('run_command', 'command', {command: 'cd /testbed && npm test'}))).resolves.toMatchObject({decision: 'allow', source: 'rule'});
+    await expect(permissions.evaluate(call('edit_file', 'write', {path: 'src/nested/existing.ts', old_text: 'old', new_text: 'new'}))).resolves.toMatchObject({decision: 'allow', source: 'rule'});
+    await expect(permissions.evaluate(call('write_file', 'write', {path: 'src/nested/new.ts', content: 'new'}))).resolves.toMatchObject({decision: 'allow', source: 'rule'});
+  });
+
   it('未信任工作区的项目权限规则不生效', async () => {
     const root = mkdtempSync('bitori-permission-'); roots.push(root);
     const permissions = engine(root, {project: `rules:

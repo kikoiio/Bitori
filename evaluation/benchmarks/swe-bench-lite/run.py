@@ -2,6 +2,7 @@
 """Run one pinned SWE-bench Lite development instance; export only safe evidence."""
 import argparse
 import base64
+import gzip
 import hashlib
 import importlib.metadata
 import json
@@ -17,6 +18,7 @@ import tempfile
 import time
 from urllib.parse import urlsplit
 import uuid
+import zlib
 
 DATASET = 'SWE-bench/SWE-bench_Lite'
 REVISION = 'b0dde1093fe417d83b7184254edf8199c1f0dff5'
@@ -30,8 +32,19 @@ except ImportError:
 
 MAX_OUTPUT = 1024 * 1024
 MAX_PATCH = 8 * 1024 * 1024
-MAX_TRACE = 8 * 1024 * 1024
+MAX_TRACE = 32 * 1024 * 1024
 MAX_EVENTS = 1000  # write_evidence's list bound; never silently drop projected events.
+BENCHMARK_PERMISSIONS = """mode: default
+rules:
+  - tool: run_command
+    pattern: '**'
+    decision: allow
+  - tool: edit_file
+    pattern: '**'
+    decision: allow
+  - tool: write_file
+    pattern: '**'
+    decision: allow"""
 SAFE_ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$')
 SHA = re.compile(r'^[0-9a-f]{40}(?:[0-9a-f]{24})?$')
 ERROR_STATUSES = {'infrastructure_error', 'agent_error', 'provider_error'}
@@ -205,7 +218,7 @@ def tree_digest(directory):
 # Copy just one regular session file through a bounded pipe, never docker cp a
 # directory/config/database. O_NOFOLLOW also prevents FIFO/device/symlink reads.
 TRACE_READER = r'''
-import base64, json, os, re, stat, sys
+import base64, gzip, json, os, re, stat, sys
 session, cap = sys.argv[1], int(sys.argv[2])
 safe = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$')
 fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
@@ -233,9 +246,11 @@ try:
         if not stat.S_ISREG(info.st_mode):
             raise ValueError('not a regular trace')
         data = file.read(cap + 1)
-    print(json.dumps({'sessionId': session, 'bytes': len(data[:cap]),
+    limited = data[:cap]
+    print(json.dumps({'sessionId': session, 'bytes': len(limited),
                       'truncated': len(data) > cap or info.st_size > cap,
-                      'data': base64.b64encode(data[:cap]).decode('ascii')}))
+                      'encoding': 'gzip+base64',
+                      'data': base64.b64encode(gzip.compress(limited, mtime=0)).decode('ascii')}))
 finally:
     os.close(fd)
 '''
@@ -266,8 +281,20 @@ def collect_trace(container, summary, private, secrets):
     selected = envelope['sessionId']
     if not isinstance(selected, str) or not SAFE_ID.fullmatch(selected) or (session and session != selected):
         raise ValueError('Trace session mismatch')
-    data = base64.b64decode(envelope['data'], validate=True)
-    if len(data) > MAX_TRACE:
+    encoded = base64.b64decode(envelope['data'], validate=True)
+    encoding = envelope.get('encoding', 'base64')
+    if encoding == 'gzip+base64':
+        decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        data = decompressor.decompress(encoded, MAX_TRACE + 1)
+        if (len(data) > MAX_TRACE or decompressor.unconsumed_tail
+                or not decompressor.eof or decompressor.unused_data):
+            raise ValueError('Trace copy exceeds bound or has invalid compressed data')
+    elif encoding == 'base64':
+        data = encoded
+    else:
+        raise ValueError('Unsupported trace encoding')
+    raw_bytes = envelope.get('bytes')
+    if type(raw_bytes) is not int or raw_bytes < 0 or raw_bytes > MAX_TRACE or len(data) != raw_bytes:
         raise ValueError('Trace copy exceeds bound')
     raw = private / 'session.jsonl'
     raw.write_bytes(data)
@@ -501,9 +528,12 @@ def run_instance(args, environment=None):
         # 1000, with no capabilities, no privilege escalation, no host home/socket.
         setup = ("mkdir -p /tmp/bitori-home/.bitori /testbed/.bitori; "
                  "touch /tmp/bitori-home/.bitori/.env; "
-                 "printf 'mode: bypass\\n' > /testbed/.bitori/permissions.local.yaml; "
-                 "cat > /tmp/bitori-home/.bitori/config.yaml; "
-                 "chmod -R a+rwX /tmp/bitori-home /testbed")
+                 "cat > /tmp/bitori-home/.bitori/permissions.yaml <<'BITORI_PERMISSIONS'\n"
+                 + BENCHMARK_PERMISSIONS + "\nBITORI_PERMISSIONS\n"
+                 + "cat > /tmp/bitori-home/.bitori/config.yaml; "
+                 + "chmod -R a+rwX /tmp/bitori-home /testbed; "
+                 + "chown 1000:1000 /tmp/bitori-home/.bitori/permissions.yaml; "
+                 + "chmod 600 /tmp/bitori-home/.bitori/permissions.yaml")
         config = (f'profiles:\n  - name: bench\n    protocol: {json.dumps(protocol)}\n'
                   f'    model: {json.dumps(environment["BITORI_MODEL"])}\n'
                   f'    base_url: {json.dumps(base_url)}\n'

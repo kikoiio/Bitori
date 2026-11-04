@@ -6,6 +6,8 @@
 
 Bitori 面向在本地软件工作区中与模型协作的用户：通过对话理解和修改项目，查看工具调用，在执行副作用前按权限规则作出决定，并在本地保留会话。跨平台终端和 Linux 桌面端是当前入口；适配不同模型协议、限制工作区文件访问和提供可排查的运行记录是主要约束。
 
-## 非目标与验收方向
+## 非目标与约束
 
-多模态、会话导入和自动断点续跑已纳入并完成实现。本轮再补齐项目内容信任边界、权限绕过确认、导出文件权限与审批说明；光标由隔离 Linux PTY 验证行为，终端像素观感仍以终端环境单独验收。云同步已取消并保持不支持，见 [决策记录](decisions/0001-cloud-sync-out-of-scope.md)。桌面 GUI 目标仅为 Linux，Windows/macOS 桌面不在范围内。RSI 及 SWE-bench Lite 暂停，见 [评测说明](../evaluation/README.md)。
+- 云同步当前不受支持，若要重新纳入需另作产品决定，见[决策记录](decisions/0001-cloud-sync-out-of-scope.md)。
+- 桌面 GUI 目前面向 Linux；Windows 和 macOS 桌面不在当前范围内。
+- RSI 及 SWE-bench Lite 需明确授权后运行，不属于日常产品路径；状态见[评测说明](reference/evaluation.md)。
