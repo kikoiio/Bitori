@@ -8,7 +8,6 @@ export const MAX_MEMORY_INDEX_BYTES = 25_000;
 export type MemoryType = 'user' | 'feedback' | 'project' | 'reference';
 
 export interface MemoryFile {path: string; name: string; description: string; type: MemoryType; content: string}
-export interface MemoryHeader {filename: string; filePath: string; scope: 'user' | 'project'; mtimeMs: number; description: string; type: MemoryType}
 
 export interface Frontmatter {name: string; description: string; type: MemoryType}
 

@@ -46,13 +46,16 @@ BITORI_E2E_PROVIDERS=1 BITORI_E2E_PROTOCOL=openai-chat npm run test:e2e:provider
 
 脚本从 `~/.bitori/.env` 读取凭据；省略 `BITORI_E2E_PROTOCOL` 时按配置推断协议。`BITORI_E2E_PRESET=image` 会发出一次图片请求。真实结果写入 `evaluation/results/e2e-providers/`，记录被测 commit 和工作树状态；历史记录不能代替当前版本的实测。GitHub E2E workflow 读取仓库配置并上传本次运行的脱敏 JSON，详见[工作流](../../.github/workflows/e2e.yml)。
 
-## 最近验证与未验收边界
+## 已有验收证据
 
-截至 2026-11-04，最近一次验证应用代码的三平台完整 Check 是提交 `5865729` 的 [run 41883853936](https://github.com/kikoiio/Bitori/actions/runs/41883853936)，Ubuntu、Windows 和 macOS 全部通过。它验证了 Windows deadline 单测从 200 ms 调整到 2 秒后的结果；此前 `fa73ce9` 的 [run 41838253124](https://github.com/kikoiio/Bitori/actions/runs/41838253124) 曾在该单测中因上游请求尚未发出而失败。Linux 桌面开发版及打包 smoke 在 [run 41770535976](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 通过。
+清理前的提交 `30e48d6` 已通过 Ubuntu、Windows 和 macOS 的完整 [Check](https://github.com/kikoiio/Bitori/actions/runs/41885899633)。Linux 桌面开发版、AppImage 与解包 deb 的 [smoke](https://github.com/kikoiio/Bitori/actions/runs/41770535976) 通过。Linux PTY 已验证 ASCII、中文输入后的 ANSI 光标位置，用户提供的 Ptyxis 截图完成提示区与插入光标的像素验收。这些历史结果不代替后续代码变更的验证。
 
-当前已知的两项验收边界：
+图片功能按用户确认通过验收：识别依赖所配模型具备 VLM 能力。[单次端点实测](https://github.com/kikoiio/Bitori/actions/runs/41826598229) 连接正常，但未识别测试图片；该记录不证明此端点具备图片识别能力。
 
-- [图片 Provider run 41826598229](https://github.com/kikoiio/Bitori/actions/runs/41826598229) 对已配置的 Anthropic/DeepSeek 端点只发起一次请求；模型输出 166 tokens、未报告图片输入，也没能识别四色条纹。连接检查通过，单次实测无法区分模型能力与网关转发问题；该端点未通过图片识别验收，未追加模型请求。
-- Linux 隔离 PTY 已验证 ASCII 与中文输入后的 ANSI 光标位置；用户提供的 Ptyxis 实际窗口截图显示提示区和文本末尾光标，像素验收完成。
+既有产品待办已关闭。RSI 复验已结束且无改进候选；SWE-bench Lite 扩跑保持暂停，见[评测参考](evaluation.md)。
 
-图片端点仍未通过识别验收；Ptyxis 截图只确认了提示区和插入光标的实际显示。评测工作流及 RSI 状态见[评测参考](evaluation.md)。
+## 生成文件与缓存
+
+`dist/` 是编译输出，`out/` 是桌面打包输出；可在对应进程退出后删除，由构建命令重新生成。`evaluation/results/` 保存本次评测输出，全部忽略入库；长期验收证据通过文档中的 CI 链接引用。旧执行日志可从 Git 历史查看。
+
+本机下载、解包与重型工具缓存应使用项目内 `.tmp/`，例如 `TMPDIR="$PWD/.tmp"`，使用前先创建目录，避免占用 `/tmp` 的 tmpfs 配额。Qoder 录制及脱敏脚本默认使用 `.tmp/qoder-capture`；真实录制仍需单独授权，脱敏后才可更新 `tests/fixtures/streams/qoder/`。

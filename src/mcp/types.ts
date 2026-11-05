@@ -1,5 +1,4 @@
 import type {JsonObject} from '../tools/types.js';
-import type {McpClient} from './client.js';
 
 /** 固定使用包含 initialize 握手的 2025-06-18 协议版本。 */
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
@@ -28,12 +27,6 @@ export interface McpToolResult extends JsonObject {
   content: unknown[];
   isError?: boolean;
   structuredContent?: JsonObject;
-}
-
-export interface McpConnectedServer {
-  name: string;
-  client: McpClient;
-  tools: McpToolDefinition[];
 }
 
 export class McpProtocolError extends Error {

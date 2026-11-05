@@ -68,8 +68,3 @@ export function initialAppState(profile: ProfileSummary | null = null): AppState
     debugOpen: false,
   };
 }
-
-export function replaceMessage(state: AppState, message: StoredMessage): AppState {
-  // 不原地修改数组：map 生成新数组，只有 id 匹配的那一项被替换。
-  return {...state, messages: state.messages.map(item => item.id === message.id ? message : item)};
-}

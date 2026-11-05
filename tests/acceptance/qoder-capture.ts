@@ -1,13 +1,13 @@
 /**
  * 手工运行:录制 Qoder Cloud Agents 的真实协议事件,供脱敏 fixture 使用。
- *   npx tsx tests/acceptance/qoder-capture.ts [--out /tmp/qoder-capture]
+ *   npx tsx tests/acceptance/qoder-capture.ts [--out .tmp/qoder-capture]
  * 凭据来自 ~/.bitori/.env(LLM_API_KEY / LLM_BASE_URL / LLM_MODEL)。
  * 录制层在 fetch 边界 tee 原始 SSE 字节;Authorization 头与密钥值不落盘。
  */
 import {config as loadDotenv} from 'dotenv';
 import {mkdirSync, appendFileSync, writeFileSync, existsSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import { homedir } from 'node:os';
+import {homedir} from 'node:os';
 import {QoderClient, resolveQoderModelId} from '../../src/providers/qoder.js';
 import type {ProviderProfile} from '../../src/config/types.js';
 import type {ChatRequest} from '../../src/providers/types.js';
@@ -28,7 +28,7 @@ const requiredModel = model;
 const outDir = (() => {
   const index = process.argv.indexOf('--out');
   const arg = index !== -1 ? process.argv[index + 1] : undefined;
-  return arg ?? '/tmp/qoder-capture';
+  return arg ?? '.tmp/qoder-capture';
 })();
 const only = (() => {
   const index = process.argv.indexOf('--only');
@@ -309,8 +309,6 @@ async function main(): Promise<void> {
       tools: [echoTool],
     };
     const first = await collect(client, request, new AbortController().signal);
-    const toolStart = /evt_[0-9a-z]+/.exec(first);
-    void toolStart;
     // 从 provider 内部 pending 无法直接取 id;第二次请求由 continuationResults 依据 providerCallId 匹配。
     // 这里通过记录文件找到 custom_tool_use id。
     const raw = readFileSyncSafe(logPath('s2-tool'));
@@ -377,8 +375,6 @@ async function main(): Promise<void> {
   // S6 内置工具实验:直接按协议创建启用 Bash 的 agent,观察服务端内置工具在 self_hosted 环境的真实行为
   // (requires_action / 拒绝 / 忽略),这是 QoderClient 正常路径刻意避开的分支。
   await scenario('s6-builtin', async () => {
-    const recorder = makeRecorder('s6-builtin');
-    void recorder;
     const root = profile.baseUrl.replace(/\/+$/, '') + '/api/v1/cloud';
     const call = async (method: string, path: string, body?: unknown): Promise<unknown> => {
       const response = await fetch(`${root}${path}`, {

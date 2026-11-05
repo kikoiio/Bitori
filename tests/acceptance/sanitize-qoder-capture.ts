@@ -1,13 +1,13 @@
 /**
  * 手工运行:把 tests/acceptance/qoder-capture.ts 的真实录制转换成仓库内脱敏 fixture。
- *   npx tsx tests/acceptance/sanitize-qoder-capture.ts --in /tmp/qoder-capture --out tests/fixtures/streams/qoder
+ *   npx tsx tests/acceptance/sanitize-qoder-capture.ts --in .tmp/qoder-capture --out tests/fixtures/streams/qoder
  * 脱敏规则:资源 id(evt/agent/env/sess/sthr/request)换成稳定占位符;时间戳归一;密钥已由录制层剔除。
  * 模型目录与协议字段保持真实,fixture 才有回归价值。
  */
 import {mkdirSync, readFileSync, writeFileSync, readdirSync} from 'node:fs';
-import {join, basename} from 'node:path';
+import {join} from 'node:path';
 
-const inDir = arg('--in') ?? '/tmp/qoder-capture';
+const inDir = arg('--in') ?? '.tmp/qoder-capture';
 const outDir = arg('--out') ?? 'tests/fixtures/streams/qoder';
 mkdirSync(outDir, {recursive: true});
 
@@ -71,7 +71,6 @@ if (modelsResponse) writeJson('models.json', modelsResponse);
 
 // s2: 第一条流 = custom_tool_use + requires_action;第二条流 = 新会话上的旧轮次重放。
 const s2 = framesOf('s2-tool.jsonl');
-const secondSessionStart = s2.findIndex(entry => entry.method === 'POST' && entry.path?.endsWith('/sessions'));
 const firstStream: string[] = [];
 const secondStream: string[] = [];
 let seenSessionsPosts = 0;
@@ -80,7 +79,6 @@ for (const entry of s2) {
   if (!entry.frame) continue;
   (seenSessionsPosts <= 1 ? firstStream : secondStream).push(entry.frame);
 }
-void secondSessionStart;
 writeSse('custom-tool-requires-action.txt', firstStream);
 if (secondStream.length) writeSse('transcript-fallback-turn.txt', secondStream);
 
@@ -111,4 +109,3 @@ const interruptReq = s4.find(entry => entry.method === 'POST' && typeof entry.re
 if (interruptReq) writeJson('interrupt-exchange.json', {request: interruptReq.request, status: interruptReq.status});
 
 console.log(`\n输出目录: ${outDir};映射 id 数: ${idMap.size}`);
-void basename;

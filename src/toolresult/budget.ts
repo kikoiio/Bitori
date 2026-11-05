@@ -11,8 +11,6 @@ export const PREVIEW_BYTES = 2_048;
 const PERSISTED_PREFIX = '<persisted-output>';
 const STALE_PREFIX = '[Stale output snipped:';
 
-export function toolResultBytes(content: string): number { return Buffer.byteLength(content, 'utf8'); }
-
 function byteLength(content: string): number { return Buffer.byteLength(content, 'utf8'); }
 
 export function spillDirectory(workDir: string): string { return join(workDir, '.bitori', 'tool-results'); }

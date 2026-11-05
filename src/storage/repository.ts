@@ -3,7 +3,6 @@ import type {Usage} from '../providers/types.js';
 import {mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {configPaths} from '../config/loader.js';
-import {StorageError} from '../shared/errors.js';
 import {StorageWorkerClient} from './worker-client.js';
 import type {ContextCheckpoint, FinalMessageUpdate, Session, SessionRepositoryContract, StoredConversation, StoredMessage, ToolCallRecord, AgentRunRecord} from './types.js';
 import type {AgentMode, AgentRunResult} from '../agent/types.js';
@@ -61,9 +60,4 @@ export class SessionRepository implements SessionRepositoryContract {
     await this.#client.request(latestPlanMessageId === undefined ? {type: 'finish_agent_run', runId, result} : {type: 'finish_agent_run', runId, result, latestPlanMessageId});
   }
   public async close(): Promise<void> { await this.#client.close(); }
-}
-
-export function asStorageError(error: unknown): StorageError {
-  // 保留已经标准化的 StorageError，其余异常统一包装并通过 cause 保留原错误。
-  return error instanceof StorageError ? error : new StorageError('本地会话存储操作失败', {cause: error});
 }

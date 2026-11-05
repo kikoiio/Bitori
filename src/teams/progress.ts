@@ -28,5 +28,4 @@ export function recordToolUse(progress: AgentProgress, toolName: string, input: 
   if (progress.recentActivities.length > 5) progress.recentActivities.shift();
 }
 
-export function recordTokens(progress: AgentProgress, inputTokens: number, outputTokens: number): void { progress.tokenCount = inputTokens + outputTokens; }
 export function summarizeActivities(activities: readonly ToolActivity[]): string { return activities.at(-1)?.activityDescription ?? ''; }

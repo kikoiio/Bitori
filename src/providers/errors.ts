@@ -21,12 +21,6 @@ export interface ProviderError {
   statusCode?: number;
 }
 
-/** provider 侧已知语义的错误可显式携带归一化 code,避免靠消息文本猜测。 */
-export interface CodedProviderError extends Error {
-  status?: number;
-  providerCode?: ProviderErrorCode;
-}
-
 interface ErrorShape {
   message?: unknown;
   status?: unknown;

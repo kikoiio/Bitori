@@ -3,9 +3,7 @@ import type {ToolDefinition} from '../tools/types.js';
 import {CHARS_PER_TOKEN, estimateContextTokens, serializedItem} from '../shared/token-estimate.js';
 import type {UsageAnchor} from '../shared/token-estimate.js';
 
-export const SUMMARY_OUTPUT_RESERVE = 20_000;
 export const AUTO_COMPACT_SAFETY_MARGIN = 13_000;
-export const MANUAL_COMPACT_SAFETY_MARGIN = 3_000;
 export const RECENT_TOKEN_FLOOR = 10_000;
 export const RECENT_ITEM_FLOOR = 5;
 export const MAX_AUTO_COMPACT_FAILURES = 3;
