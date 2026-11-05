@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-首次运行会创建 `~/.bitori/config.yaml` 和 `~/.bitori/.env`，缺少连接参数时会提示填写后退出。在 `.env` 中填写供应商提供的连接信息，变量名为 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`；不要将该文件提交到仓库。已有完整进程环境变量时可直接加载配置。协议识别、多配置及扩展规则见 [配置参考](docs/reference/configuration.md)。
+首次运行会创建 `~/.bitori/config.yaml` 和 `~/.bitori/.env`，缺少连接参数时会提示填写后退出。在 `.env` 中填写供应商提供的连接信息，变量名为 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`；不要将该文件提交到仓库。已有完整进程环境变量时可直接加载配置。协议识别、多配置及扩展规则见 [配置参考](docs/configuration.md)。
 
 配置完成后检查连接，再启动对话：
 
@@ -30,7 +30,7 @@ TUI 使用当前目录作为工作区。输入任务后按 Enter 发送，生成
 
 Linux 桌面源码入口是 `npm run desktop`，该命令会先构建并准备 Electron。启动后在侧栏选择并信任工作区，再选择模型配置。Enter 发送，Shift+Enter 换行，停止按钮取消生成；侧栏可管理历史会话。工作区信任会允许加载项目配置、指令、记忆、skills、commands、agents、权限规则、MCP 和 Hook；确认前应审查仓库内容。
 
-工具审批可选择仅本次、本会话、永久允许或拒绝。会话批准仅在当前进程中对当前聊天生效；永久规则写入项目 `.bitori/permissions.local.yaml`。启用 bypass 要在 `/permission bypass` 后一分钟内、同一聊天中再输入 `/permission bypass confirm`；切换聊天时立即清除。权限档位、规则优先级和限制见 [权限规则与审批](docs/reference/configuration.md#权限规则与审批)。
+工具审批可选择仅本次、本会话、永久允许或拒绝。会话批准仅在当前进程中对当前聊天生效；永久规则写入项目 `.bitori/permissions.local.yaml`。启用 bypass 要在 `/permission bypass` 后一分钟内、同一聊天中再输入 `/permission bypass confirm`；切换聊天时立即清除。权限档位、规则优先级和限制见 [权限规则与审批](docs/configuration.md#权限规则与审批)。
 
 ## 图片、会话交换与恢复
 
@@ -41,9 +41,9 @@ Linux 桌面源码入口是 `npm run desktop`，该命令会先构建并准备 E
 | 导入会话 | `/import <path>` | 侧栏“导入会话”选择 JSON 文件 |
 | 确认恢复中断任务 | 根据提示输入 `/resume` | 在恢复提示中检查风险后点击继续按钮 |
 
-图片支持 PNG、JPEG、GIF、WebP；每条消息最多 4 张，单张非空且不超过 4 MiB，合计不超过 8 MiB。宽高均不得超过 8192 像素，总像素不得超过 20,000,000。可只发送图片；终端显示文件名和类型，桌面提供预览和移除。实际模型必须支持图片，Qoder 当前拒绝图片输入；不会自动改成纯文本重发。详见 [图片附件](docs/reference/configuration.md#图片附件)。
+图片支持 PNG、JPEG、GIF、WebP；每条消息最多 4 张，单张非空且不超过 4 MiB，合计不超过 8 MiB。宽高均不得超过 8192 像素，总像素不得超过 20,000,000。可只发送图片；终端显示文件名和类型，桌面提供预览和移除。实际模型必须支持图片，Qoder 当前拒绝图片输入；不会自动改成纯文本重发。详见 [图片附件](docs/configuration.md#图片附件)。
 
-会话交换使用带版本的 Bitori JSON，图片内容内嵌，最大 16 MiB。导入创建新会话，不覆盖原会话，也不执行归档中的工具。归档不包含配置和凭据字段，但消息、工具输出及图片仍可能含有秘密，分享前需检查。CLI 用法见 [会话导入与导出](docs/reference/configuration.md#会话导入与导出)。
+会话交换使用带版本的 Bitori JSON，图片内容内嵌，最大 16 MiB。导入创建新会话，不覆盖原会话，也不执行归档中的工具。归档不包含配置和凭据字段，但消息、工具输出及图片仍可能含有秘密，分享前需检查。CLI 用法见 [会话导入与导出](docs/configuration.md#会话导入与导出)。
 
 重新打开会话时，交互界面会检查最近的进程中断回合。安全回合自动恢复；存在结果不确定的写入、命令或其他非只读工具时先请求确认。已完成工具结果作为上下文恢复，不由恢复机制直接重放。确认继续后模型仍可能提出新工具调用，适用当前审批规则。这不是对外部副作用“恰好执行一次”的保证。手动停止、失败或导入的回合不会自动续跑，`exec` 也不会自动恢复历史任务。
 
@@ -51,4 +51,4 @@ Linux 桌面源码入口是 `npm run desktop`，该命令会先构建并准备 E
 
 模型和网关的图片能力各不相同；Qoder 图片输入会明确拒绝，其他端点需自行支持图片。RSI 与 SWE-bench Lite 是需明确授权的可选评测工作流，不属于常规本地编码路径。
 
-配置、开发、架构和安全资料见[文档索引](docs/README.md)。
+配置、安全和开发资料见[文档索引](docs/README.md)。
