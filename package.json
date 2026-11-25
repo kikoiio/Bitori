@@ -1,0 +1,21 @@
+{
+  "name": "my-own-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/cli.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "diff": "^9.0.0",
+    "openai": "^7.60.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^6.0.0"
+  }
+}

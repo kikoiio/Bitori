@@ -1,0 +1,12 @@
+node_modules/
+.tmp/
+.env
+.transcripts/
+.task_outputs/
+.memory/
+.tasks/
+.mailboxes/
+.worktrees/
+.runtime/
+.scheduled_tasks.json
+.scheduled_tasks.json.*.tmp
